@@ -387,6 +387,26 @@ class MainWindow(QMainWindow):
             for f in file_paths:
                 self.open_pdf(f)
 
+    def handle_external_file(self, file_path: str):
+        """Called when a PDF is opened from Windows Explorer or an email attachment."""
+        if file_path and os.path.exists(file_path):
+            self.open_pdf(file_path)
+
+        # Restore from minimized state and bring to foreground
+        self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMinimized | Qt.WindowState.WindowActive)
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                hwnd = int(self.winId())
+                ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                ctypes.windll.user32.SetForegroundWindow(hwnd)
+            except Exception:
+                pass
+
     def open_pdf(self, file_path: str):
         # Check if this exact file is already open in one of the tabs
         for i in range(self.tabs.count()):

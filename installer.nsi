@@ -64,13 +64,20 @@ Section "MainSection" SEC01
   CreateShortCut "$SMPROGRAMS\NeNgi PDF\NeNgi PDF.lnk" "$INSTDIR\NeNgi_PDF.exe" "" "$INSTDIR\NeNgi_PDF.exe" 0
   CreateShortCut "$SMPROGRAMS\NeNgi PDF\NeNgi PDF Kaldır (Uninstall).lnk" "$INSTDIR\uninstall.exe"
 
-  ; PDF Dosya İlişkilendirmesi (File Association)
+  ; PDF Dosya İlişkilendirmesi (File Association - HKCR & HKCU)
   WriteRegStr HKCR ".pdf" "" "NeNgiPDF.Document"
   WriteRegStr HKCR ".pdf\OpenWithProgids" "NeNgiPDF.Document" ""
   WriteRegStr HKCR "NeNgiPDF.Document" "" "NeNgi PDF Dokümanı"
   WriteRegStr HKCR "NeNgiPDF.Document\DefaultIcon" "" "$INSTDIR\NeNgi_PDF.exe,0"
   WriteRegStr HKCR "NeNgiPDF.Document\shell" "" "open"
   WriteRegStr HKCR "NeNgiPDF.Document\shell\open\command" "" '"$INSTDIR\NeNgi_PDF.exe" "%1"'
+
+  WriteRegStr HKCU "Software\Classes\.pdf" "" "NeNgiPDF.Document"
+  WriteRegStr HKCU "Software\Classes\.pdf\OpenWithProgids" "NeNgiPDF.Document" ""
+  WriteRegStr HKCU "Software\Classes\NeNgiPDF.Document" "" "NeNgi PDF Dokümanı"
+  WriteRegStr HKCU "Software\Classes\NeNgiPDF.Document\DefaultIcon" "" "$INSTDIR\NeNgi_PDF.exe,0"
+  WriteRegStr HKCU "Software\Classes\NeNgiPDF.Document\shell" "" "open"
+  WriteRegStr HKCU "Software\Classes\NeNgiPDF.Document\shell\open\command" "" '"$INSTDIR\NeNgi_PDF.exe" "%1"'
 
   ; Windows Default Apps Registration
   WriteRegStr HKLM "Software\NeNgiPDF\Capabilities" "ApplicationDescription" "NeNgi PDF Okuyucu ve DIFF Düzenleyici"
