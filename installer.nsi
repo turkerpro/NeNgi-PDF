@@ -50,8 +50,12 @@ ShowInstDetails show
 ShowUnInstDetails show
 
 Section "MainSection" SEC01
+  ; Çalışan eski sürüm veya arka plan System Tray ajanı varsa sessizce kapat
+  nsExec::Exec 'taskkill /F /IM NeNgi_PDF.exe'
+  Sleep 500
+
   SetOutPath "$INSTDIR"
-  SetOverwrite ifnewer
+  SetOverwrite on
 
   ; Kurulacak ana dosya
   File "dist\NeNgi_PDF.exe"
@@ -115,6 +119,10 @@ Section -Post
 SectionEnd
 
 Section Uninstall
+  ; Kaldırmadan önce çalışan programı kapat
+  nsExec::Exec 'taskkill /F /IM NeNgi_PDF.exe'
+  Sleep 500
+
   ; Kısayolları sil
   Delete "$DESKTOP\NeNgi PDF.lnk"
   Delete "$SMPROGRAMS\NeNgi PDF\NeNgi PDF.lnk"
