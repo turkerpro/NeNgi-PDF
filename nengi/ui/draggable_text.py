@@ -11,7 +11,7 @@ from PyQt6.QtCore import Qt, QPoint, pyqtSignal, QRect
 from PyQt6.QtGui import QColor, QFont, QCursor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGraphicsDropShadowEffect, QDialog
+    QGraphicsDropShadowEffect, QDialog, QFrame
 )
 
 if TYPE_CHECKING:
@@ -60,68 +60,90 @@ class DraggableTextWidget(QWidget):
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 4, 6, 6)
-        layout.setSpacing(4)
+        layout.setContentsMargins(4, 2, 4, 4)
+        layout.setSpacing(3)
 
-        # Mini Top Action Bar (Move handle + Apply + Delete)
-        bar_layout = QHBoxLayout()
-        bar_layout.setContentsMargins(0, 0, 0, 0)
+        # Mini Top Action Bar Pill (Clean floating light pill on white page)
+        self.action_pill = QFrame(self)
+        self.action_pill.setObjectName("actionPill")
+        self.action_pill.setStyleSheet(
+            "QFrame#actionPill {"
+            "  background-color: #FFFFFF;"
+            "  border: 1px solid #CBD5E1;"
+            "  border-radius: 11px;"
+            "  padding: 1px 4px;"
+            "}"
+            "QFrame#actionPill QLabel {"
+            "  background: transparent;"
+            "  color: #0078D4;"
+            "  font-weight: bold;"
+            "  font-size: 10px;"
+            "}"
+            "QFrame#actionPill QPushButton {"
+            "  background: transparent;"
+            "  border: none;"
+            "  border-radius: 3px;"
+            "  font-size: 11px;"
+            "}"
+            "QFrame#actionPill QPushButton:hover {"
+            "  background-color: #E2E8F0;"
+            "}"
+        )
+        bar_layout = QHBoxLayout(self.action_pill)
+        bar_layout.setContentsMargins(4, 1, 4, 1)
         bar_layout.setSpacing(4)
 
         lbl_hint = QLabel("✥ Taşı")
-        lbl_hint.setStyleSheet("font-size: 10px; color: #0078D4; font-weight: bold;")
         bar_layout.addWidget(lbl_hint)
         bar_layout.addStretch()
 
         btn_edit = QPushButton("✏️")
         btn_edit.setFixedSize(20, 20)
         btn_edit.setToolTip("Metni veya Fontu Düzenle (Çift Tıklama)")
-        btn_edit.setStyleSheet("border: none; background: transparent; font-size: 11px;")
         btn_edit.clicked.connect(self._edit_text)
         bar_layout.addWidget(btn_edit)
 
         btn_apply = QPushButton("✅")
         btn_apply.setFixedSize(20, 20)
         btn_apply.setToolTip("Metni Buraya Sabitle (PDF'e Yerleştir)")
-        btn_apply.setStyleSheet("border: none; background: #0078D4; color: white; border-radius: 3px; font-size: 10px;")
+        btn_apply.setStyleSheet("background-color: #0078D4; color: white; border-radius: 3px; font-size: 10px;")
         btn_apply.clicked.connect(self.commit_to_pdf)
         bar_layout.addWidget(btn_apply)
 
         btn_delete = QPushButton("🗑️")
         btn_delete.setFixedSize(20, 20)
         btn_delete.setToolTip("Metin Kutusunu Kaldır")
-        btn_delete.setStyleSheet("border: none; background: #D83B01; color: white; border-radius: 3px; font-size: 10px;")
+        btn_delete.setStyleSheet("background-color: #DC2626; color: white; border-radius: 3px; font-size: 10px;")
         btn_delete.clicked.connect(self.discard)
         bar_layout.addWidget(btn_delete)
 
-        layout.addLayout(bar_layout)
+        layout.addWidget(self.action_pill)
 
-        # Text Label Display
+        # Text Label Display (Fully Transparent Background)
         self.lbl_content = QLabel(self.text)
+        self.lbl_content.setObjectName("textContent")
         self.lbl_content.setWordWrap(True)
         self._update_text_style()
         layout.addWidget(self.lbl_content)
 
-        # Modern selection dashed styling
+        # Acrobat Pro Style Transparent Bounding Box
         self.setStyleSheet(
             "QWidget#draggableTextBox {"
-            "  background-color: rgba(0, 120, 212, 22);"
+            "  background: transparent;"
             "  border: 1.5px dashed #0078D4;"
-            "  border-radius: 6px;"
+            "  border-radius: 4px;"
+            "}"
+            "QWidget#draggableTextBox QLabel#textContent {"
+            "  background: transparent;"
+            "  border: none;"
             "}"
         )
-
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(8)
-        shadow.setColor(QColor(0, 0, 0, 90))
-        shadow.setOffset(0, 2)
-        self.setGraphicsEffect(shadow)
 
     def _update_text_style(self):
         screen_size = max(8, int(self.fontsize * self.zoom))
         r, g, b = [int(c * 255) for c in self.color_rgb]
         self.lbl_content.setStyleSheet(
-            f"font-size: {screen_size}pt; color: rgb({r}, {g}, {b}); font-family: 'Segoe UI', Arial, sans-serif; padding: 2px;"
+            f"font-size: {screen_size}pt; color: rgb({r}, {g}, {b}); font-family: 'Segoe UI', Arial, sans-serif; background: transparent; border: none; padding: 2px;"
         )
 
     def update_zoom(self, new_zoom: float):

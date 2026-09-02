@@ -801,11 +801,13 @@ class MainWindow(QMainWindow):
 
     def _open_signature_dialog(self):
         dlg = SignatureDialog(parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.signature_path:
-            viewer = self.get_current_viewer()
-            if viewer:
-                viewer.set_stamp_image(dlg.signature_path)
-                self.show_status_message("İmzayı yerleştirmek için sayfada istediğiniz yere tıklayın.")
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            sig_path = getattr(dlg, "signature_path", None) or getattr(dlg, "saved_signature_path", None)
+            if sig_path and os.path.exists(sig_path):
+                viewer = self.get_current_viewer()
+                if viewer:
+                    viewer.set_stamp_image(sig_path)
+                    self.show_status_message("İmzayı yerleştirmek için sayfada istediğiniz yere tıklayın.")
 
     def _encrypt_current_doc(self):
         doc = self.get_current_doc()
