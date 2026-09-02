@@ -475,6 +475,14 @@ class PDFViewer(QScrollArea):
             pw.mode = mode
             pw.stamp_image_path = stamp_path
 
+    def set_tool(self, tool_name: str):
+        """Sets current active tool ('view', 'text', 'whiteout')."""
+        self.set_tool_mode(tool_name)
+
+    def set_stamp_image(self, image_path: str):
+        """Switches to stamp mode with signature/stamp image."""
+        self.set_tool_mode("stamp", stamp_path=image_path)
+
     def scroll_to_page(self, page_idx: int):
         """Scrolls view to specific page."""
         if 0 <= page_idx < len(self.page_widgets):

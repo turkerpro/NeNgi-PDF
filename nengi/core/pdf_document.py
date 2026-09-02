@@ -11,6 +11,45 @@ from typing import List, Tuple, Dict, Any, Optional
 import pymupdf as fitz
 from PIL import Image
 from PyQt6.QtGui import QImage, QPixmap
+import sys
+
+_cached_font_buffer: Optional[bytes] = None
+
+
+def get_unicode_font_buffer() -> Optional[bytes]:
+    """Finds and loads a TrueType font buffer that supports Turkish and Unicode characters."""
+    global _cached_font_buffer
+    if _cached_font_buffer is not None:
+        return _cached_font_buffer
+
+    candidates = []
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    candidates.append(os.path.join(base_dir, "resources", "fonts", "LiberationSans-Regular.ttf"))
+    if hasattr(sys, "_MEIPASS"):
+        candidates.append(os.path.join(sys._MEIPASS, "resources", "fonts", "LiberationSans-Regular.ttf"))
+
+    # Windows fonts
+    candidates.extend([
+        "C:\\Windows\\Fonts\\arial.ttf",
+        "C:\\Windows\\Fonts\\segoeui.ttf",
+        "C:\\Windows\\Fonts\\calibri.ttf"
+    ])
+
+    # Linux fonts
+    candidates.extend([
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    ])
+
+    for p in candidates:
+        if p and os.path.exists(p):
+            try:
+                with open(p, "rb") as f:
+                    _cached_font_buffer = f.read()
+                    return _cached_font_buffer
+            except Exception:
+                pass
+    return None
 
 
 class PDFDocument:
@@ -398,7 +437,15 @@ class PDFDocument:
                 fontsize = max(7.0, min(36.0, h * 0.85))
 
             insert_point = fitz.Point(rect.x0, rect.y1 - 1.5)
-            page.insert_text(insert_point, new_text, fontsize=fontsize, fontname=fontname, color=color)
+            font_buf = get_unicode_font_buffer()
+            target_font = fontname
+            if font_buf:
+                try:
+                    page.insert_font(fontname="f_unicode", fontbuffer=font_buf)
+                    target_font = "f_unicode"
+                except Exception:
+                    pass
+            page.insert_text(insert_point, new_text, fontsize=fontsize, fontname=target_font, color=color)
             self.is_modified = True
             return True
         except Exception as e:
@@ -423,13 +470,22 @@ class PDFDocument:
             page.add_redact_annot(rect, fill=(1, 1, 1))
             page.apply_redactions()
 
+            font_buf = get_unicode_font_buffer()
+            target_font = fontname
+            if font_buf:
+                try:
+                    page.insert_font(fontname="f_unicode", fontbuffer=font_buf)
+                    target_font = "f_unicode"
+                except Exception:
+                    pass
+
             lines = new_text.splitlines()
             line_height = fontsize * 1.25
             y_pos = rect.y0 + fontsize
             for line in lines:
                 if y_pos > page.rect.height - 10:
                     break
-                page.insert_text((rect.x0, y_pos), line, fontsize=fontsize, fontname=fontname, color=color)
+                page.insert_text((rect.x0, y_pos), line, fontsize=fontsize, fontname=target_font, color=color)
                 y_pos += line_height
 
             self.is_modified = True
@@ -444,18 +500,28 @@ class PDFDocument:
     ) -> bool:
         """
         Acrobat Pro style text insertion at point.
-        Saves undo state and inserts text lines.
+        Saves undo state and inserts text lines with full Turkish/Unicode support.
         """
         if not self.is_open:
             return False
         try:
             self.save_state_for_undo()
             page = self.get_page(page_number)
+
+            font_buf = get_unicode_font_buffer()
+            target_font = fontname
+            if font_buf:
+                try:
+                    page.insert_font(fontname="f_unicode", fontbuffer=font_buf)
+                    target_font = "f_unicode"
+                except Exception:
+                    pass
+
             lines = text.splitlines()
             line_height = fontsize * 1.25
             y_pos = point.y
             for line in lines:
-                page.insert_text((point.x, y_pos), line, fontsize=fontsize, fontname=fontname, color=color)
+                page.insert_text((point.x, y_pos), line, fontsize=fontsize, fontname=target_font, color=color)
                 y_pos += line_height
 
             self.is_modified = True

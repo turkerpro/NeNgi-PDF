@@ -125,6 +125,14 @@ class MainWindow(QMainWindow):
         self.resize(1340, 860)
         self.is_dark_mode = True
         self.recent_files: List[str] = []
+        self.tray_agent = None
+
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        icon_path = os.path.join(base_dir, "resources", "app_icon.png")
+        if hasattr(sys, "_MEIPASS"):
+            icon_path = os.path.join(sys._MEIPASS, "resources", "app_icon.png")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
         self._init_ui()
         self.apply_theme(DARK_THEME)
@@ -558,6 +566,11 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Dönüştürme Hatası", f"Dosya PDF'e dönüştürülemedi:\n{e}")
 
     def handle_external_file(self, raw_arg: str):
+        self.show()
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
         if not raw_arg:
             return
 
@@ -872,3 +885,10 @@ class MainWindow(QMainWindow):
 
     def apply_theme(self, stylesheet: str):
         self.setStyleSheet(stylesheet)
+
+    def closeEvent(self, event):
+        """Minimizes to system tray if tray agent is attached."""
+        if hasattr(self, "tray_agent") and self.tray_agent:
+            self.tray_agent.handle_window_close(event)
+        else:
+            event.accept()

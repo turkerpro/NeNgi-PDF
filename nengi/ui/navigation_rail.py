@@ -5,12 +5,15 @@ vector SVG icons, and bottom-pinned settings.
 """
 
 from __future__ import annotations
+import os
+import sys
 from typing import Optional
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QFrame, QButtonGroup
 )
+from PyQt6.QtGui import QPixmap
 
 from nengi.ui.icons import get_svg_icon
 
@@ -41,7 +44,16 @@ class NavigationRail(QWidget):
         brand_layout.setContentsMargins(6, 0, 6, 16)
 
         lbl_logo = QLabel()
-        lbl_logo.setPixmap(get_svg_icon("logo", "#0078D4", 26).pixmap(26, 26))
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        icon_path = os.path.join(base_dir, "resources", "app_icon.png")
+        if hasattr(sys, "_MEIPASS"):
+            icon_path = os.path.join(sys._MEIPASS, "resources", "app_icon.png")
+
+        if os.path.exists(icon_path):
+            pix = QPixmap(icon_path).scaled(28, 28, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            lbl_logo.setPixmap(pix)
+        else:
+            lbl_logo.setPixmap(get_svg_icon("logo", "#0078D4", 26).pixmap(26, 26))
         brand_layout.addWidget(lbl_logo)
 
         lbl_title = QLabel("NeNgi PDF")

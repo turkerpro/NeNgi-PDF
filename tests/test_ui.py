@@ -78,7 +78,20 @@ class TestNeNgiUI(unittest.TestCase):
         dlg.list_widget.setCurrentRow(0)
         dlg._move_down()
         self.assertEqual(dlg.files[0], self.rev_pdf)
-        dlg.close()
+
+    def test_viewer_set_tool_and_stamp(self):
+        self.window.open_pdf(self.orig_pdf)
+        viewer = self.window.get_current_viewer()
+        self.assertIsNotNone(viewer)
+        # Verify set_tool doesn't crash
+        viewer.set_tool("text")
+        self.assertEqual(viewer.current_mode, "text")
+        viewer.set_tool("whiteout")
+        self.assertEqual(viewer.current_mode, "whiteout")
+        # Verify set_stamp_image doesn't crash
+        viewer.set_stamp_image(self.orig_pdf)
+        self.assertEqual(viewer.current_mode, "stamp")
+        self.assertEqual(viewer.stamp_image_path, self.orig_pdf)
 
 
 if __name__ == "__main__":

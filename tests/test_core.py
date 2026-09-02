@@ -195,6 +195,21 @@ class TestNeNgiCore(unittest.TestCase):
 
         doc.close()
 
+    def test_turkish_text_insertion(self):
+        doc = PDFDocument()
+        doc.doc = fitz.open()
+        doc.doc.new_page()
+        # Insert Turkish text
+        turkish_sample = "Deneme: Şş Çç Ğğ Iı İi Öö Üü"
+        self.assertTrue(doc.insert_new_text(0, fitz.Point(50, 50), turkish_sample))
+        txt = doc.get_page(0).get_text()
+        self.assertIn("Şş", txt)
+        self.assertIn("Çç", txt)
+        self.assertIn("Ğğ", txt)
+        self.assertIn("Öö", txt)
+        self.assertIn("Üü", txt)
+        doc.close()
+
 
 if __name__ == "__main__":
     unittest.main()

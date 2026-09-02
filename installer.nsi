@@ -5,7 +5,7 @@
 ; =========================================================
 
 !define PRODUCT_NAME "NeNgi PDF"
-!define PRODUCT_VERSION "1.4.3"
+!define PRODUCT_VERSION "1.4.4"
 !define PRODUCT_PUBLISHER "NeNgi"
 !define PRODUCT_WEB_SITE "https://github.com/turkerpro/NeNgi-PDF"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\NeNgi_PDF.exe"
@@ -20,8 +20,8 @@ RequestExecutionLevel admin
 
 ; MUI Settings
 !define MUI_ABORTWARNING
-!define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
-!define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
+!define MUI_ICON "resources\app_icon.ico"
+!define MUI_UNICON "resources\app_icon.ico"
 
 ; Welcome page
 !insertmacro MUI_PAGE_WELCOME
@@ -63,6 +63,9 @@ Section "MainSection" SEC01
   CreateDirectory "$SMPROGRAMS\NeNgi PDF"
   CreateShortCut "$SMPROGRAMS\NeNgi PDF\NeNgi PDF.lnk" "$INSTDIR\NeNgi_PDF.exe" "" "$INSTDIR\NeNgi_PDF.exe" 0
   CreateShortCut "$SMPROGRAMS\NeNgi PDF\NeNgi PDF Kaldır (Uninstall).lnk" "$INSTDIR\uninstall.exe"
+
+  ; Windows Açılışında Hızlı Başlatıcı (System Tray Ajanı)
+  CreateShortCut "$SMSTARTUP\NeNgi PDF Hızlı Başlatıcı.lnk" "$INSTDIR\NeNgi_PDF.exe" "--tray" "$INSTDIR\NeNgi_PDF.exe" 0
 
   ; PDF Dosya İlişkilendirmesi (File Association - HKCR & HKCU)
   WriteRegStr HKCR ".pdf" "" "NeNgiPDF.Document"
