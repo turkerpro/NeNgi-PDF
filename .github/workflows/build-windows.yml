@@ -40,16 +40,19 @@ jobs:
           python -m unittest discover -v tests
         continue-on-error: true
 
-      - name: Build Windows Executable (.exe)
+      - name: Build Windows Executables
         run: |
-          python -m PyInstaller --noconfirm --onefile --windowed --name "NeNgi_PDF" --icon "resources/app_icon.ico" --collect-all pymupdf --collect-all fitz --collect-all PyQt6 --hidden-import PyQt6 --hidden-import PIL --add-data "resources;resources" nengi/main.py
+          # 1. Build uncompressed folder structure for Setup Installer (Instant 0.05s launch)
+          python -m PyInstaller --noconfirm --onedir --windowed --name "NeNgi_PDF" --icon "resources/app_icon.ico" --collect-all pymupdf --collect-all fitz --collect-all PyQt6 --hidden-import PyQt6 --hidden-import PIL --add-data "resources;resources" nengi/main.py
+
+          # 2. Build standalone single-file portable binary
+          python -m PyInstaller --noconfirm --onefile --windowed --name "NeNgi_PDF_Portable" --icon "resources/app_icon.ico" --collect-all pymupdf --collect-all fitz --collect-all PyQt6 --hidden-import PyQt6 --hidden-import PIL --add-data "resources;resources" nengi/main.py
 
       - name: Build Windows Setup Installer (NSIS)
         run: |
           $TAG = "${{ github.ref_name }}"
           if (-not $TAG -or $TAG -eq "main") { $TAG = "v1.4.7" }
-          Copy-Item "dist\NeNgi_PDF.exe" -Destination "dist\NeNgi_PDF_Portable.exe"
-          Copy-Item "dist\NeNgi_PDF.exe" -Destination "dist\NeNgi_PDF_${TAG}_Portable.exe"
+          Copy-Item "dist\NeNgi_PDF_Portable.exe" -Destination "dist\NeNgi_PDF_${TAG}_Portable.exe"
           & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
           Copy-Item "dist\NeNgi_PDF_Setup.exe" -Destination "dist\NeNgi_PDF_${TAG}_Setup.exe"
 

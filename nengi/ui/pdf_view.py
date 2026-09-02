@@ -48,7 +48,8 @@ class PageRenderWidget(QWidget):
         self.hovered_block: Optional[Tuple[float, float, float, float, str, int, int]] = None
         self.active_text_widgets: List = []
 
-        # Selection state for whiteout / drag
+        # Selection state for text / whiteout / drag
+        self._is_selecting_text = False
         self._dragging = False
         self._drag_start = QPoint()
         self._drag_current = QPoint()
@@ -58,16 +59,16 @@ class PageRenderWidget(QWidget):
         self.cached_pixmap: Optional[QPixmap] = None
         self._text_extracted = False
 
-        # Instant Open / Lazy Virtualization:
-        # Render first page immediately; subsequent pages render on-demand in paintEvent!
+        # Set widget geometry immediately from page rect
+        try:
+            p_rect = self.doc.get_page(self.page_idx).rect
+            self.setFixedSize(int(p_rect.width * self.zoom), int(p_rect.height * self.zoom))
+        except Exception:
+            pass
+
+        # Render first page immediately; subsequent pages render on-demand in paintEvent
         if self.page_idx == 0:
             self.render_cache()
-        else:
-            try:
-                p_rect = self.doc.get_page(self.page_idx).rect
-                self.setFixedSize(int(p_rect.width * self.zoom), int(p_rect.height * self.zoom))
-            except Exception:
-                self.render_cache()
 
     def _ensure_text_extracted(self):
         """Extracts text words and blocks on-demand only when user interacts with text."""
@@ -99,7 +100,7 @@ class PageRenderWidget(QWidget):
             return
         self.cached_pixmap = self.doc.render_page_pixmap(self.page_idx, self.zoom)
         self._text_extracted = False
-        if self.cached_pixmap:
+        if self.cached_pixmap and self.size() != self.cached_pixmap.size():
             self.setFixedSize(self.cached_pixmap.size())
 
     def set_highlights(self, highlights: List[Tuple[fitz.Rect, QColor]]):

@@ -57,8 +57,8 @@ Section "MainSection" SEC01
   SetOutPath "$INSTDIR"
   SetOverwrite on
 
-  ; Kurulacak ana dosya
-  File "dist\NeNgi_PDF.exe"
+  ; Kurulacak program dosyaları (Hazır açılmış, anında çalışan klasör yapısı)
+  File /r "dist\NeNgi_PDF\*.*"
 
   ; Masaüstü Kısayolu
   CreateShortCut "$DESKTOP\NeNgi PDF.lnk" "$INSTDIR\NeNgi_PDF.exe" "" "$INSTDIR\NeNgi_PDF.exe" 0
@@ -127,12 +127,11 @@ Section Uninstall
   Delete "$DESKTOP\NeNgi PDF.lnk"
   Delete "$SMPROGRAMS\NeNgi PDF\NeNgi PDF.lnk"
   Delete "$SMPROGRAMS\NeNgi PDF\NeNgi PDF Kaldır (Uninstall).lnk"
+  Delete "$SMSTARTUP\NeNgi PDF Hızlı Başlatıcı.lnk"
   RMDir "$SMPROGRAMS\NeNgi PDF"
 
   ; Program dosyalarını sil
-  Delete "$INSTDIR\NeNgi_PDF.exe"
-  Delete "$INSTDIR\uninstall.exe"
-  RMDir "$INSTDIR"
+  RMDir /r "$INSTDIR"
 
   ; Kayıt defteri temizliği
   DeleteRegKey HKCR "*\shell\NeNgiPDF.Merge"
