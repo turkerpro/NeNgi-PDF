@@ -9,7 +9,7 @@ import tempfile
 import unittest
 import pymupdf as fitz
 from PIL import Image
-from PyQt6.QtGui import QGuiApplication
+from PyQt6.QtWidgets import QApplication
 
 from nengi.core.pdf_document import PDFDocument
 from nengi.core.diff_engine import DiffEngine
@@ -18,7 +18,7 @@ from nengi.core.security import SecurityManager
 from nengi.core.converter import FormatConverter
 
 # Initialize GUI application for QPixmap/QImage operations
-app = QGuiApplication.instance() or QGuiApplication(sys.argv)
+app = QApplication.instance() or QApplication(sys.argv)
 
 
 class TestNeNgiCore(unittest.TestCase):
