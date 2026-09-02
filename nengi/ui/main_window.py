@@ -8,13 +8,13 @@ from __future__ import annotations
 import os
 import sys
 from typing import Optional, List, Tuple
-from PyQt6.QtCore import Qt, QSize, QPoint
+from PyQt6.QtCore import Qt, QSize, QPoint, QRect
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, 
     QToolBar, QStatusBar, QFileDialog, QMessageBox, QLabel, 
     QSplitter, QInputDialog, QComboBox, QMenu, QDialog, QPushButton
 )
-from PyQt6.QtGui import QIcon, QAction, QKeySequence
+from PyQt6.QtGui import QIcon, QAction, QKeySequence, QPixmap, QPainter, QFont
 
 from nengi.core.pdf_document import PDFDocument
 from nengi.core.page_manager import PageManager
@@ -146,119 +146,119 @@ class MainWindow(QMainWindow):
         # Toolbars / Ribbon
         self._create_toolbars()
 
+    def _add_action(self, toolbar: QToolBar, icon_str: str, text: str, tooltip: str = "", shortcut: str = "", checkable: bool = False) -> QAction:
+        """Helper to render a crisp icon centered above a clean text label."""
+        pixmap = QPixmap(24, 24)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        font = QFont("Segoe UI Emoji", 13)
+        painter.setFont(font)
+        painter.drawText(QRect(0, 0, 24, 24), Qt.AlignmentFlag.AlignCenter, icon_str)
+        painter.end()
+
+        act = toolbar.addAction(QIcon(pixmap), text)
+        if tooltip:
+            act.setToolTip(tooltip)
+        if shortcut:
+            act.setShortcut(QKeySequence(shortcut))
+        if checkable:
+            act.setCheckable(True)
+        return act
+
     def _create_toolbars(self):
-        # 1. Main Action Toolbar
+        # 1. Main Action Toolbar (Minimalist with Text Under Icon)
         tb_main = QToolBar("Ana Araçlar")
-        tb_main.setIconSize(QSize(20, 20))
+        tb_main.setMovable(False)
+        tb_main.setIconSize(QSize(22, 22))
+        tb_main.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, tb_main)
 
         # File actions
-        act_open = tb_main.addAction("📂 PDF Aç")
-        act_open.setShortcut(QKeySequence("Ctrl+O"))
+        act_open = self._add_action(tb_main, "📂", "Aç", "PDF Dosyası Aç (Ctrl+O)", "Ctrl+O")
         act_open.triggered.connect(self.open_file_dialog)
 
-        act_save = tb_main.addAction("💾 Kaydet")
-        act_save.setShortcut(QKeySequence("Ctrl+S"))
+        act_save = self._add_action(tb_main, "💾", "Kaydet", "Değişiklikleri Kaydet (Ctrl+S)", "Ctrl+S")
         act_save.triggered.connect(self.save_current_file)
 
-        act_save_as = tb_main.addAction("💾 Farklı Kaydet")
+        act_save_as = self._add_action(tb_main, "📑", "Farklı Kaydet", "Farklı Kaydet...")
         act_save_as.triggered.connect(self.save_current_file_as)
 
-        act_print = tb_main.addAction("🖨️ Yazdır")
-        act_print.setShortcut(QKeySequence("Ctrl+P"))
-        act_print.setToolTip("Belgeyi fiziksel yazıcıya veya Microsoft Print to PDF sanal yazıcısına yazdır (Ctrl+P)")
+        act_print = self._add_action(tb_main, "🖨️", "Yazdır", "Belgeyi Yazdır veya PDF Yap (Ctrl+P)", "Ctrl+P")
         act_print.triggered.connect(self.print_current_document)
 
-        act_merge = tb_main.addAction("📑 Dosyaları Birleştir")
-        act_merge.setToolTip("Birden çok PDF veya resmi tek bir PDF belgesinde birleştir")
+        act_merge = self._add_action(tb_main, "🗂️", "Birleştir", "Birden çok PDF veya resmi tek PDF'te birleştir")
         act_merge.triggered.connect(lambda: self.open_merge_dialog())
 
         tb_main.addSeparator()
 
         # DIFF Actions
-        act_diff_open_tabs = tb_main.addAction("⚖️ Açık Sekmeleri Karşılaştır (DIFF)")
-        act_diff_open_tabs.setToolTip("Gelen maillerdeki açık olan iki PDF sekmesini kaydetmeden anında karşılaştır")
+        act_diff_open_tabs = self._add_action(tb_main, "⚖️", "Sekme DIFF", "Açık olan sekmeleri kaydetmeden hemen karşılaştır")
         act_diff_open_tabs.triggered.connect(self.compare_open_tabs)
 
-        act_diff = tb_main.addAction("⚖️ İki Dosya Seçip Karşılaştır...")
-        act_diff.setToolTip("Bilgisayardan iki farklı PDF seçip yan yana karşılaştır")
+        act_diff = self._add_action(tb_main, "📁⚖️", "Dosya DIFF", "Bilgisayardan iki PDF seçip yan yana karşılaştır")
         act_diff.triggered.connect(self.open_diff_dialog)
 
         tb_main.addSeparator()
 
         # Tools
-        self.act_tool_view = tb_main.addAction("👆 Gezin / Seç")
-        self.act_tool_view.setCheckable(True)
+        self.act_tool_view = self._add_action(tb_main, "👆", "Gezin / Seç", "Sayfada gezin veya fareyle metin seç", checkable=True)
         self.act_tool_view.setChecked(True)
         self.act_tool_view.triggered.connect(lambda: self._set_viewer_tool("view"))
 
-        self.act_tool_whiteout = tb_main.addAction("◻️ Beyazlat / Silgi")
-        self.act_tool_whiteout.setCheckable(True)
-        self.act_tool_whiteout.setToolTip("Taranmış yazı, leke veya kalem izlerini dikdörtgen seçerek temizle")
+        self.act_tool_whiteout = self._add_action(tb_main, "◻️", "Silgi", "Yazı, leke veya kalem izlerini beyazlatıp temizle", checkable=True)
         self.act_tool_whiteout.triggered.connect(lambda: self._set_viewer_tool("whiteout"))
 
-        self.act_tool_text = tb_main.addAction("✍️ Metin Ekle")
-        self.act_tool_text.setCheckable(True)
-        self.act_tool_text.setToolTip("Sayfa üzerinde istenen yere tıklayıp yeni metin ekle")
+        self.act_tool_text = self._add_action(tb_main, "✍️", "Metin Ekle", "Sayfa üzerinde istenen yere yeni metin ekle", checkable=True)
         self.act_tool_text.triggered.connect(lambda: self._set_viewer_tool("text"))
 
-        act_edit_text = tb_main.addAction("✏️ Metni Düzenle")
-        act_edit_text.setToolTip("Seçili metni veya çift tıklanan kelimeyi doğrudan PDF üzerinde değiştir")
+        act_edit_text = self._add_action(tb_main, "✏️", "Düzenle", "Seçili metni veya çift tıklanan kelimeyi doğrudan değiştir")
         act_edit_text.triggered.connect(self._edit_selected_text_trigger)
 
-        act_ocr = tb_main.addAction("🔍 Metin Tanı (OCR)")
-        act_ocr.setToolTip("Sayfadaki metinleri tanı, seçilebilir ve düzenlenebilir yap")
+        act_ocr = self._add_action(tb_main, "🔍", "OCR", "Sayfadaki metinleri tanı, seçilebilir ve düzenlenebilir yap")
         act_ocr.triggered.connect(self._run_ocr_trigger)
 
-        act_paint = tb_main.addAction("🖌️ Paint'te Aç ve Düzenle")
-        act_paint.setToolTip("Taranmış evrağı Paint programında açıp temizle; kaydedince PDF otomatik güncellenir")
+        act_paint = self._add_action(tb_main, "🖌️", "Paint", "Taranmış evrağı Paint programında açıp temizle")
         act_paint.triggered.connect(self._launch_external_image_edit)
 
-        act_sig = tb_main.addAction("🖊️ İmza Ekle")
-        act_sig.setToolTip("Kendi el yazısı imzanızı çizin veya imza resmi yükleyip sayfaya ekleyin")
+        act_sig = self._add_action(tb_main, "🖊️", "İmza", "El yazısı imzanızı çizin veya imza resmi ekleyin")
         act_sig.triggered.connect(self._open_signature_dialog)
 
         tb_main.addSeparator()
 
         # Page Management
-        act_manage_pages = tb_main.addAction("📑 Sayfaları Yönet")
-        act_manage_pages.setToolTip("Sayfaları görsel olarak sırala, döndür, sil veya boş sayfa ekle")
+        act_manage_pages = self._add_action(tb_main, "📑", "Sayfalar", "Sayfaları görsel olarak sırala, döndür, sil")
         act_manage_pages.triggered.connect(self._open_page_manager)
 
-        act_rot_cw = tb_main.addAction("🔄 Döndür")
+        act_rot_cw = self._add_action(tb_main, "🔄", "Döndür", "Sayfayı 90 derece sağa döndür")
         act_rot_cw.triggered.connect(self._rotate_current_page)
 
-        tb_main.addSeparator()
-
-        # Security & Conversion
-        act_protect = tb_main.addAction("🔒 Parola Koy")
+        act_protect = self._add_action(tb_main, "🔒", "Parola", "PDF'e parola koy")
         act_protect.triggered.connect(self._encrypt_current_doc)
 
-        act_unprotect = tb_main.addAction("🔓 Şifre Kaldır")
+        act_unprotect = self._add_action(tb_main, "🔓", "Şifre Çöz", "Belgedeki parolayı kaldır")
         act_unprotect.triggered.connect(self._decrypt_current_doc)
 
-        act_export_pages = tb_main.addAction("🖼️ Resme Çevir")
+        act_export_pages = self._add_action(tb_main, "🖼️", "Resme Çevir", "Sayfaları resim olarak dışa aktar")
         act_export_pages.triggered.connect(self._export_pages_as_images)
 
-        act_img_to_pdf = tb_main.addAction("📑 Resimlerden PDF Yap")
+        act_img_to_pdf = self._add_action(tb_main, "📑", "Resimden PDF", "Resimlerden yeni bir PDF oluştur")
         act_img_to_pdf.triggered.connect(self._convert_images_to_pdf)
 
         tb_main.addSeparator()
 
-        # Windows integration, Settings & Theme
-        act_settings = tb_main.addAction("⚙️ Seçenekler / Ayarlar")
-        act_settings.setToolTip("Varsayılan uygulama, tema, görünüm ve karşılaştırma seçenekleri")
+        # Settings & Zoom
+        act_settings = self._add_action(tb_main, "⚙️", "Seçenekler", "Varsayılan uygulama, tema ve karşılaştırma ayarları")
         act_settings.triggered.connect(self._open_settings_dialog)
 
-        # Zoom actions
-        act_zoom_in = tb_main.addAction("🔍➕")
+        act_zoom_in = self._add_action(tb_main, "🔍➕", "Büyüt", "Yakınlaştır")
         act_zoom_in.triggered.connect(self._zoom_in)
 
-        act_zoom_out = tb_main.addAction("🔍➖")
+        act_zoom_out = self._add_action(tb_main, "🔍➖", "Küçült", "Uzaklaştır")
         act_zoom_out.triggered.connect(self._zoom_out)
 
-        # Theme toggle
-        act_theme = tb_main.addAction("🌓 Tema")
+        act_theme = self._add_action(tb_main, "🌓", "Tema", "Koyu / Aydınlık tema geçişi")
         act_theme.triggered.connect(self._toggle_theme)
 
     def _open_settings_dialog(self):
