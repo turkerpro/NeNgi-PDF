@@ -31,6 +31,10 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Install NSIS Compiler
+        run: |
+          choco install nsis -y --no-progress
+
       - name: Run Tests
         run: |
           python -m unittest discover tests
@@ -41,8 +45,8 @@ jobs:
 
       - name: Build Windows Setup Installer (NSIS)
         run: |
-          copy dist\NeNgi_PDF.exe dist\NeNgi_PDF_Portable.exe
-          makensis installer.nsi
+          Copy-Item "dist\NeNgi_PDF.exe" -Destination "dist\NeNgi_PDF_Portable.exe"
+          & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
 
       - name: Upload Windows Executable Artifacts
         uses: actions/upload-artifact@v4
