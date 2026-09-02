@@ -1,23 +1,24 @@
 """
 NeNgi PDF - NextGen Left Navigation Rail
 Clean vertical navigation bar featuring app branding, primary views,
-and bottom-pinned settings.
+vector SVG icons, and bottom-pinned settings.
 """
 
 from __future__ import annotations
 from typing import Optional
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QFrame, QButtonGroup
 )
 
+from nengi.ui.icons import get_svg_icon
+
 
 class NavigationRail(QWidget):
     """Modern left sidebar with brand identity and view navigation."""
 
-    nav_changed = pyqtSignal(str) # Emits view key: "home", "recent", "documents", "diff", "tools", "settings"
+    nav_changed = pyqtSignal(str) # "home", "recent", "documents", "diff", "tools", "settings"
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -37,10 +38,10 @@ class NavigationRail(QWidget):
         # 1. Brand Logo & Title
         brand_layout = QHBoxLayout()
         brand_layout.setSpacing(10)
-        brand_layout.setContentsMargins(4, 0, 4, 16)
+        brand_layout.setContentsMargins(6, 0, 6, 16)
 
-        lbl_logo = QLabel("📑")
-        lbl_logo.setStyleSheet("font-size: 24px;")
+        lbl_logo = QLabel()
+        lbl_logo.setPixmap(get_svg_icon("logo", "#0078D4", 26).pixmap(26, 26))
         brand_layout.addWidget(lbl_logo)
 
         lbl_title = QLabel("NeNgi PDF")
@@ -50,12 +51,12 @@ class NavigationRail(QWidget):
 
         layout.addLayout(brand_layout)
 
-        # 2. Primary Navigation Items
-        self._add_nav_item(layout, "home", "🏠  Ana Sayfa", is_checked=True)
-        self._add_nav_item(layout, "recent", "🕒  Son Dosyalar")
-        self._add_nav_item(layout, "documents", "📁  Belgelerim")
-        self._add_nav_item(layout, "diff", "⚖️  Karşılaştır (DIFF)")
-        self._add_nav_item(layout, "tools", "✨  AI & Araçlar")
+        # 2. Primary Navigation Items with SVG Icons
+        self._add_nav_item(layout, "home", "home", "Ana Sayfa", is_checked=True)
+        self._add_nav_item(layout, "recent", "recent", "Son Dosyalar")
+        self._add_nav_item(layout, "documents", "documents", "Belgelerim")
+        self._add_nav_item(layout, "diff", "diff", "Karşılaştır (DIFF)")
+        self._add_nav_item(layout, "tools", "tools", "Hızlı Araçlar")
 
         layout.addStretch()
 
@@ -66,11 +67,13 @@ class NavigationRail(QWidget):
         layout.addWidget(divider)
 
         # 3. Bottom Pinned Settings
-        self._add_nav_item(layout, "settings", "⚙️  Ayarlar", checkable=False)
+        self._add_nav_item(layout, "settings", "settings", "Ayarlar", checkable=False)
 
-    def _add_nav_item(self, layout: QVBoxLayout, key: str, label: str, is_checked: bool = False, checkable: bool = True):
-        btn = QPushButton(label)
+    def _add_nav_item(self, layout: QVBoxLayout, key: str, icon_name: str, label: str, is_checked: bool = False, checkable: bool = True):
+        btn = QPushButton(f"  {label}")
         btn.setObjectName("navButton")
+        btn.setIcon(get_svg_icon(icon_name, "#9DA3AE", 18))
+        btn.setIconSize(QSize(18, 18))
         btn.setCheckable(checkable)
         btn.setChecked(is_checked)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -89,6 +92,9 @@ class NavigationRail(QWidget):
         )
         if checkable:
             self._button_group.addButton(btn)
+            btn.toggled.connect(lambda is_on, b=btn, name=icon_name: b.setIcon(get_svg_icon(name, "#FFFFFF" if is_on else "#9DA3AE", 18)))
+            if is_checked:
+                btn.setIcon(get_svg_icon(icon_name, "#FFFFFF", 18))
 
         btn.clicked.connect(lambda: self._on_btn_clicked(key))
         self._buttons[key] = btn

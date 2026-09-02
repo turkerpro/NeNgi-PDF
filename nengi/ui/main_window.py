@@ -40,6 +40,7 @@ from nengi.ui.navigation_rail import NavigationRail
 from nengi.ui.floating_toolbar import FloatingPillToolbar
 from nengi.ui.copilot_panel import CopilotPanel
 from nengi.ui.styles import DARK_THEME, LIGHT_THEME
+from nengi.ui.icons import get_svg_icon
 
 
 class OpenTabsDiffDialog(QDialog):
@@ -183,39 +184,47 @@ class MainWindow(QMainWindow):
         h_layout.addSpacing(220) # Align with rail width
         self.txt_search = QLineEdit()
         self.txt_search.setObjectName("searchBox")
-        self.txt_search.setPlaceholderText("🔍  Belgelerde, metinlerde veya araçlarda ara... (Enter)")
+        self.txt_search.setPlaceholderText("Belgelerde veya metinlerde ara... (Enter)")
         self.txt_search.returnPressed.connect(self._on_search_triggered)
         h_layout.addWidget(self.txt_search, 1)
 
-        # Right quick action buttons
-        btn_print = QPushButton("🖨️ Yazdır")
+        # Right quick action buttons with SVG icons
+        btn_print = QPushButton("  Yazdır")
+        btn_print.setIcon(get_svg_icon("print", "#D0D4DC", 16))
+        btn_print.setIconSize(QSize(16, 16))
         btn_print.setToolTip("Belgeyi Yazdır veya PDF Yap (Ctrl+P)")
         btn_print.clicked.connect(self.print_current_document)
         h_layout.addWidget(btn_print)
 
-        btn_save = QPushButton("💾 Kaydet")
+        btn_save = QPushButton("  Kaydet")
+        btn_save.setIcon(get_svg_icon("save", "#D0D4DC", 16))
+        btn_save.setIconSize(QSize(16, 16))
         btn_save.setToolTip("Değişiklikleri Kaydet (Ctrl+S)")
         btn_save.clicked.connect(self.save_current_file)
         h_layout.addWidget(btn_save)
 
-        btn_theme = QPushButton("🌓")
+        btn_theme = QPushButton()
+        btn_theme.setIcon(get_svg_icon("theme", "#D0D4DC", 18))
+        btn_theme.setIconSize(QSize(18, 18))
         btn_theme.setFixedSize(36, 36)
         btn_theme.setToolTip("Koyu / Açık Tema Değiştir")
         btn_theme.clicked.connect(self._toggle_theme)
         h_layout.addWidget(btn_theme)
 
-        # Copilot Toggle Button
-        self.btn_toggle_copilot = QPushButton("✨ Copilot")
+        # Tools Panel Toggle Button (No Copilot / No AI)
+        self.btn_toggle_copilot = QPushButton("  Araçlar")
+        self.btn_toggle_copilot.setIcon(get_svg_icon("panel", "#D0D4DC", 16))
+        self.btn_toggle_copilot.setIconSize(QSize(16, 16))
         self.btn_toggle_copilot.setCheckable(True)
         self.btn_toggle_copilot.setChecked(True)
-        self.btn_toggle_copilot.setStyleSheet("font-weight: 600; padding: 6px 12px;")
+        self.btn_toggle_copilot.setStyleSheet("font-weight: 600; padding: 6px 14px;")
         self.btn_toggle_copilot.clicked.connect(self._toggle_copilot_panel)
         h_layout.addWidget(self.btn_toggle_copilot)
 
         # User Badge
-        badge_user = QLabel("👤 Standart Plan")
+        badge_user = QLabel("Standart Plan")
         badge_user.setStyleSheet(
-            "background-color: #24272D; border: 1px solid #353942; border-radius: 14px; padding: 4px 10px; color: #A0A5AD; font-size: 11.5px;"
+            "background-color: #24272D; border: 1px solid #353942; border-radius: 14px; padding: 5px 12px; color: #A0A5AD; font-size: 11.5px; font-weight: 500;"
         )
         h_layout.addWidget(badge_user)
 
@@ -275,9 +284,12 @@ class MainWindow(QMainWindow):
         f_layout.setContentsMargins(16, 4, 16, 4)
         f_layout.setSpacing(12)
 
-        # Left: Page Stepper
-        btn_prev = QPushButton("◀")
+        # Left: Page Stepper with SVG icons
+        btn_prev = QPushButton()
+        btn_prev.setIcon(get_svg_icon("prev", "#D0D4DC", 14))
+        btn_prev.setIconSize(QSize(14, 14))
         btn_prev.setFixedSize(28, 26)
+        btn_prev.setToolTip("Önceki Sayfa")
         btn_prev.clicked.connect(self._prev_page)
         f_layout.addWidget(btn_prev)
 
@@ -285,8 +297,11 @@ class MainWindow(QMainWindow):
         self.lbl_footer_page.setStyleSheet("padding: 0 4px; font-weight: 500;")
         f_layout.addWidget(self.lbl_footer_page)
 
-        btn_next = QPushButton("▶")
+        btn_next = QPushButton()
+        btn_next.setIcon(get_svg_icon("next", "#D0D4DC", 14))
+        btn_next.setIconSize(QSize(14, 14))
         btn_next.setFixedSize(28, 26)
+        btn_next.setToolTip("Sonraki Sayfa")
         btn_next.clicked.connect(self._next_page)
         f_layout.addWidget(btn_next)
 
@@ -295,9 +310,12 @@ class MainWindow(QMainWindow):
         self.lbl_footer_status.setStyleSheet("color: #727883; margin-left: 20px;")
         f_layout.addWidget(self.lbl_footer_status, 1)
 
-        # Right: Zoom & View controls
-        btn_zoom_out = QPushButton("➖")
+        # Right: Zoom & View controls with SVG icons
+        btn_zoom_out = QPushButton()
+        btn_zoom_out.setIcon(get_svg_icon("zoom_out", "#D0D4DC", 14))
+        btn_zoom_out.setIconSize(QSize(14, 14))
         btn_zoom_out.setFixedSize(28, 26)
+        btn_zoom_out.setToolTip("Uzaklaştır")
         btn_zoom_out.clicked.connect(self._zoom_out)
         f_layout.addWidget(btn_zoom_out)
 
@@ -305,13 +323,18 @@ class MainWindow(QMainWindow):
         self.lbl_footer_zoom.setStyleSheet("font-weight: 600; min-width: 44px; text-align: center;")
         f_layout.addWidget(self.lbl_footer_zoom)
 
-        btn_zoom_in = QPushButton("➕")
+        btn_zoom_in = QPushButton()
+        btn_zoom_in.setIcon(get_svg_icon("zoom_in", "#D0D4DC", 14))
+        btn_zoom_in.setIconSize(QSize(14, 14))
         btn_zoom_in.setFixedSize(28, 26)
+        btn_zoom_in.setToolTip("Yakınlaştır")
         btn_zoom_in.clicked.connect(self._zoom_in)
         f_layout.addWidget(btn_zoom_in)
 
-        # Thumbnails toggle
-        btn_thumbs = QPushButton("📑")
+        # Thumbnails toggle with SVG icon
+        btn_thumbs = QPushButton()
+        btn_thumbs.setIcon(get_svg_icon("thumbnails", "#D0D4DC", 16))
+        btn_thumbs.setIconSize(QSize(16, 16))
         btn_thumbs.setFixedSize(30, 26)
         btn_thumbs.setToolTip("Sayfa Küçük Resimleri Panelini Aç / Kapat")
         btn_thumbs.clicked.connect(self._toggle_thumbnails)

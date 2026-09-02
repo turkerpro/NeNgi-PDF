@@ -1,20 +1,23 @@
 """
-NeNgi PDF - NextGen Copilot & Tools Side Panel
-Collapsible right sidebar providing suggested actions, quick document intelligence,
-OCR processing, and an interactive assistant interface.
+NeNgi PDF - Document Tools Side Panel
+Collapsible right sidebar providing quick document utilities,
+OCR processing, and an interactive command interface.
+Completely vector SVG powered with no AI/Copilot branding.
 """
 
 from __future__ import annotations
 from typing import Optional
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QLineEdit, QScrollArea, QFrame
 )
 
+from nengi.ui.icons import get_svg_icon
+
 
 class CopilotPanel(QWidget):
-    """NextGen right sidebar for document intelligence and quick tools."""
+    """NextGen right sidebar for document utilities and quick tools."""
 
     closed = pyqtSignal()
     action_triggered = pyqtSignal(str) # "summarize", "ocr", "diff", "merge", "protect"
@@ -32,23 +35,25 @@ class CopilotPanel(QWidget):
         layout.setContentsMargins(14, 16, 14, 16)
         layout.setSpacing(12)
 
-        # 1. Header: Copilot title and close button
+        # 1. Header: Document Tools title and close button
         header_layout = QHBoxLayout()
-        lbl_icon = QLabel("✨")
-        lbl_icon.setStyleSheet("font-size: 18px;")
+        lbl_icon = QLabel()
+        lbl_icon.setPixmap(get_svg_icon("tools", "#0078D4", 20).pixmap(20, 20))
         header_layout.addWidget(lbl_icon)
 
-        lbl_title = QLabel("Copilot & Araçlar")
+        lbl_title = QLabel("Belge Araçları")
         lbl_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #FFFFFF;")
         header_layout.addWidget(lbl_title)
         header_layout.addStretch()
 
-        btn_close = QPushButton("✕")
+        btn_close = QPushButton()
+        btn_close.setIcon(get_svg_icon("close", "#8C929C", 16))
+        btn_close.setIconSize(QSize(16, 16))
         btn_close.setFixedSize(26, 26)
         btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_close.setStyleSheet(
-            "QPushButton { border: none; background: transparent; color: #8C929C; font-size: 14px; border-radius: 13px; }"
-            "QPushButton:hover { background-color: #2D3036; color: #FFFFFF; }"
+            "QPushButton { border: none; background: transparent; border-radius: 13px; }"
+            "QPushButton:hover { background-color: #2D3036; }"
         )
         btn_close.clicked.connect(self.closed.emit)
         header_layout.addWidget(btn_close)
@@ -56,18 +61,18 @@ class CopilotPanel(QWidget):
         layout.addLayout(header_layout)
 
         # 2. Suggested Section Header
-        lbl_suggested = QLabel("ÖNERİLEN İŞLEMLER")
+        lbl_suggested = QLabel("HIZLI İŞLEMLER")
         lbl_suggested.setStyleSheet("font-size: 10.5px; font-weight: 600; color: #6E7681; letter-spacing: 0.8px;")
         layout.addWidget(lbl_suggested)
 
-        # 3. Action Cards
-        self._add_action_card(layout, "📄", "Sayfadaki Metinleri Kopyala", "summarize")
-        self._add_action_card(layout, "🔍", "Taranmış Metinleri Tanı (OCR)", "ocr")
-        self._add_action_card(layout, "⚖️", "Açık Sekmelerle Karşılaştır (DIFF)", "diff")
-        self._add_action_card(layout, "🗂️", "Birden Çok Dosyayı Birleştir", "merge")
-        self._add_action_card(layout, "🔒", "Belgeyi Parola ile Şifrele", "protect")
+        # 3. Action Cards with SVG Icons
+        self._add_action_card(layout, "documents", "Sayfadaki Metinleri Kopyala", "summarize")
+        self._add_action_card(layout, "search", "Taranmış Metinleri Tanı (OCR)", "ocr")
+        self._add_action_card(layout, "diff", "Açık Sekmelerle Karşılaştır (DIFF)", "diff")
+        self._add_action_card(layout, "pages", "Birden Çok Dosyayı Birleştir", "merge")
+        self._add_action_card(layout, "settings", "Belgeyi Parola ile Şifrele", "protect")
 
-        # 4. Message & Intelligence Area (Scrollable)
+        # 4. Message & Activity Area (Scrollable)
         self.msg_area = QScrollArea()
         self.msg_area.setWidgetResizable(True)
         self.msg_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
@@ -90,16 +95,18 @@ class CopilotPanel(QWidget):
         input_lay.setContentsMargins(8, 2, 4, 2)
 
         self.txt_query = QLineEdit()
-        self.txt_query.setPlaceholderText("Belge hakkında işlem yapın...")
+        self.txt_query.setPlaceholderText("Belge içinde arayın veya işlem yapın...")
         self.txt_query.setStyleSheet("QLineEdit { border: none; background: transparent; color: #FFFFFF; font-size: 12px; }")
         self.txt_query.returnPressed.connect(self._send_query)
         input_lay.addWidget(self.txt_query)
 
-        btn_send = QPushButton("➤")
+        btn_send = QPushButton()
+        btn_send.setIcon(get_svg_icon("send", "#FFFFFF", 14))
+        btn_send.setIconSize(QSize(14, 14))
         btn_send.setFixedSize(28, 28)
         btn_send.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_send.setStyleSheet(
-            "QPushButton { border: none; border-radius: 14px; background-color: #0078D4; color: white; font-weight: bold; }"
+            "QPushButton { border: none; border-radius: 14px; background-color: #0078D4; }"
             "QPushButton:hover { background-color: #1084D9; }"
         )
         btn_send.clicked.connect(self._send_query)
@@ -107,9 +114,11 @@ class CopilotPanel(QWidget):
 
         layout.addWidget(input_frame)
 
-    def _add_action_card(self, layout: QVBoxLayout, icon: str, title: str, action_key: str):
-        btn = QPushButton(f"  {icon}  {title}")
+    def _add_action_card(self, layout: QVBoxLayout, icon_name: str, title: str, action_key: str):
+        btn = QPushButton(f"  {title}")
         btn.setObjectName("actionCard")
+        btn.setIcon(get_svg_icon(icon_name, "#A0A5B0", 16))
+        btn.setIconSize(QSize(16, 16))
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setStyleSheet(
             "QPushButton#actionCard {"

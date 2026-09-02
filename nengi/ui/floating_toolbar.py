@@ -1,7 +1,7 @@
 """
 NeNgi PDF - Floating Island / Pill Toolbar
 Modern floating capsule widget positioned at the bottom of the document canvas,
-containing quick interaction tools (Select, Edit, Add Text, Whiteout, Signature, Rotate, Undo).
+containing quick interaction tools powered by clean vector SVG icons.
 """
 
 from __future__ import annotations
@@ -12,6 +12,8 @@ from PyQt6.QtWidgets import (
     QGraphicsDropShadowEffect
 )
 from PyQt6.QtGui import QColor
+
+from nengi.ui.icons import get_svg_icon
 
 
 class FloatingPillToolbar(QFrame):
@@ -27,7 +29,7 @@ class FloatingPillToolbar(QFrame):
         # Soft drop shadow for floating elevation
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(20)
-        shadow.setColor(QColor(0, 0, 0, 100))
+        shadow.setColor(QColor(0, 0, 0, 120))
         shadow.setOffset(0, 4)
         self.setGraphicsEffect(shadow)
 
@@ -38,50 +40,55 @@ class FloatingPillToolbar(QFrame):
 
     def _init_ui(self):
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 4, 10, 4)
-        layout.setSpacing(4)
+        layout.setContentsMargins(12, 4, 12, 4)
+        layout.setSpacing(6)
 
         # 1. Primary Canvas Tools (Exclusive toggle)
-        self.btn_view = self._add_tool_btn("👆", "Gezin / Seç", "view", checkable=True, checked=True)
-        self.btn_edit = self._add_tool_btn("✏️", "Metni / Paragrafı Düzenle", "edit_text", checkable=False)
-        self.btn_text = self._add_tool_btn("✍️", "Metin Ekle", "text", checkable=True)
-        self.btn_whiteout = self._add_tool_btn("◻️", "Silgi / Beyazlat", "whiteout", checkable=True)
-        self.btn_sig = self._add_tool_btn("🖊️", "İmza Ekle", "signature", checkable=False)
+        self.btn_view = self._add_tool_btn("pointer", "Gezin / Seç", "view", checkable=True, checked=True)
+        self.btn_edit = self._add_tool_btn("edit", "Metni / Paragrafı Düzenle", "edit_text", checkable=False)
+        self.btn_text = self._add_tool_btn("text_add", "Metin Ekle", "text", checkable=True)
+        self.btn_whiteout = self._add_tool_btn("eraser", "Silgi / Beyazlat", "whiteout", checkable=True)
+        self.btn_sig = self._add_tool_btn("signature", "İmza Ekle", "signature", checkable=False)
 
         # Subtle divider
         div = QFrame()
         div.setFrameShape(QFrame.Shape.VLine)
-        div.setStyleSheet("color: #383C44; background-color: #383C44; width: 1px; margin: 6px 2px;")
+        div.setStyleSheet("color: #383C44; background-color: #383C44; width: 1px; margin: 8px 4px;")
         layout.addWidget(div)
 
         # 2. Action Tools
-        self._add_tool_btn("🔄", "Döndür", "rotate", checkable=False)
-        self._add_tool_btn("📑", "Sayfalar", "pages", checkable=False)
-        self._add_tool_btn("↩️", "Geri Al (Ctrl+Z)", "undo", checkable=False)
-        self._add_tool_btn("↪️", "Yinele (Ctrl+Y)", "redo", checkable=False)
+        self._add_tool_btn("rotate", "Sayfayı Döndür", "rotate", checkable=False)
+        self._add_tool_btn("pages", "Sayfaları Yönet", "pages", checkable=False)
+        self._add_tool_btn("undo", "Geri Al (Ctrl+Z)", "undo", checkable=False)
+        self._add_tool_btn("redo", "Yinele (Ctrl+Y)", "redo", checkable=False)
 
-    def _add_tool_btn(self, icon_str: str, tooltip: str, tool_id: str, checkable: bool = False, checked: bool = False) -> QPushButton:
-        btn = QPushButton(icon_str)
+    def _add_tool_btn(self, icon_name: str, tooltip: str, tool_id: str, checkable: bool = False, checked: bool = False) -> QPushButton:
+        btn = QPushButton()
         btn.setObjectName("pillButton")
         btn.setToolTip(tooltip)
+        btn.setIcon(get_svg_icon(icon_name, "#D0D4DC", 18))
+        btn.setIconSize(QSize(18, 18))
         btn.setCheckable(checkable)
         btn.setChecked(checked)
         btn.setFixedSize(36, 36)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setStyleSheet(
             "QPushButton#pillButton {"
-            "  font-size: 16px; border: none; border-radius: 18px;"
-            "  background-color: transparent; color: #E0E0E0;"
+            "  border: none; border-radius: 18px;"
+            "  background-color: transparent;"
             "}"
             "QPushButton#pillButton:hover {"
-            "  background-color: #353942; color: #FFFFFF;"
+            "  background-color: #353942;"
             "}"
             "QPushButton#pillButton:checked {"
-            "  background-color: #0078D4; color: #FFFFFF;"
+            "  background-color: #0078D4;"
             "}"
         )
         if checkable:
             self._btn_group.addButton(btn)
+            btn.toggled.connect(lambda is_on, b=btn, name=icon_name: b.setIcon(get_svg_icon(name, "#FFFFFF" if is_on else "#D0D4DC", 18)))
+            if checked:
+                btn.setIcon(get_svg_icon(icon_name, "#FFFFFF", 18))
 
         btn.clicked.connect(lambda: self.tool_changed.emit(tool_id))
         self.layout().addWidget(btn)
