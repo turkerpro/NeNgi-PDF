@@ -7,7 +7,9 @@ NeNgi PDF; Adobe Acrobat Pro, Foxit Pro ve Nitro Pro gibi pahalı yazılımları
 
 ## ✨ Öne Çıkan Özellikler
 
-### 1. ⚖️ Yan Yana Metin Karşılaştırması (DIFF)
+### 1. ⚖️ Yan Yana Metin Karşılaştırması (DIFF) & Açık Sekmeler Arasında Karşılaştırma
+- **E-Postadan Gelen Belgeleri Kaydetmeden Karşılaştırın:** Mail ekindeki iki PDF'e peş peşe tıkladığınızda ayrı pencereler açılmaz; ikisi de aynı pencerede sekmeler halinde açılır.
+- **Açık Sekmeleri Tek Tıkla Karşılaştırma:** Menüdeki **"Açık Sekmeleri Karşılaştır"** butonuyla veya herhangi bir sekmeye sağ tıklayarak açık olan iki belgeyi diskte dosya aramadan anında yan yana DIFF ekranına getirin.
 - **Orijinal ve Revize Belge Yan Yana:** İki PDF dosyasını seçip anında karşılaştırın.
 - **Senkronize Kaydırma (Sync-Scroll):** Bir belgede aşağı kaydırdığınızda diğeri de otomatik olarak aynı oranda kayar.
 - **Renk Kodlu Anlık Vurgulama:**
@@ -17,25 +19,29 @@ NeNgi PDF; Adobe Acrobat Pro, Foxit Pro ve Nitro Pro gibi pahalı yazılımları
 - **Farklar Listesi & Hızlı Gezinti:** Sağ panelde tespit edilen tüm farklar listelenir; tıklanan farka her iki belgede otomatik olarak odaklanılır.
 - **Fark Raporu Dışa Aktarma:** Değişiklik listesini tek tıkla `.txt` raporu olarak kaydedin.
 
-### 2. 🖌️ Harici Editörle Görsel ve Tarama Temizleme Döngüsü (Roundtrip Edit)
+### 2. ⚡ Tek Pencerede Çoklu Sekme (Single-Instance) & Windows Varsayılan PDF Okuyucu
+- **Tekil Oturum (IPC Socket):** Windows'ta çift tıklanan veya e-posta istemcilerinden (Outlook, Thunderbird vb.) açılan tüm PDF'ler tek bir NeNgi PDF penceresinde yeni sekmeler olarak toplanır.
+- **Varsayılan PDF Okuyucusu Yap:** Menüden tek tıkla NeNgi PDF'i Windows'un varsayılan PDF uygulaması olarak ayarlayın (`.pdf` uzantı kaydı ve ProgID entegrasyonu).
+
+### 3. 🖌️ Harici Editörle Görsel ve Tarama Temizleme Döngüsü (Roundtrip Edit)
 - Taranmış bir sayfadaki veya PDF'teki bir görsele tıklayıp **"Paint'te Aç ve Düzenle"** diyebilirsiniz.
 - Sistemdeki varsayılan resim programında (MS Paint, Photoshop vb.) kalem izlerini, mürekkep lekelerini veya istenmeyen notları temizleyin.
 - Resim programında `Ctrl + S` yapıp kaydettiğiniz anda NeNgi PDF dosya değişikliğini yakalar ve **PDF içindeki sayfayı otomatik olarak günceller**.
 
-### 3. ◻️ Hızlı Beyazlatma & Silgi (Whiteout)
+### 4. ◻️ Hızlı Beyazlatma & Silgi (Whiteout)
 - Harici programa gitmeye gerek kalmadan, sayfa üzerindeki tükenmez kalem izlerinin veya silinmesi gereken alanların üzerini fare ile dikdörtgen çizerek anında temizleyin.
 
-### 4. ✍️ Doğrudan Metin ve İmza Ekleme
+### 5. ✍️ Doğrudan Metin ve İmza Ekleme
 - Sayfanın herhangi bir noktasına tıklayarak yeni metin kutusu ekleyin.
 - **İmza Ekle:** Mouse veya kalem ile ekranda kendi imzanızı çizin ya da hazır imza resminizi yükleyip belgenin dilediğiniz yerine boyutlandırarak yapıştırın.
 
-### 5. 📑 Görsel Sayfa Yönetimi
+### 6. 📑 Görsel Sayfa Yönetimi
 - Sayfaları 90°, 180°, 270° döndürün.
 - İstenmeyen sayfaları silin.
 - Sayfaların sırasını yukarı/aşağı taşıyarak değiştirin.
 - Boş A4 sayfası ekleyin veya başka bir PDF'teki sayfaları mevcut belgeye ekleyin (Merge).
 
-### 6. 🔒 Güvenlik & Format Dönüştürme
+### 7. 🔒 Güvenlik & Format Dönüştürme
 - **AES-256 Parola Koruması:** Belgeye şifre koyun.
 - **Şifre Kaldırma:** Parolalı bir PDF'in şifresini çözerek korumasız yeni bir kopya kaydedin.
 - **Resme Çevir:** PDF sayfalarını 300 DPI yüksek kaliteli PNG/JPG formatında dışa aktarın.

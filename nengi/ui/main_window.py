@@ -1,18 +1,18 @@
 """
 NeNgi PDF - Main Fluent Application Window
 Integrates multi-tab browsing, ribbon toolbar, PDF viewing, side-by-side DIFF comparison,
-image roundtrip editing, visual page organization, security, and conversion.
+open tab comparison, external image roundtrip editing, page management, security, and Windows integration.
 """
 
 from __future__ import annotations
 import os
 import sys
-from typing import Optional, List, Dict
-from PyQt6.QtCore import Qt, QSize
+from typing import Optional, List, Tuple
+from PyQt6.QtCore import Qt, QSize, QPoint
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, 
     QToolBar, QStatusBar, QFileDialog, QMessageBox, QLabel, 
-    QSplitter, QInputDialog, QComboBox, QToolButton
+    QSplitter, QInputDialog, QComboBox, QMenu, QDialog, QPushButton
 )
 from PyQt6.QtGui import QIcon, QAction, QKeySequence
 
@@ -20,6 +20,7 @@ from nengi.core.pdf_document import PDFDocument
 from nengi.core.page_manager import PageManager
 from nengi.core.security import SecurityManager
 from nengi.core.converter import FormatConverter
+from nengi.core.windows_integration import register_as_default_pdf_viewer, open_windows_default_apps_settings, is_windows
 from nengi.ui.pdf_view import PDFViewer
 from nengi.ui.diff_view import DiffView
 from nengi.ui.thumbnail_bar import ThumbnailBar
@@ -27,6 +28,68 @@ from nengi.ui.signature_dialog import SignatureDialog
 from nengi.ui.password_dialog import PasswordDialog
 from nengi.ui.page_manager_dialog import PageManagerDialog
 from nengi.ui.styles import DARK_THEME, LIGHT_THEME
+
+
+class OpenTabsDiffDialog(QDialog):
+    """Dialog allowing user to choose which two open tabs to compare with DIFF."""
+
+    def __init__(self, open_tabs: List[Tuple[int, str, PDFDocument]], default_a: int = 0, default_b: int = 1, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self.setWindowTitle("Açık Sekmeleri Karşılaştır (DIFF)")
+        self.setFixedSize(450, 220)
+        self.open_tabs = open_tabs
+        self.selected_a_idx = default_a
+        self.selected_b_idx = default_b
+
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+
+        lbl_info = QLabel("Gelen e-postalardan veya dosyalardan açık olan sekmeleri seçin:")
+        lbl_info.setStyleSheet("color: #C0C0C0; margin-bottom: 5px;")
+        layout.addWidget(lbl_info)
+
+        # Tab A
+        layout.addWidget(QLabel("🔴 Orijinal (Eski) Belge:"))
+        self.combo_a = QComboBox()
+        for idx, title, _ in self.open_tabs:
+            self.combo_a.addItem(f"Sekme {idx + 1}: {title}", idx)
+        self.combo_a.setCurrentIndex(min(self.selected_a_idx, self.combo_a.count() - 1))
+        layout.addWidget(self.combo_a)
+
+        # Tab B
+        layout.addWidget(QLabel("🟢 Revize Edilmiş (Yeni) Belge:"))
+        self.combo_b = QComboBox()
+        for idx, title, _ in self.open_tabs:
+            self.combo_b.addItem(f"Sekme {idx + 1}: {title}", idx)
+        # Select second tab by default if exists
+        target_b = self.selected_b_idx if self.selected_b_idx < self.combo_b.count() else 0
+        self.combo_b.setCurrentIndex(target_b)
+        layout.addWidget(self.combo_b)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_cancel = QPushButton("İptal")
+        btn_cancel.clicked.connect(self.reject)
+        btn_layout.addWidget(btn_cancel)
+
+        btn_compare = QPushButton("⚖️ Sekmeleri Karşılaştır")
+        btn_compare.setObjectName("accentButton")
+        btn_compare.clicked.connect(self._on_compare)
+        btn_layout.addWidget(btn_compare)
+
+        layout.addLayout(btn_layout)
+
+    def _on_compare(self):
+        self.selected_a_idx = self.combo_a.currentData()
+        self.selected_b_idx = self.combo_b.currentData()
+
+        if self.selected_a_idx == self.selected_b_idx:
+            QMessageBox.warning(self, "Uyarı", "Lütfen karşılaştırmak için iki farklı sekme seçin.")
+            return
+
+        self.accept()
 
 
 class MainWindow(QMainWindow):
@@ -45,9 +108,13 @@ class MainWindow(QMainWindow):
         # Create Central Tab Widget
         self.tabs = QTabWidget()
         self.tabs.setTabsClosable(True)
+        self.tabs.setMovable(True)
         self.tabs.tabCloseRequested.connect(self._close_tab)
         self.tabs.currentChanged.connect(self._on_tab_changed)
-        self.setCentralWidget(self.tabs)
+
+        # Tab bar context menu for comparing open tabs and tab management
+        self.tabs.tabBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tabs.tabBar().customContextMenuRequested.connect(self._show_tab_context_menu)
 
         # Create Left Sidebar (Thumbnails)
         self.thumbnail_bar = ThumbnailBar()
@@ -96,9 +163,13 @@ class MainWindow(QMainWindow):
 
         tb_main.addSeparator()
 
-        # DIFF Action (Prominent)
-        act_diff = tb_main.addAction("⚖️ İki PDF Karşılaştır (DIFF)")
-        act_diff.setToolTip("İki PDF arasındaki metin değişikliklerini yan yana senkronize gör")
+        # DIFF Actions
+        act_diff_open_tabs = tb_main.addAction("⚖️ Açık Sekmeleri Karşılaştır (DIFF)")
+        act_diff_open_tabs.setToolTip("Gelen maillerdeki açık olan iki PDF sekmesini kaydetmeden anında karşılaştır")
+        act_diff_open_tabs.triggered.connect(self.compare_open_tabs)
+
+        act_diff = tb_main.addAction("⚖️ İki Dosya Seçip Karşılaştır...")
+        act_diff.setToolTip("Bilgisayardan iki farklı PDF seçip yan yana karşılaştır")
         act_diff.triggered.connect(self.open_diff_dialog)
 
         tb_main.addSeparator()
@@ -154,6 +225,11 @@ class MainWindow(QMainWindow):
 
         tb_main.addSeparator()
 
+        # Windows integration & Default app
+        act_default_app = tb_main.addAction("⚙️ Varsayılan PDF Aracı Yap")
+        act_default_app.setToolTip("NeNgi PDF'i Windows'un varsayılan PDF okuyucusu yap")
+        act_default_app.triggered.connect(self._set_as_default_pdf_app)
+
         # Zoom actions
         act_zoom_in = tb_main.addAction("🔍➕")
         act_zoom_in.triggered.connect(self._zoom_in)
@@ -172,6 +248,119 @@ class MainWindow(QMainWindow):
         self.is_dark_mode = not self.is_dark_mode
         self.apply_theme(DARK_THEME if self.is_dark_mode else LIGHT_THEME)
 
+    def get_open_pdf_tabs(self) -> List[Tuple[int, str, PDFViewer]]:
+        """Returns list of (tab_index, title, viewer) for all currently open PDF tabs."""
+        results = []
+        for i in range(self.tabs.count()):
+            w = self.tabs.widget(i)
+            if isinstance(w, PDFViewer) and w.doc and w.doc.is_open:
+                title = self.tabs.tabText(i)
+                results.append((i, title, w))
+        return results
+
+    def compare_open_tabs(self, default_tab_a: int = 0, default_tab_b: int = 1):
+        """
+        Compares two open tabs side-by-side with DIFF.
+        If exactly 2 tabs are open, launches immediately!
+        If > 2 tabs open, prompts with dropdown.
+        If < 2 tabs open, guides user to open the second document.
+        """
+        open_tabs = self.get_open_pdf_tabs()
+        if len(open_tabs) < 2:
+            if len(open_tabs) == 1:
+                # Offer to pick the 2nd PDF to compare with this open tab
+                reply = QMessageBox.question(
+                    self, "DIFF Karşılaştırma",
+                    f"Şu anda yalnızca '{open_tabs[0][1]}' açık.\n\nBu belgeyle karşılaştırmak istediğiniz ikinci PDF dosyasını seçmek ister misiniz?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    file_b, _ = QFileDialog.getOpenFileName(self, "Karşılaştırılacak 2. PDF Dosyasını Seç", "", "PDF Dosyaları (*.pdf)")
+                    if file_b:
+                        doc_b = PDFDocument(file_b)
+                        self._launch_diff(open_tabs[0][2].doc, doc_b, open_tabs[0][1], os.path.basename(file_b))
+            else:
+                QMessageBox.information(
+                    self, "Bilgi", 
+                    "Karşılaştırma yapabilmek için lütfen karşılaştırmak istediğiniz PDF'leri açın (örneğin maillerinizdeki iki PDF'e tıklayarak sekmelerde açabilirsiniz)."
+                )
+            return
+
+        if len(open_tabs) == 2:
+            # Exactly two tabs: compare immediately!
+            tab_a = open_tabs[0]
+            tab_b = open_tabs[1]
+            self._launch_diff(tab_a[2].doc, tab_b[2].doc, tab_a[1], tab_b[1])
+        else:
+            # More than two tabs: let user choose
+            dlg = OpenTabsDiffDialog(open_tabs, default_tab_a, default_tab_b, self)
+            if dlg.exec() == QDialog.DialogCode.Accepted:
+                viewer_a = self.tabs.widget(dlg.selected_a_idx)
+                viewer_b = self.tabs.widget(dlg.selected_b_idx)
+                title_a = self.tabs.tabText(dlg.selected_a_idx)
+                title_b = self.tabs.tabText(dlg.selected_b_idx)
+                if isinstance(viewer_a, PDFViewer) and isinstance(viewer_b, PDFViewer):
+                    self._launch_diff(viewer_a.doc, viewer_b.doc, title_a, title_b)
+
+    def _launch_diff(self, doc_a: PDFDocument, doc_b: PDFDocument, label_a: str, label_b: str):
+        diff_view = DiffView(self)
+        diff_view.status_message.connect(self.show_status_message)
+        diff_view.load_diff(doc_a, doc_b, label_a, label_b)
+
+        tab_title = f"⚖️ DIFF: {label_a} ⟷ {label_b}"
+        tab_idx = self.tabs.addTab(diff_view, tab_title)
+        self.tabs.setCurrentIndex(tab_idx)
+        self.show_status_message(f"Karşılaştırma açıldı: {label_a} ⟷ {label_b}")
+
+    def _show_tab_context_menu(self, pos: QPoint):
+        """Right-click menu on tabs."""
+        tab_bar = self.tabs.tabBar()
+        tab_idx = tab_bar.tabAt(pos)
+        if tab_idx < 0:
+            return
+
+        menu = QMenu(self)
+        open_tabs = self.get_open_pdf_tabs()
+
+        if len(open_tabs) >= 2 and isinstance(self.tabs.widget(tab_idx), PDFViewer):
+            act_diff_this = menu.addAction("⚖️ Bu Sekmeyi Diğer Açık Sekmeyle Karşılaştır (DIFF)")
+            act_diff_this.triggered.connect(lambda: self.compare_open_tabs(default_tab_a=tab_idx))
+            menu.addSeparator()
+
+        act_close = menu.addAction("❌ Bu Sekmeyi Kapat")
+        act_close.triggered.connect(lambda: self._close_tab(tab_idx))
+
+        act_close_others = menu.addAction("🧹 Diğer Sekmeleri Kapat")
+        act_close_others.triggered.connect(lambda: self._close_other_tabs(tab_idx))
+
+        menu.exec(tab_bar.mapToGlobal(pos))
+
+    def _close_other_tabs(self, keep_idx: int):
+        for i in range(self.tabs.count() - 1, -1, -1):
+            if i != keep_idx:
+                self._close_tab(i)
+
+    def _set_as_default_pdf_app(self):
+        """Sets NeNgi PDF as the default PDF handler in Windows."""
+        if not is_windows():
+            QMessageBox.information(
+                self, "Bilgi", 
+                "Windows entegrasyonu özelliği Windows işletim sisteminde aktiftir.\n\nWindows bilgisayarınızda bu butona tıkladığınızda NeNgi PDF otomatik olarak varsayılan PDF okuyucusu olarak ayarlanır."
+            )
+            return
+
+        ok, msg = register_as_default_pdf_viewer()
+        if ok:
+            reply = QMessageBox.question(
+                self, "Başarılı",
+                f"{msg}\n\nWindows 'Varsayılan Uygulamalar' ayarlarını da açıp onaylamak ister misiniz?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                open_windows_default_apps_settings()
+        else:
+            QMessageBox.warning(self, "Hata", msg)
+
     def get_current_viewer(self) -> Optional[PDFViewer]:
         current_widget = self.tabs.currentWidget()
         if isinstance(current_widget, PDFViewer):
@@ -183,11 +372,20 @@ class MainWindow(QMainWindow):
         return viewer.doc if viewer else None
 
     def open_file_dialog(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "PDF Dosyası Aç", "", "PDF Dosyaları (*.pdf)")
-        if file_path:
-            self.open_pdf(file_path)
+        file_paths, _ = QFileDialog.getOpenFileNames(self, "PDF Dosyası Aç", "", "PDF Dosyaları (*.pdf)")
+        if file_paths:
+            for f in file_paths:
+                self.open_pdf(f)
 
     def open_pdf(self, file_path: str):
+        # Check if this exact file is already open in one of the tabs
+        for i in range(self.tabs.count()):
+            w = self.tabs.widget(i)
+            if isinstance(w, PDFViewer) and w.doc and w.doc.file_path == file_path:
+                self.tabs.setCurrentIndex(i)
+                self.show_status_message(f"'{os.path.basename(file_path)}' sekmesine geçildi.")
+                return
+
         doc = PDFDocument()
         is_ok = doc.open(file_path)
         
@@ -212,10 +410,10 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentIndex(tab_idx)
 
         self.thumbnail_bar.load_thumbnails(doc)
-        self.show_status_message(f"'{tab_title}' başarıyla açıldı.")
+        self.show_status_message(f"'{tab_title}' yeni sekmede açıldı.")
 
     def open_diff_dialog(self):
-        """Dialog to select two PDFs and open a side-by-side DIFF tab."""
+        """Dialog to select two PDFs from disk and open a side-by-side DIFF tab."""
         file_a, _ = QFileDialog.getOpenFileName(self, "Orijinal (Eski) PDF Dosyasını Seç", "", "PDF Dosyaları (*.pdf)")
         if not file_a:
             return
@@ -226,14 +424,7 @@ class MainWindow(QMainWindow):
 
         doc_a = PDFDocument(file_a)
         doc_b = PDFDocument(file_b)
-
-        diff_view = DiffView(self)
-        diff_view.status_message.connect(self.show_status_message)
-        diff_view.load_diff(doc_a, doc_b, os.path.basename(file_a), os.path.basename(file_b))
-
-        tab_title = f"⚖️ DIFF: {os.path.basename(file_a)} ⟷ {os.path.basename(file_b)}"
-        tab_idx = self.tabs.addTab(diff_view, tab_title)
-        self.tabs.setCurrentIndex(tab_idx)
+        self._launch_diff(doc_a, doc_b, os.path.basename(file_a), os.path.basename(file_b))
 
     def save_current_file(self):
         doc = self.get_current_doc()
@@ -259,7 +450,6 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, "Hata", "Dosya kaydedilemedi.")
 
     def _set_viewer_tool(self, tool_mode: str):
-        # Uncheck others
         self.act_tool_view.setChecked(tool_mode == "view")
         self.act_tool_whiteout.setChecked(tool_mode == "whiteout")
         self.act_tool_text.setChecked(tool_mode == "text")

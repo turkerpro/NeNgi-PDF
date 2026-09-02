@@ -56,6 +56,20 @@ class TestNeNgiUI(unittest.TestCase):
         doc_a.close()
         doc_b.close()
 
+    def test_compare_open_tabs(self):
+        # Open both PDFs into tabs
+        self.window.open_pdf(self.orig_pdf)
+        self.window.open_pdf(self.rev_pdf)
+        self.assertEqual(self.window.tabs.count(), 2)
+
+        # Call compare_open_tabs directly
+        self.window.compare_open_tabs()
+        # Should now have 3 tabs: Tab 1, Tab 2, and the new DIFF tab!
+        self.assertEqual(self.window.tabs.count(), 3)
+        diff_tab = self.window.tabs.widget(2)
+        self.assertIsInstance(diff_tab, DiffView)
+        self.assertGreater(len(diff_tab.changes), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
