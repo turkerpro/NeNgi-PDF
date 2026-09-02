@@ -1,7 +1,7 @@
 # 📑 NeNgi PDF
 > **Windows için Açık Kaynaklı, Akıllı ve Metin Odaklı Yan Yana DIFF (Karşılaştırma) Destekli PDF Düzenleyici**
 
-NeNgi PDF; Adobe Acrobat Pro, Foxit Pro ve Nitro Pro gibi pahalı yazılımların yerini alabilecek; yüksek performanslı, modern Windows 11 arayüzüne sahip, bağımsız bir masaüstü uygulamasıdır.
+NeNgi PDF; yüksek performanslı, modern Windows 11 arayüzüne sahip, gelişmiş belge karşılaştırma ve kapsamlı düzenleme yetenekleri sunan bağımsız, açık kaynaklı bir masaüstü uygulamasıdır.
 
 ---
 
