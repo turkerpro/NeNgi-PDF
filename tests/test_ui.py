@@ -93,6 +93,31 @@ class TestNeNgiUI(unittest.TestCase):
         self.assertEqual(viewer.current_mode, "stamp")
         self.assertEqual(viewer.stamp_image_path, self.orig_pdf)
 
+    def test_draggable_text_widget(self):
+        from nengi.ui.draggable_text import DraggableTextWidget
+        from PyQt6.QtCore import QPoint
+        self.window.open_pdf(self.orig_pdf)
+        viewer = self.window.get_current_viewer()
+        self.assertIsNotNone(viewer)
+        pw = viewer.page_widgets[0]
+        box = DraggableTextWidget(
+            page_widget=pw,
+            initial_pos=QPoint(100, 150),
+            text="Test Sürüklenebilir Metin",
+            fontsize=12,
+            zoom=1.0,
+            parent=pw
+        )
+        self.assertEqual(box.text, "Test Sürüklenebilir Metin")
+        self.assertEqual(box.pos(), QPoint(100, 150))
+        # Test moving
+        box.move(QPoint(120, 180))
+        self.assertEqual(box.pos(), QPoint(120, 180))
+        # Commit
+        box.commit_to_pdf()
+        txt = pw.doc.get_page(0).get_text()
+        self.assertIn("Test Sürüklenebilir Metin", txt)
+
 
 if __name__ == "__main__":
     unittest.main()

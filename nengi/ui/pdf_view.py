@@ -44,9 +44,9 @@ class PageRenderWidget(QWidget):
         # Text words & Acrobat Pro style paragraph blocks
         self.words: List[Tuple[float, float, float, float, str, int, int, int]] = []
         self.blocks: List[Tuple[float, float, float, float, str, int, int]] = []
-        self.hovered_block: Optional[Tuple[float, float, float, float, str, int, int]] = None
         self.selected_words: List[Tuple[float, float, float, float, str, int, int, int]] = []
-        self._is_selecting_text = False
+        self.hovered_block: Optional[Tuple[float, float, float, float, str, int, int]] = None
+        self.active_text_widgets: List = []
 
         # Selection state for whiteout / drag
         self._dragging = False
@@ -56,12 +56,31 @@ class PageRenderWidget(QWidget):
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.cached_pixmap: Optional[QPixmap] = None
-        self.render_cache()
+
+        # Instant Open / Lazy Virtualization:
+        # Render first page immediately; subsequent pages render on-demand in paintEvent!
+        if self.page_idx == 0:
+            self.render_cache()
+        else:
+            try:
+                p_rect = self.doc.get_page(self.page_idx).rect
+                self.setFixedSize(int(p_rect.width * self.zoom), int(p_rect.height * self.zoom))
+            except Exception:
+                self.render_cache()
 
     def set_zoom(self, zoom: float):
         if abs(self.zoom - zoom) > 0.01:
             self.zoom = zoom
-            self.render_cache()
+            self.cached_pixmap = None
+            try:
+                p_rect = self.doc.get_page(self.page_idx).rect
+                self.setFixedSize(int(p_rect.width * self.zoom), int(p_rect.height * self.zoom))
+            except Exception:
+                self.render_cache()
+
+            for tw in list(self.active_text_widgets):
+                tw.update_zoom(zoom)
+
             self.updateGeometry()
             self.update()
 
@@ -81,6 +100,9 @@ class PageRenderWidget(QWidget):
         self.update()
 
     def paintEvent(self, event: QPaintEvent):
+        # On-Demand Virtualized Rendering
+        if self.cached_pixmap is None:
+            self.render_cache()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -333,7 +355,6 @@ class PageRenderWidget(QWidget):
     def _prompt_add_text(self, pos: QPoint):
         pdf_x = pos.x() / self.zoom
         pdf_y = pos.y() / self.zoom
-        insert_pt = fitz.Point(pdf_x, pdf_y)
 
         # Detect nearby style for smart font inheritance
         nearby_rect = fitz.Rect(pdf_x - 60, pdf_y - 30, pdf_x + 60, pdf_y + 30)
@@ -346,13 +367,25 @@ class PageRenderWidget(QWidget):
             parent=self
         )
         if dlg.exec() == QDialog.DialogCode.Accepted and dlg.result_text.strip():
-            self.doc.insert_new_text(
-                self.page_idx, insert_pt, dlg.result_text,
-                fontname=dlg.result_fitz_font, fontsize=dlg.result_fontsize, color=dlg.result_color_rgb
+            from nengi.ui.draggable_text import DraggableTextWidget
+            box = DraggableTextWidget(
+                page_widget=self,
+                initial_pos=pos,
+                text=dlg.result_text,
+                fontsize=dlg.result_fontsize,
+                fontname=dlg.result_fitz_font,
+                color_rgb=dlg.result_color_rgb,
+                zoom=self.zoom,
+                parent=self
             )
-            self.render_cache()
-            self.update()
-            self.page_modified.emit()
+            self.active_text_widgets.append(box)
+            box.committed.connect(lambda b=box: self.active_text_widgets.remove(b) if b in self.active_text_widgets else None)
+            box.discarded.connect(lambda b=box: self.active_text_widgets.remove(b) if b in self.active_text_widgets else None)
+
+    def commit_all_pending_text(self):
+        """Commits all floating text boxes permanently onto the PDF page."""
+        for box in list(self.active_text_widgets):
+            box.commit_to_pdf()
 
     def _apply_stamp(self, pos: QPoint):
         if not self.stamp_image_path or not os.path.exists(self.stamp_image_path):
@@ -482,6 +515,11 @@ class PDFViewer(QScrollArea):
     def set_stamp_image(self, image_path: str):
         """Switches to stamp mode with signature/stamp image."""
         self.set_tool_mode("stamp", stamp_path=image_path)
+
+    def commit_pending_edits(self):
+        """Bakes any uncommitted draggable text boxes before saving."""
+        for pw in self.page_widgets:
+            pw.commit_all_pending_text()
 
     def scroll_to_page(self, page_idx: int):
         """Scrolls view to specific page."""

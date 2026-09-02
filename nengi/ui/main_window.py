@@ -640,6 +640,9 @@ class MainWindow(QMainWindow):
         self.show_status_message(f"Açıldı: {tab_title}")
 
     def save_current_file(self):
+        viewer = self.get_current_viewer()
+        if viewer:
+            viewer.commit_pending_edits()
         doc = self.get_current_doc()
         if not doc or not doc.is_open:
             return
@@ -652,6 +655,9 @@ class MainWindow(QMainWindow):
             self.save_current_file_as()
 
     def save_current_file_as(self):
+        viewer = self.get_current_viewer()
+        if viewer:
+            viewer.commit_pending_edits()
         doc = self.get_current_doc()
         if not doc or not doc.is_open:
             return
