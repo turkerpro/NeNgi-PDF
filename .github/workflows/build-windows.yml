@@ -46,16 +46,19 @@ jobs:
 
       - name: Build Windows Setup Installer (NSIS)
         run: |
+          $TAG = "${{ github.ref_name }}"
+          if (-not $TAG -or $TAG -eq "main") { $TAG = "v1.4.7" }
           Copy-Item "dist\NeNgi_PDF.exe" -Destination "dist\NeNgi_PDF_Portable.exe"
+          Copy-Item "dist\NeNgi_PDF.exe" -Destination "dist\NeNgi_PDF_${TAG}_Portable.exe"
           & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+          Copy-Item "dist\NeNgi_PDF_Setup.exe" -Destination "dist\NeNgi_PDF_${TAG}_Setup.exe"
 
       - name: Upload Windows Executable Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: NeNgi-PDF-Windows-x64
           path: |
-            dist/NeNgi_PDF_Setup.exe
-            dist/NeNgi_PDF_Portable.exe
+            dist/NeNgi_PDF_*.exe
           if-no-files-found: error
 
       - name: Create Release and Attach Installers (On Tag)
@@ -63,6 +66,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            dist/NeNgi_PDF_${{ github.ref_name }}_Setup.exe
+            dist/NeNgi_PDF_${{ github.ref_name }}_Portable.exe
             dist/NeNgi_PDF_Setup.exe
             dist/NeNgi_PDF_Portable.exe
         env:
