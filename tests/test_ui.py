@@ -20,7 +20,8 @@ from nengi.core.pdf_document import PDFDocument
 class TestNeNgiUI(unittest.TestCase):
 
     def setUp(self):
-        self.samples_dir = "/home/turker/Documents/playground/nengi-pdf/resources/samples"
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.samples_dir = os.path.join(base_dir, "resources", "samples")
         self.orig_pdf = os.path.join(self.samples_dir, "sozlesme_orijinal.pdf")
         self.rev_pdf = os.path.join(self.samples_dir, "sozlesme_revize.pdf")
         self.window = MainWindow()
