@@ -82,17 +82,21 @@ python -m nengi.main
 
 ---
 
-## 📦 Windows Bağımsız .EXE Dosyası Üretme
+## 📦 Windows Kurulum Paketi (Setup.exe) ve Taşınabilir Sürüm
 
-NeNgi PDF'i herhangi bir Python kurulumu gerektirmeyen, doğrudan çift tıklamayla çalışan bağımsız bir Windows `.exe` dosyası haline getirmek için:
+NeNgi PDF iki farklı formatta dağıtılmaktadır:
 
-```bash
-python build_windows.py
-```
-İşlem tamamlandığında `dist/NeNgi_PDF/NeNgi_PDF.exe` dosyası hazır olacaktır.
+1. **Kurulum Paketi (`NeNgi_PDF_Setup.exe`):**
+   - Uygulamayı `C:\Program Files\NeNgi PDF` dizinine profesyonelce kurar.
+   - Masaüstüne ve Başlat Menüsüne kısayollar ekler.
+   - Windows'ta `.pdf` dosyalarını otomatik olarak NeNgi PDF ile ilişkilendirir.
+   - Windows Denetim Masası "Program Ekle / Kaldır" listesine resmi uninstaller ekler.
+
+2. **Taşınabilir Sürüm (`NeNgi_PDF_Portable.exe`):**
+   - Kurulum gerektirmeden, USB bellekten veya indirilen klasörden çift tıkla doğrudan çalışır.
 
 > [!TIP]
-> Proje içinde hazır bulunan `.github/workflows/build-windows.yml` sayesinde projeyi GitHub'a yüklediğinizde veya yeni bir sürüm etiketi (örn. `v1.0.0`) açtığınızda GitHub Actions **otomatik olarak Windows .exe dosyasını derleyip Release bölümüne ekler**.
+> Proje içinde hazır bulunan `.github/workflows/build-windows.yml` sayesinde her yeni sürümde GitHub Actions hem **Setup.exe** kurulum dosyasını hem de **Portable.exe** dosyasını Microsoft Windows sunucularında otomatik derleyip GitHub Releases bölümüne ekler.
 
 ---
 

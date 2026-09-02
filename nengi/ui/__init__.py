@@ -6,6 +6,7 @@ from .thumbnail_bar import ThumbnailBar
 from .signature_dialog import SignatureDialog
 from .password_dialog import PasswordDialog
 from .page_manager_dialog import PageManagerDialog
+from .settings_dialog import SettingsDialog
 
 __all__ = [
     "MainWindow",
@@ -14,5 +15,6 @@ __all__ = [
     "ThumbnailBar",
     "SignatureDialog",
     "PasswordDialog",
-    "PageManagerDialog"
+    "PageManagerDialog",
+    "SettingsDialog"
 ]

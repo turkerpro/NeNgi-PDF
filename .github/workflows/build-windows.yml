@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build Windows EXE & Setup Installer
 
 on:
   push:
@@ -39,17 +39,26 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --onefile --windowed --name "NeNgi_PDF" --collect-all pymupdf --collect-all fitz --hidden-import PyQt6 --hidden-import PIL --add-data "resources;resources" nengi/main.py
 
-      - name: Upload Windows Executable Artifact
+      - name: Build Windows Setup Installer (NSIS)
+        run: |
+          copy dist\NeNgi_PDF.exe dist\NeNgi_PDF_Portable.exe
+          makensis installer.nsi
+
+      - name: Upload Windows Executable Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: NeNgi-PDF-Windows-x64
-          path: dist/NeNgi_PDF.exe
+          path: |
+            dist/NeNgi_PDF_Setup.exe
+            dist/NeNgi_PDF_Portable.exe
           if-no-files-found: error
 
-      - name: Create Release and Attach EXE (On Tag)
+      - name: Create Release and Attach Installers (On Tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/NeNgi_PDF.exe
+          files: |
+            dist/NeNgi_PDF_Setup.exe
+            dist/NeNgi_PDF_Portable.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

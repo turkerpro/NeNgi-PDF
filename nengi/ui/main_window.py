@@ -27,6 +27,7 @@ from nengi.ui.thumbnail_bar import ThumbnailBar
 from nengi.ui.signature_dialog import SignatureDialog
 from nengi.ui.password_dialog import PasswordDialog
 from nengi.ui.page_manager_dialog import PageManagerDialog
+from nengi.ui.settings_dialog import SettingsDialog
 from nengi.ui.styles import DARK_THEME, LIGHT_THEME
 
 
@@ -225,10 +226,10 @@ class MainWindow(QMainWindow):
 
         tb_main.addSeparator()
 
-        # Windows integration & Default app
-        act_default_app = tb_main.addAction("⚙️ Varsayılan PDF Aracı Yap")
-        act_default_app.setToolTip("NeNgi PDF'i Windows'un varsayılan PDF okuyucusu yap")
-        act_default_app.triggered.connect(self._set_as_default_pdf_app)
+        # Windows integration, Settings & Theme
+        act_settings = tb_main.addAction("⚙️ Seçenekler / Ayarlar")
+        act_settings.setToolTip("Varsayılan uygulama, tema, görünüm ve karşılaştırma seçenekleri")
+        act_settings.triggered.connect(self._open_settings_dialog)
 
         # Zoom actions
         act_zoom_in = tb_main.addAction("🔍➕")
@@ -240,6 +241,15 @@ class MainWindow(QMainWindow):
         # Theme toggle
         act_theme = tb_main.addAction("🌓 Tema")
         act_theme.triggered.connect(self._toggle_theme)
+
+    def _open_settings_dialog(self):
+        dlg = SettingsDialog(current_is_dark=self.is_dark_mode, parent=self)
+        dlg.theme_changed.connect(self._on_settings_theme_changed)
+        dlg.exec()
+
+    def _on_settings_theme_changed(self, theme_name: str):
+        self.is_dark_mode = (theme_name == "dark")
+        self.apply_theme(DARK_THEME if self.is_dark_mode else LIGHT_THEME)
 
     def apply_theme(self, stylesheet: str):
         self.setStyleSheet(stylesheet)
