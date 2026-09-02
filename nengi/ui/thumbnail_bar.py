@@ -61,12 +61,25 @@ class ThumbnailBar(QWidget):
         if self.doc.page_count > 0:
             self.list_widget.setCurrentRow(0)
 
+    def load_document(self, doc: PDFDocument):
+        """Alias for load_thumbnails."""
+        self.load_thumbnails(doc)
+
+    def clear(self):
+        """Clears all thumbnails and resets document."""
+        self.doc = None
+        self.list_widget.clear()
+
     def select_page(self, page_idx: int):
         """Highlights the active page in the sidebar without re-triggering signal."""
         if 0 <= page_idx < self.list_widget.count():
             self.list_widget.blockSignals(True)
             self.list_widget.setCurrentRow(page_idx)
             self.list_widget.blockSignals(False)
+
+    def set_active_page(self, page_idx: int):
+        """Alias for select_page."""
+        self.select_page(page_idx)
 
     def _on_row_changed(self, row: int):
         if row >= 0:

@@ -377,7 +377,7 @@ class PDFViewer(QScrollArea):
     document_modified = pyqtSignal()
     status_message = pyqtSignal(str)
 
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(self, doc: Optional[PDFDocument] = None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.doc: Optional[PDFDocument] = None
         self.current_page_idx = 0
@@ -401,6 +401,9 @@ class PDFViewer(QScrollArea):
         self.page_widgets: List[PageRenderWidget] = []
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
+
+        if doc:
+            self.load_document(doc)
 
     def load_document(self, doc: PDFDocument):
         """Loads a PDFDocument into the viewer."""
@@ -479,6 +482,10 @@ class PDFViewer(QScrollArea):
             self.ensureWidgetVisible(target_widget, 0, 50)
             self.current_page_idx = page_idx
             self.page_changed.emit(page_idx + 1, len(self.page_widgets))
+
+    def go_to_page(self, page_idx: int):
+        """Navigates to specific page."""
+        self.scroll_to_page(page_idx)
 
     def refresh_page(self, page_idx: int):
         """Forces re-render of a specific page widget."""

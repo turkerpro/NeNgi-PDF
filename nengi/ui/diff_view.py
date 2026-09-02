@@ -6,6 +6,7 @@ and an interactive difference navigation panel.
 """
 
 from __future__ import annotations
+import os
 from typing import Optional, List, Tuple, Dict
 from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QRectF
 from PyQt6.QtWidgets import (
@@ -49,7 +50,7 @@ class DiffView(QWidget):
 
     status_message = pyqtSignal(str)
 
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(self, doc_a: Optional[PDFDocument] = None, doc_b: Optional[PDFDocument] = None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.doc_a: Optional[PDFDocument] = None
         self.doc_b: Optional[PDFDocument] = None
@@ -60,6 +61,11 @@ class DiffView(QWidget):
         self.zoom = 1.0
 
         self._init_ui()
+
+        if doc_a and doc_b:
+            name_a = os.path.basename(doc_a.file_path) if doc_a.file_path else "Orijinal"
+            name_b = os.path.basename(doc_b.file_path) if doc_b.file_path else "Revize"
+            self.load_diff(doc_a, doc_b, name_a, name_b)
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)

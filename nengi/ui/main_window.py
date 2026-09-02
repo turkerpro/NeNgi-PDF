@@ -1,7 +1,11 @@
 """
-NeNgi PDF - Main Fluent Application Window
-Integrates multi-tab browsing, ribbon toolbar, PDF viewing, side-by-side DIFF comparison,
-open tab comparison, external image roundtrip editing, page management, security, and Windows integration.
+NeNgi PDF - NextGen Studio Main Application Window
+Modern 3-column layout featuring:
+- Left Navigation Rail (Brand, Home, Recent, Documents, Diff, Tools, Settings)
+- Top Global Header with Search Pill & Quick Actions
+- Central Multi-Tab Document Canvas with Floating Bottom Pill Toolbar
+- Right Collapsible Copilot & AI Tools Panel
+- Bottom Pagination & Zoom Footer Bar
 """
 
 from __future__ import annotations
@@ -11,10 +15,12 @@ from typing import Optional, List, Tuple
 from PyQt6.QtCore import Qt, QSize, QPoint, QRect
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, 
-    QToolBar, QStatusBar, QFileDialog, QMessageBox, QLabel, 
-    QSplitter, QInputDialog, QComboBox, QMenu, QDialog, QPushButton
+    QStatusBar, QFileDialog, QMessageBox, QLabel, QLineEdit,
+    QSplitter, QInputDialog, QComboBox, QMenu, QDialog, QPushButton,
+    QFrame
 )
 from PyQt6.QtGui import QIcon, QAction, QKeySequence, QPixmap, QPainter, QFont
+import pymupdf as fitz
 
 from nengi.core.pdf_document import PDFDocument
 from nengi.core.page_manager import PageManager
@@ -30,6 +36,9 @@ from nengi.ui.password_dialog import PasswordDialog
 from nengi.ui.page_manager_dialog import PageManagerDialog
 from nengi.ui.settings_dialog import SettingsDialog
 from nengi.ui.merge_dialog import MergeFilesDialog
+from nengi.ui.navigation_rail import NavigationRail
+from nengi.ui.floating_toolbar import FloatingPillToolbar
+from nengi.ui.copilot_panel import CopilotPanel
 from nengi.ui.styles import DARK_THEME, LIGHT_THEME
 
 
@@ -48,36 +57,49 @@ class OpenTabsDiffDialog(QDialog):
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
+        layout.setSpacing(12)
 
-        lbl_info = QLabel("Gelen e-postalardan veya dosyalardan açık olan sekmeleri seçin:")
-        lbl_info.setStyleSheet("color: #C0C0C0; margin-bottom: 5px;")
+        lbl_info = QLabel("Karşılaştırmak istediğiniz iki açık PDF sekmesini seçin:")
+        lbl_info.setWordWrap(True)
+        lbl_info.setStyleSheet("font-weight: bold; font-size: 13px;")
         layout.addWidget(lbl_info)
 
-        # Tab A
-        layout.addWidget(QLabel("🔴 Orijinal (Eski) Belge:"))
-        self.combo_a = QComboBox()
-        for idx, title, _ in self.open_tabs:
-            self.combo_a.addItem(f"Sekme {idx + 1}: {title}", idx)
-        self.combo_a.setCurrentIndex(min(self.selected_a_idx, self.combo_a.count() - 1))
-        layout.addWidget(self.combo_a)
+        # Tab A combo
+        h_a = QHBoxLayout()
+        lbl_a = QLabel("🔴 Orijinal Belge (A):")
+        lbl_a.setFixedWidth(140)
+        self.cb_a = QComboBox()
+        for idx, name, _ in self.open_tabs:
+            self.cb_a.addItem(f"{idx+1}. {name}", idx)
+        if 0 <= self.selected_a_idx < len(self.open_tabs):
+            self.cb_a.setCurrentIndex(self.selected_a_idx)
+        h_a.addWidget(lbl_a)
+        h_a.addWidget(self.cb_a)
+        layout.addLayout(h_a)
 
-        # Tab B
-        layout.addWidget(QLabel("🟢 Revize Edilmiş (Yeni) Belge:"))
-        self.combo_b = QComboBox()
-        for idx, title, _ in self.open_tabs:
-            self.combo_b.addItem(f"Sekme {idx + 1}: {title}", idx)
-        # Select second tab by default if exists
-        target_b = self.selected_b_idx if self.selected_b_idx < self.combo_b.count() else 0
-        self.combo_b.setCurrentIndex(target_b)
-        layout.addWidget(self.combo_b)
+        # Tab B combo
+        h_b = QHBoxLayout()
+        lbl_b = QLabel("🟢 Revize Belge (B):")
+        lbl_b.setFixedWidth(140)
+        self.cb_b = QComboBox()
+        for idx, name, _ in self.open_tabs:
+            self.cb_b.addItem(f"{idx+1}. {name}", idx)
+        if 0 <= self.selected_b_idx < len(self.open_tabs):
+            self.cb_b.setCurrentIndex(self.selected_b_idx)
+        h_b.addWidget(lbl_b)
+        h_b.addWidget(self.cb_b)
+        layout.addLayout(h_b)
 
-        # Buttons
+        layout.addStretch()
+
         btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
         btn_cancel = QPushButton("İptal")
         btn_cancel.clicked.connect(self.reject)
         btn_layout.addWidget(btn_cancel)
 
-        btn_compare = QPushButton("⚖️ Sekmeleri Karşılaştır")
+        btn_compare = QPushButton("⚖️ Yan Yana Karşılaştır")
         btn_compare.setObjectName("accentButton")
         btn_compare.clicked.connect(self._on_compare)
         btn_layout.addWidget(btn_compare)
@@ -85,316 +107,368 @@ class OpenTabsDiffDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def _on_compare(self):
-        self.selected_a_idx = self.combo_a.currentData()
-        self.selected_b_idx = self.combo_b.currentData()
-
+        self.selected_a_idx = self.cb_a.currentData()
+        self.selected_b_idx = self.cb_b.currentData()
         if self.selected_a_idx == self.selected_b_idx:
-            QMessageBox.warning(self, "Uyarı", "Lütfen karşılaştırmak için iki farklı sekme seçin.")
+            QMessageBox.warning(self, "Uyarı", "Lütfen karşılaştırmak için iki farklı belge seçin.")
             return
-
         self.accept()
 
 
 class MainWindow(QMainWindow):
-    """Main Application Window for NeNgi PDF."""
+    """NextGen Studio Main Application Window."""
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("NeNgi PDF - Akıllı ve DIFF Destekli PDF Düzenleyici")
-        self.resize(1280, 840)
+        self.setWindowTitle("NeNgi PDF")
+        self.resize(1340, 860)
         self.is_dark_mode = True
+        self.recent_files: List[str] = []
 
         self._init_ui()
         self.apply_theme(DARK_THEME)
 
     def _init_ui(self):
-        # Create Central Tab Widget
+        root_widget = QWidget()
+        root_layout = QVBoxLayout(root_widget)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        # 1. Top Global Header Bar
+        header = self._create_header()
+        root_layout.addWidget(header, 0)
+
+        # 2. Main Central Splitter (Left Rail + Center Canvas + Right Copilot)
+        self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.main_splitter.setHandleWidth(1)
+
+        # 2a. Left Navigation Rail
+        self.nav_rail = NavigationRail()
+        self.nav_rail.nav_changed.connect(self._on_nav_rail_action)
+        self.main_splitter.addWidget(self.nav_rail)
+
+        # 2b. Central Canvas (Tabs + Floating Pill Toolbar)
+        self.canvas_widget = self._create_canvas()
+        self.main_splitter.addWidget(self.canvas_widget)
+
+        # 2c. Right Copilot Panel
+        self.copilot_panel = CopilotPanel()
+        self.copilot_panel.closed.connect(lambda: self.copilot_panel.setVisible(False))
+        self.copilot_panel.action_triggered.connect(self._on_copilot_action)
+        self.copilot_panel.query_submitted.connect(self._on_copilot_query)
+        self.main_splitter.addWidget(self.copilot_panel)
+
+        self.main_splitter.setSizes([220, 820, 300])
+        root_layout.addWidget(self.main_splitter, 1)
+
+        # 3. Bottom Footer (Pagination & Zoom)
+        footer = self._create_footer()
+        root_layout.addWidget(footer, 0)
+
+        self.setCentralWidget(root_widget)
+
+        # Keyboard shortcuts
+        self._setup_shortcuts()
+
+    def _create_header(self) -> QFrame:
+        """Creates top search & quick action header bar."""
+        header = QFrame()
+        header.setObjectName("topHeader")
+        header.setFixedHeight(52)
+        h_layout = QHBoxLayout(header)
+        h_layout.setContentsMargins(16, 6, 16, 6)
+        h_layout.setSpacing(12)
+
+        # Center search pill
+        h_layout.addSpacing(220) # Align with rail width
+        self.txt_search = QLineEdit()
+        self.txt_search.setObjectName("searchBox")
+        self.txt_search.setPlaceholderText("🔍  Belgelerde, metinlerde veya araçlarda ara... (Enter)")
+        self.txt_search.returnPressed.connect(self._on_search_triggered)
+        h_layout.addWidget(self.txt_search, 1)
+
+        # Right quick action buttons
+        btn_print = QPushButton("🖨️ Yazdır")
+        btn_print.setToolTip("Belgeyi Yazdır veya PDF Yap (Ctrl+P)")
+        btn_print.clicked.connect(self.print_current_document)
+        h_layout.addWidget(btn_print)
+
+        btn_save = QPushButton("💾 Kaydet")
+        btn_save.setToolTip("Değişiklikleri Kaydet (Ctrl+S)")
+        btn_save.clicked.connect(self.save_current_file)
+        h_layout.addWidget(btn_save)
+
+        btn_theme = QPushButton("🌓")
+        btn_theme.setFixedSize(36, 36)
+        btn_theme.setToolTip("Koyu / Açık Tema Değiştir")
+        btn_theme.clicked.connect(self._toggle_theme)
+        h_layout.addWidget(btn_theme)
+
+        # Copilot Toggle Button
+        self.btn_toggle_copilot = QPushButton("✨ Copilot")
+        self.btn_toggle_copilot.setCheckable(True)
+        self.btn_toggle_copilot.setChecked(True)
+        self.btn_toggle_copilot.setStyleSheet("font-weight: 600; padding: 6px 12px;")
+        self.btn_toggle_copilot.clicked.connect(self._toggle_copilot_panel)
+        h_layout.addWidget(self.btn_toggle_copilot)
+
+        # User Badge
+        badge_user = QLabel("👤 Standart Plan")
+        badge_user.setStyleSheet(
+            "background-color: #24272D; border: 1px solid #353942; border-radius: 14px; padding: 4px 10px; color: #A0A5AD; font-size: 11.5px;"
+        )
+        h_layout.addWidget(badge_user)
+
+        return header
+
+    def _create_canvas(self) -> QWidget:
+        """Creates central canvas with document tabs and floating pill toolbar."""
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 8)
+        layout.setSpacing(6)
+
+        # Splitter between thumbnails sidebar and tabs
+        self.doc_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.doc_splitter.setHandleWidth(1)
+
+        # Thumbnails Bar (Collapsible / hidden by default for clean look)
+        self.thumbnail_bar = ThumbnailBar()
+        self.thumbnail_bar.setVisible(False)
+        self.thumbnail_bar.page_selected.connect(self._on_thumbnail_page_selected)
+        self.thumbnail_bar.pages_modified.connect(self._on_pages_modified)
+        self.doc_splitter.addWidget(self.thumbnail_bar)
+
+        # Tabs
         self.tabs = QTabWidget()
         self.tabs.setTabsClosable(True)
         self.tabs.setMovable(True)
         self.tabs.tabCloseRequested.connect(self._close_tab)
         self.tabs.currentChanged.connect(self._on_tab_changed)
-
-        # Tab bar context menu for comparing open tabs and tab management
         self.tabs.tabBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tabs.tabBar().customContextMenuRequested.connect(self._show_tab_context_menu)
+        self.doc_splitter.addWidget(self.tabs)
 
-        # Create Left Sidebar (Thumbnails)
-        self.thumbnail_bar = ThumbnailBar()
-        self.thumbnail_bar.page_selected.connect(self._on_thumbnail_page_selected)
-        self.thumbnail_bar.pages_modified.connect(self._on_pages_modified)
+        self.doc_splitter.setSizes([0, 820])
+        layout.addWidget(self.doc_splitter, 1)
 
-        # Main horizontal splitter with thumbnails and central tabs
-        self.splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.splitter.addWidget(self.thumbnail_bar)
-        self.splitter.addWidget(self.tabs)
-        self.splitter.setSizes([180, 1100])
-        self.setCentralWidget(self.splitter)
+        # Floating Bottom Pill Toolbar (Centered capsule island)
+        pill_container = QHBoxLayout()
+        pill_container.setContentsMargins(0, 0, 0, 2)
+        pill_container.addStretch()
 
-        # Status Bar
-        self.status_bar = QStatusBar()
-        self.setStatusBar(self.status_bar)
+        self.floating_toolbar = FloatingPillToolbar()
+        self.floating_toolbar.tool_changed.connect(self._on_floating_tool_changed)
+        pill_container.addWidget(self.floating_toolbar)
 
-        self.lbl_status_page = QLabel("Sayfa: - / -")
-        self.lbl_status_page.setStyleSheet("padding: 0 10px;")
-        self.status_bar.addPermanentWidget(self.lbl_status_page)
+        pill_container.addStretch()
+        layout.addLayout(pill_container)
 
-        self.lbl_status_zoom = QLabel("Yakınlaştırma: %120")
-        self.lbl_status_zoom.setStyleSheet("padding: 0 10px;")
-        self.status_bar.addPermanentWidget(self.lbl_status_zoom)
+        return container
 
-        # Toolbars / Ribbon
-        self._create_toolbars()
+    def _create_footer(self) -> QFrame:
+        """Creates bottom pagination and zoom footer."""
+        footer = QFrame()
+        footer.setObjectName("bottomFooter")
+        footer.setFixedHeight(38)
+        f_layout = QHBoxLayout(footer)
+        f_layout.setContentsMargins(16, 4, 16, 4)
+        f_layout.setSpacing(12)
 
-    def _add_action(self, toolbar: QToolBar, icon_str: str, text: str, tooltip: str = "", shortcut: str = "", checkable: bool = False) -> QAction:
-        """Helper to render a crisp icon centered above a clean text label."""
-        pixmap = QPixmap(24, 24)
-        pixmap.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-        font = QFont("Segoe UI Emoji", 13)
-        painter.setFont(font)
-        painter.drawText(QRect(0, 0, 24, 24), Qt.AlignmentFlag.AlignCenter, icon_str)
-        painter.end()
+        # Left: Page Stepper
+        btn_prev = QPushButton("◀")
+        btn_prev.setFixedSize(28, 26)
+        btn_prev.clicked.connect(self._prev_page)
+        f_layout.addWidget(btn_prev)
 
-        act = toolbar.addAction(QIcon(pixmap), text)
-        if tooltip:
-            act.setToolTip(tooltip)
-        if shortcut:
-            act.setShortcut(QKeySequence(shortcut))
-        if checkable:
-            act.setCheckable(True)
-        return act
+        self.lbl_footer_page = QLabel("Sayfa: - / -")
+        self.lbl_footer_page.setStyleSheet("padding: 0 4px; font-weight: 500;")
+        f_layout.addWidget(self.lbl_footer_page)
 
-    def _create_toolbars(self):
-        # 1. Main Action Toolbar (Minimalist with Text Under Icon)
-        tb_main = QToolBar("Ana Araçlar")
-        tb_main.setMovable(False)
-        tb_main.setIconSize(QSize(22, 22))
-        tb_main.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
-        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, tb_main)
+        btn_next = QPushButton("▶")
+        btn_next.setFixedSize(28, 26)
+        btn_next.clicked.connect(self._next_page)
+        f_layout.addWidget(btn_next)
 
-        # File actions
-        act_open = self._add_action(tb_main, "📂", "Aç", "PDF Dosyası Aç (Ctrl+O)", "Ctrl+O")
+        # Center Status Message
+        self.lbl_footer_status = QLabel("Hazır")
+        self.lbl_footer_status.setStyleSheet("color: #727883; margin-left: 20px;")
+        f_layout.addWidget(self.lbl_footer_status, 1)
+
+        # Right: Zoom & View controls
+        btn_zoom_out = QPushButton("➖")
+        btn_zoom_out.setFixedSize(28, 26)
+        btn_zoom_out.clicked.connect(self._zoom_out)
+        f_layout.addWidget(btn_zoom_out)
+
+        self.lbl_footer_zoom = QLabel("%120")
+        self.lbl_footer_zoom.setStyleSheet("font-weight: 600; min-width: 44px; text-align: center;")
+        f_layout.addWidget(self.lbl_footer_zoom)
+
+        btn_zoom_in = QPushButton("➕")
+        btn_zoom_in.setFixedSize(28, 26)
+        btn_zoom_in.clicked.connect(self._zoom_in)
+        f_layout.addWidget(btn_zoom_in)
+
+        # Thumbnails toggle
+        btn_thumbs = QPushButton("📑")
+        btn_thumbs.setFixedSize(30, 26)
+        btn_thumbs.setToolTip("Sayfa Küçük Resimleri Panelini Aç / Kapat")
+        btn_thumbs.clicked.connect(self._toggle_thumbnails)
+        f_layout.addWidget(btn_thumbs)
+
+        return footer
+
+    def _setup_shortcuts(self):
+        """Registers keyboard shortcuts."""
+        # Open
+        act_open = QAction(self)
+        act_open.setShortcut(QKeySequence("Ctrl+O"))
         act_open.triggered.connect(self.open_file_dialog)
+        self.addAction(act_open)
 
-        act_save = self._add_action(tb_main, "💾", "Kaydet", "Değişiklikleri Kaydet (Ctrl+S)", "Ctrl+S")
+        # Save
+        act_save = QAction(self)
+        act_save.setShortcut(QKeySequence("Ctrl+S"))
         act_save.triggered.connect(self.save_current_file)
+        self.addAction(act_save)
 
-        act_save_as = self._add_action(tb_main, "📑", "Farklı Kaydet", "Farklı Kaydet...")
-        act_save_as.triggered.connect(self.save_current_file_as)
-
-        act_undo = self._add_action(tb_main, "↩️", "Geri Al", "Son işlemi geri al (Ctrl+Z)", "Ctrl+Z")
-        act_undo.triggered.connect(self.undo_current)
-
-        act_redo = self._add_action(tb_main, "↪️", "Yinele", "Geri alınan işlemi yinele (Ctrl+Y)", "Ctrl+Y")
-        act_redo.triggered.connect(self.redo_current)
-
-        act_print = self._add_action(tb_main, "🖨️", "Yazdır", "Belgeyi Yazdır veya PDF Yap (Ctrl+P)", "Ctrl+P")
+        # Print
+        act_print = QAction(self)
+        act_print.setShortcut(QKeySequence("Ctrl+P"))
         act_print.triggered.connect(self.print_current_document)
+        self.addAction(act_print)
 
-        act_merge = self._add_action(tb_main, "🗂️", "Birleştir", "Birden çok PDF veya resmi tek PDF'te birleştir")
-        act_merge.triggered.connect(lambda: self.open_merge_dialog())
+        # Undo
+        act_undo = QAction(self)
+        act_undo.setShortcut(QKeySequence("Ctrl+Z"))
+        act_undo.triggered.connect(self.undo_current)
+        self.addAction(act_undo)
 
-        tb_main.addSeparator()
+        # Redo
+        act_redo = QAction(self)
+        act_redo.setShortcut(QKeySequence("Ctrl+Y"))
+        act_redo.triggered.connect(self.redo_current)
+        self.addAction(act_redo)
 
-        # DIFF Actions
-        act_diff_open_tabs = self._add_action(tb_main, "⚖️", "Sekme DIFF", "Açık olan sekmeleri kaydetmeden hemen karşılaştır")
-        act_diff_open_tabs.triggered.connect(self.compare_open_tabs)
+    # ==========================================
+    # Navigation & Interaction Handlers
+    # ==========================================
 
-        act_diff = self._add_action(tb_main, "📁⚖️", "Dosya DIFF", "Bilgisayardan iki PDF seçip yan yana karşılaştır")
-        act_diff.triggered.connect(self.open_diff_dialog)
-
-        tb_main.addSeparator()
-
-        # Tools
-        self.act_tool_view = self._add_action(tb_main, "👆", "Gezin / Seç", "Sayfada gezin veya fareyle metin seç", checkable=True)
-        self.act_tool_view.setChecked(True)
-        self.act_tool_view.triggered.connect(lambda: self._set_viewer_tool("view"))
-
-        self.act_tool_whiteout = self._add_action(tb_main, "◻️", "Silgi", "Yazı, leke veya kalem izlerini beyazlatıp temizle", checkable=True)
-        self.act_tool_whiteout.triggered.connect(lambda: self._set_viewer_tool("whiteout"))
-
-        self.act_tool_text = self._add_action(tb_main, "✍️", "Metin Ekle", "Sayfa üzerinde istenen yere yeni metin ekle", checkable=True)
-        self.act_tool_text.triggered.connect(lambda: self._set_viewer_tool("text"))
-
-        act_edit_text = self._add_action(tb_main, "✏️", "Düzenle", "Seçili metni veya çift tıklanan kelimeyi doğrudan değiştir")
-        act_edit_text.triggered.connect(self._edit_selected_text_trigger)
-
-        act_ocr = self._add_action(tb_main, "🔍", "OCR", "Sayfadaki metinleri tanı, seçilebilir ve düzenlenebilir yap")
-        act_ocr.triggered.connect(self._run_ocr_trigger)
-
-        act_paint = self._add_action(tb_main, "🖌️", "Paint", "Taranmış evrağı Paint programında açıp temizle")
-        act_paint.triggered.connect(self._launch_external_image_edit)
-
-        act_sig = self._add_action(tb_main, "🖊️", "İmza", "El yazısı imzanızı çizin veya imza resmi ekleyin")
-        act_sig.triggered.connect(self._open_signature_dialog)
-
-        tb_main.addSeparator()
-
-        # Page Management
-        act_manage_pages = self._add_action(tb_main, "📑", "Sayfalar", "Sayfaları görsel olarak sırala, döndür, sil")
-        act_manage_pages.triggered.connect(self._open_page_manager)
-
-        act_rot_cw = self._add_action(tb_main, "🔄", "Döndür", "Sayfayı 90 derece sağa döndür")
-        act_rot_cw.triggered.connect(self._rotate_current_page)
-
-        act_protect = self._add_action(tb_main, "🔒", "Parola", "PDF'e parola koy")
-        act_protect.triggered.connect(self._encrypt_current_doc)
-
-        act_unprotect = self._add_action(tb_main, "🔓", "Şifre Çöz", "Belgedeki parolayı kaldır")
-        act_unprotect.triggered.connect(self._decrypt_current_doc)
-
-        act_export_pages = self._add_action(tb_main, "🖼️", "Resme Çevir", "Sayfaları resim olarak dışa aktar")
-        act_export_pages.triggered.connect(self._export_pages_as_images)
-
-        act_img_to_pdf = self._add_action(tb_main, "📑", "Resimden PDF", "Resimlerden yeni bir PDF oluştur")
-        act_img_to_pdf.triggered.connect(self._convert_images_to_pdf)
-
-        tb_main.addSeparator()
-
-        # Settings & Zoom
-        act_settings = self._add_action(tb_main, "⚙️", "Seçenekler", "Varsayılan uygulama, tema ve karşılaştırma ayarları")
-        act_settings.triggered.connect(self._open_settings_dialog)
-
-        act_zoom_in = self._add_action(tb_main, "🔍➕", "Büyüt", "Yakınlaştır")
-        act_zoom_in.triggered.connect(self._zoom_in)
-
-        act_zoom_out = self._add_action(tb_main, "🔍➖", "Küçült", "Uzaklaştır")
-        act_zoom_out.triggered.connect(self._zoom_out)
-
-        act_theme = self._add_action(tb_main, "🌓", "Tema", "Koyu / Aydınlık tema geçişi")
-        act_theme.triggered.connect(self._toggle_theme)
-
-    def _open_settings_dialog(self):
-        dlg = SettingsDialog(current_is_dark=self.is_dark_mode, parent=self)
-        dlg.theme_changed.connect(self._on_settings_theme_changed)
-        dlg.exec()
-
-    def _on_settings_theme_changed(self, theme_name: str):
-        self.is_dark_mode = (theme_name == "dark")
-        self.apply_theme(DARK_THEME if self.is_dark_mode else LIGHT_THEME)
-
-    def apply_theme(self, stylesheet: str):
-        self.setStyleSheet(stylesheet)
-
-    def _toggle_theme(self):
-        self.is_dark_mode = not self.is_dark_mode
-        self.apply_theme(DARK_THEME if self.is_dark_mode else LIGHT_THEME)
-
-    def get_open_pdf_tabs(self) -> List[Tuple[int, str, PDFViewer]]:
-        """Returns list of (tab_index, title, viewer) for all currently open PDF tabs."""
-        results = []
-        for i in range(self.tabs.count()):
-            w = self.tabs.widget(i)
-            if isinstance(w, PDFViewer) and w.doc and w.doc.is_open:
-                title = self.tabs.tabText(i)
-                results.append((i, title, w))
-        return results
-
-    def compare_open_tabs(self, default_tab_a: int = 0, default_tab_b: int = 1):
-        """
-        Compares two open tabs side-by-side with DIFF.
-        If exactly 2 tabs are open, launches immediately!
-        If > 2 tabs open, prompts with dropdown.
-        If < 2 tabs open, guides user to open the second document.
-        """
-        open_tabs = self.get_open_pdf_tabs()
-        if len(open_tabs) < 2:
-            if len(open_tabs) == 1:
-                # Offer to pick the 2nd PDF to compare with this open tab
-                reply = QMessageBox.question(
-                    self, "DIFF Karşılaştırma",
-                    f"Şu anda yalnızca '{open_tabs[0][1]}' açık.\n\nBu belgeyle karşılaştırmak istediğiniz ikinci PDF dosyasını seçmek ister misiniz?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-                )
-                if reply == QMessageBox.StandardButton.Yes:
-                    file_b, _ = QFileDialog.getOpenFileName(self, "Karşılaştırılacak 2. PDF Dosyasını Seç", "", "PDF Dosyaları (*.pdf)")
-                    if file_b:
-                        doc_b = PDFDocument(file_b)
-                        self._launch_diff(open_tabs[0][2].doc, doc_b, open_tabs[0][1], os.path.basename(file_b))
+    def _on_nav_rail_action(self, key: str):
+        if key == "home" or key == "documents":
+            self.open_file_dialog()
+        elif key == "recent":
+            self._show_recent_files_menu()
+        elif key == "diff":
+            if self.tabs.count() >= 2:
+                self.compare_open_tabs()
             else:
-                QMessageBox.information(
-                    self, "Bilgi", 
-                    "Karşılaştırma yapabilmek için lütfen karşılaştırmak istediğiniz PDF'leri açın (örneğin maillerinizdeki iki PDF'e tıklayarak sekmelerde açabilirsiniz)."
-                )
+                self.open_diff_dialog()
+        elif key == "tools":
+            self._toggle_copilot_panel()
+        elif key == "settings":
+            self._open_settings_dialog()
+
+    def _on_floating_tool_changed(self, tool_id: str):
+        if tool_id in ["view", "text", "whiteout"]:
+            self._set_viewer_tool(tool_id)
+        elif tool_id == "edit_text":
+            self._edit_selected_text_trigger()
+        elif tool_id == "signature":
+            self._open_signature_dialog()
+        elif tool_id == "rotate":
+            self._rotate_current_page()
+        elif tool_id == "pages":
+            self._open_page_manager()
+        elif tool_id == "undo":
+            self.undo_current()
+        elif tool_id == "redo":
+            self.redo_current()
+
+    def _toggle_copilot_panel(self):
+        is_vis = not self.copilot_panel.isVisible()
+        self.copilot_panel.setVisible(is_vis)
+        self.btn_toggle_copilot.setChecked(is_vis)
+
+    def _toggle_thumbnails(self):
+        is_vis = not self.thumbnail_bar.isVisible()
+        self.thumbnail_bar.setVisible(is_vis)
+        self.doc_splitter.setSizes([160 if is_vis else 0, 800])
+
+    def _show_recent_files_menu(self):
+        if not self.recent_files:
+            QMessageBox.information(self, "Son Dosyalar", "Henüz açılmış bir son dosya geçmişi yok.")
             return
-
-        if len(open_tabs) == 2:
-            # Exactly two tabs: compare immediately!
-            tab_a = open_tabs[0]
-            tab_b = open_tabs[1]
-            self._launch_diff(tab_a[2].doc, tab_b[2].doc, tab_a[1], tab_b[1])
-        else:
-            # More than two tabs: let user choose
-            dlg = OpenTabsDiffDialog(open_tabs, default_tab_a, default_tab_b, self)
-            if dlg.exec() == QDialog.DialogCode.Accepted:
-                viewer_a = self.tabs.widget(dlg.selected_a_idx)
-                viewer_b = self.tabs.widget(dlg.selected_b_idx)
-                title_a = self.tabs.tabText(dlg.selected_a_idx)
-                title_b = self.tabs.tabText(dlg.selected_b_idx)
-                if isinstance(viewer_a, PDFViewer) and isinstance(viewer_b, PDFViewer):
-                    self._launch_diff(viewer_a.doc, viewer_b.doc, title_a, title_b)
-
-    def _launch_diff(self, doc_a: PDFDocument, doc_b: PDFDocument, label_a: str, label_b: str):
-        diff_view = DiffView(self)
-        diff_view.status_message.connect(self.show_status_message)
-        diff_view.load_diff(doc_a, doc_b, label_a, label_b)
-
-        tab_title = f"⚖️ DIFF: {label_a} ⟷ {label_b}"
-        tab_idx = self.tabs.addTab(diff_view, tab_title)
-        self.tabs.setCurrentIndex(tab_idx)
-        self.show_status_message(f"Karşılaştırma açıldı: {label_a} ⟷ {label_b}")
-
-    def _show_tab_context_menu(self, pos: QPoint):
-        """Right-click menu on tabs."""
-        tab_bar = self.tabs.tabBar()
-        tab_idx = tab_bar.tabAt(pos)
-        if tab_idx < 0:
-            return
-
         menu = QMenu(self)
-        open_tabs = self.get_open_pdf_tabs()
+        for f in self.recent_files[:10]:
+            act = menu.addAction(f"📄 {os.path.basename(f)}")
+            act.triggered.connect(lambda checked, path=f: self.open_pdf(path))
+        menu.exec(self.nav_rail.mapToGlobal(QPoint(220, 100)))
 
-        if len(open_tabs) >= 2 and isinstance(self.tabs.widget(tab_idx), PDFViewer):
-            act_diff_this = menu.addAction("⚖️ Bu Sekmeyi Diğer Açık Sekmeyle Karşılaştır (DIFF)")
-            act_diff_this.triggered.connect(lambda: self.compare_open_tabs(default_tab_a=tab_idx))
-            menu.addSeparator()
-
-        act_close = menu.addAction("❌ Bu Sekmeyi Kapat")
-        act_close.triggered.connect(lambda: self._close_tab(tab_idx))
-
-        act_close_others = menu.addAction("🧹 Diğer Sekmeleri Kapat")
-        act_close_others.triggered.connect(lambda: self._close_other_tabs(tab_idx))
-
-        menu.exec(tab_bar.mapToGlobal(pos))
-
-    def _close_other_tabs(self, keep_idx: int):
-        for i in range(self.tabs.count() - 1, -1, -1):
-            if i != keep_idx:
-                self._close_tab(i)
-
-    def _set_as_default_pdf_app(self):
-        """Sets NeNgi PDF as the default PDF handler in Windows."""
-        if not is_windows():
-            QMessageBox.information(
-                self, "Bilgi", 
-                "Windows entegrasyonu özelliği Windows işletim sisteminde aktiftir.\n\nWindows bilgisayarınızda bu butona tıkladığınızda NeNgi PDF otomatik olarak varsayılan PDF okuyucusu olarak ayarlanır."
-            )
+    def _on_copilot_action(self, action_key: str):
+        doc = self.get_current_doc()
+        viewer = self.get_current_viewer()
+        if not doc or not doc.is_open:
+            self.copilot_panel.add_message("Lütfen önce işlem yapılacak bir PDF açın.")
             return
 
-        ok, msg = register_as_default_pdf_viewer()
-        if ok:
-            reply = QMessageBox.question(
-                self, "Başarılı",
-                f"{msg}\n\nWindows 'Varsayılan Uygulamalar' ayarlarını da açıp onaylamak ister misiniz?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        curr_page = viewer.current_page_idx if viewer else 0
+
+        if action_key == "summarize":
+            words = doc.get_page_text_words(curr_page)
+            text = " ".join(w[4] for w in words)
+            if text:
+                from PyQt6.QtWidgets import QApplication
+                QApplication.clipboard().setText(text)
+                self.copilot_panel.add_message(
+                    f"✅ Sayfa {curr_page+1} metinleri kopyalandı ({len(words)} kelime):\n\n\"{text[:200]}...\""
+                )
+            else:
+                self.copilot_panel.add_message("Bu sayfada seçilebilir metin bulunamadı. OCR çalıştırmayı deneyin.")
+        elif action_key == "ocr":
+            self.copilot_panel.add_message("🔍 OCR metin taraması başlatılıyor...")
+            self._run_ocr_trigger()
+        elif action_key == "diff":
+            self.compare_open_tabs()
+        elif action_key == "merge":
+            self.open_merge_dialog()
+        elif action_key == "protect":
+            self._encrypt_current_doc()
+
+    def _on_copilot_query(self, query: str):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            self.copilot_panel.add_message("Arama yapabilmek için lütfen bir belge açın.")
+            return
+
+        # Simple fast keyword lookup across document pages
+        matches = []
+        q_lower = query.lower()
+        for idx in range(doc.page_count):
+            txt = doc.get_page(idx).get_text("text").lower()
+            if q_lower in txt:
+                matches.append(idx + 1)
+
+        if matches:
+            pages_str = ", ".join(str(p) for p in matches[:8])
+            self.copilot_panel.add_message(
+                f"🔎 '{query}' ifadesi şu sayfalarda bulundu: Sayfa {pages_str}"
             )
-            if reply == QMessageBox.StandardButton.Yes:
-                open_windows_default_apps_settings()
+            viewer = self.get_current_viewer()
+            if viewer and matches:
+                viewer.go_to_page(matches[0] - 1)
         else:
-            QMessageBox.warning(self, "Hata", msg)
+            self.copilot_panel.add_message(f"'{query}' belgede bulunamadı.")
+
+    def _on_search_triggered(self):
+        query = self.txt_search.text().strip()
+        if query:
+            self._on_copilot_query(query)
+
+    # ==========================================
+    # Document & Tab Management
+    # ==========================================
 
     def get_current_viewer(self) -> Optional[PDFViewer]:
         current_widget = self.tabs.currentWidget()
@@ -407,13 +481,14 @@ class MainWindow(QMainWindow):
         return viewer.doc if viewer else None
 
     def open_file_dialog(self):
-        file_paths, _ = QFileDialog.getOpenFileNames(self, "PDF Dosyası Aç", "", "PDF Dosyaları (*.pdf)")
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self, "PDF Dosyası Aç", "", "PDF Dosyaları (*.pdf);;Resim Dosyaları (*.png *.jpg *.jpeg *.bmp)"
+        )
         if file_paths:
             for f in file_paths:
                 self.open_pdf(f)
 
     def print_current_document(self):
-        """Prints the current PDF document to chosen physical or virtual PDF printer."""
         doc = self.get_current_doc()
         viewer = self.get_current_viewer()
         if not doc or not doc.is_open:
@@ -423,25 +498,23 @@ class MainWindow(QMainWindow):
         PDFPrinter.print_document(doc, parent=self, current_page=curr_page)
 
     def undo_current(self):
-        """Reverts the last document action in active tab."""
         viewer = self.get_current_viewer()
         if viewer:
             viewer.undo()
+            self._update_footer_page_info()
 
     def redo_current(self):
-        """Redoes the last reverted action in active tab."""
         viewer = self.get_current_viewer()
         if viewer:
             viewer.redo()
+            self._update_footer_page_info()
 
     def open_merge_dialog(self, files: Optional[List[str]] = None):
-        """Opens multi-file merge wizard."""
         dlg = MergeFilesDialog(initial_files=files, parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted and dlg.output_pdf_path:
             self.open_pdf(dlg.output_pdf_path)
 
     def convert_file_to_pdf(self, file_path: str):
-        """Converts image or document to PDF and opens it in a new tab."""
         if not os.path.exists(file_path):
             return
         ext = os.path.splitext(file_path)[1].lower()
@@ -462,7 +535,6 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Dönüştürme Hatası", f"Dosya PDF'e dönüştürülemedi:\n{e}")
 
     def handle_external_file(self, raw_arg: str):
-        """Handles incoming files or flags from Windows Explorer or secondary instances."""
         if not raw_arg:
             return
 
@@ -488,23 +560,13 @@ class MainWindow(QMainWindow):
                 elif ext in [".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".webp"]:
                     self.convert_file_to_pdf(path)
 
-        # Restore from minimized state and bring to foreground
         self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMinimized | Qt.WindowState.WindowActive)
         self.show()
         self.raise_()
         self.activateWindow()
 
-        if sys.platform == "win32":
-            try:
-                import ctypes
-                hwnd = int(self.winId())
-                ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-                ctypes.windll.user32.SetForegroundWindow(hwnd)
-            except Exception:
-                pass
-
     def open_pdf(self, file_path: str):
-        # Check if this exact file is already open in one of the tabs
+        # Check if already open
         for i in range(self.tabs.count()):
             w = self.tabs.widget(i)
             if isinstance(w, PDFViewer) and w.doc and w.doc.file_path == file_path:
@@ -515,220 +577,275 @@ class MainWindow(QMainWindow):
         doc = PDFDocument()
         is_ok = doc.open(file_path)
         
-        # If encrypted, prompt for password
         if doc.is_encrypted and not is_ok:
             dlg = PasswordDialog(mode="decrypt", parent=self)
             if dlg.exec() == QDialog.DialogCode.Accepted and dlg.password:
                 if not doc.authenticate(dlg.password):
-                    QMessageBox.critical(self, "Hata", "Girilen parola hatalı.")
+                    QMessageBox.critical(self, "Hata", "Hatalı parola girdiniz.")
                     return
             else:
                 return
 
-        viewer = PDFViewer(self)
-        viewer.load_document(doc)
-        viewer.page_changed.connect(self._on_viewer_page_changed)
-        viewer.document_modified.connect(self._on_doc_modified)
+        viewer = PDFViewer(doc=doc, parent=self)
+        viewer.page_changed.connect(self._on_page_changed)
+        viewer.document_modified.connect(self._on_document_modified)
         viewer.status_message.connect(self.show_status_message)
 
-        tab_title = os.path.basename(file_path)
-        tab_idx = self.tabs.addTab(viewer, tab_title)
-        self.tabs.setCurrentIndex(tab_idx)
+        tab_title = os.path.basename(file_path) if file_path else "Yeni Belge"
+        idx = self.tabs.addTab(viewer, tab_title)
+        self.tabs.setCurrentIndex(idx)
 
-        self.thumbnail_bar.load_thumbnails(doc)
-        self.show_status_message(f"'{tab_title}' yeni sekmede açıldı.")
+        # Track recent files
+        if file_path and file_path not in self.recent_files:
+            self.recent_files.insert(0, file_path)
 
-    def open_diff_dialog(self):
-        """Dialog to select two PDFs from disk and open a side-by-side DIFF tab."""
-        file_a, _ = QFileDialog.getOpenFileName(self, "Orijinal (Eski) PDF Dosyasını Seç", "", "PDF Dosyaları (*.pdf)")
-        if not file_a:
-            return
-
-        file_b, _ = QFileDialog.getOpenFileName(self, "Revize Edilmiş (Yeni) PDF Dosyasını Seç", "", "PDF Dosyaları (*.pdf)")
-        if not file_b:
-            return
-
-        doc_a = PDFDocument(file_a)
-        doc_b = PDFDocument(file_b)
-        self._launch_diff(doc_a, doc_b, os.path.basename(file_a), os.path.basename(file_b))
+        self.thumbnail_bar.load_document(doc)
+        self._update_footer_page_info()
+        self.show_status_message(f"Açıldı: {tab_title}")
 
     def save_current_file(self):
         doc = self.get_current_doc()
-        if not doc:
+        if not doc or not doc.is_open:
+            return
+        if not doc.file_path:
+            self.save_current_file_as()
             return
         if doc.save():
-            self.show_status_message("Belge kaydedildi.")
-            viewer = self.get_current_viewer()
-            if viewer:
-                viewer.refresh_all_pages()
+            self.show_status_message(f"Kaydedildi: {os.path.basename(doc.file_path)}")
         else:
-            QMessageBox.critical(self, "Hata", "Dosya kaydedilemedi.")
+            self.save_current_file_as()
 
     def save_current_file_as(self):
         doc = self.get_current_doc()
-        if not doc:
+        if not doc or not doc.is_open:
             return
-        file_path, _ = QFileDialog.getSaveFileName(self, "Farklı Kaydet", "", "PDF Dosyaları (*.pdf)")
+        suggested = os.path.basename(doc.file_path) if doc.file_path else "Belge.pdf"
+        file_path, _ = QFileDialog.getSaveFileName(self, "Farklı Kaydet", suggested, "PDF Dosyaları (*.pdf)")
         if file_path:
             if doc.save(file_path):
-                self.show_status_message(f"Farklı kaydedildi: {file_path}")
-            else:
-                QMessageBox.critical(self, "Hata", "Dosya kaydedilemedi.")
+                curr_idx = self.tabs.currentIndex()
+                self.tabs.setTabText(curr_idx, os.path.basename(file_path))
+                self.show_status_message(f"Farklı kaydedildi: {os.path.basename(file_path)}")
 
-    def _edit_selected_text_trigger(self):
-        viewer = self.get_current_viewer()
-        if not viewer or not viewer.page_widgets:
-            QMessageBox.information(self, "Bilgi", "Lütfen önce bir PDF açın.")
-            return
-        for pw in viewer.page_widgets:
-            if pw.selected_words:
-                pw.prompt_edit_selected_text()
+    def _close_tab(self, index: int):
+        widget = self.tabs.widget(index)
+        if isinstance(widget, PDFViewer) and widget.doc and widget.doc.is_modified:
+            reply = QMessageBox.question(
+                self, "Kaydedilmemiş Değişiklikler",
+                "Bu belgede kaydedilmemiş değişiklikler var. Kapatmadan önce kaydetmek istiyor musunuz?",
+                QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel
+            )
+            if reply == QMessageBox.StandardButton.Save:
+                self.save_current_file()
+            elif reply == QMessageBox.StandardButton.Cancel:
                 return
-        QMessageBox.information(
-            self, "Metin Düzenleme İpucu",
-            "PDF üzerindeki herhangi bir kelimeye çift tıklayarak doğrudan düzenleyebilir "
-            "veya fareyle seçip bu butona basabilirsiniz."
-        )
 
-    def _run_ocr_trigger(self):
-        viewer = self.get_current_viewer()
-        if viewer and viewer.doc:
-            viewer.run_ocr(viewer.current_page_idx)
+        if isinstance(widget, PDFViewer) and widget.doc:
+            widget.doc.close()
+
+        self.tabs.removeTab(index)
+        if self.tabs.count() == 0:
+            self.thumbnail_bar.clear()
+            self._update_footer_page_info()
+
+    def _on_tab_changed(self, index: int):
+        doc = self.get_current_doc()
+        if doc and doc.is_open:
+            self.thumbnail_bar.load_document(doc)
         else:
-            QMessageBox.information(self, "Bilgi", "Lütfen önce bir PDF açın.")
+            self.thumbnail_bar.clear()
+        self._update_footer_page_info()
 
-    def _set_viewer_tool(self, tool_mode: str):
-        self.act_tool_view.setChecked(tool_mode == "view")
-        self.act_tool_whiteout.setChecked(tool_mode == "whiteout")
-        self.act_tool_text.setChecked(tool_mode == "text")
-
-        viewer = self.get_current_viewer()
-        if viewer:
-            viewer.set_tool_mode(tool_mode)
-
-    def _launch_external_image_edit(self):
-        viewer = self.get_current_viewer()
-        if viewer and viewer.doc:
-            current_page = viewer.current_page_idx
-            viewer.roundtrip_handler.edit_scanned_page(viewer.doc, current_page)
-
-    def _open_signature_dialog(self):
-        viewer = self.get_current_viewer()
-        if not viewer or not viewer.doc:
-            QMessageBox.information(self, "Bilgi", "Lütfen önce bir PDF açın.")
-            return
-
-        dlg = SignatureDialog(self)
-        if dlg.exec() == SignatureDialog.DialogCode.Accepted and dlg.saved_signature_path:
-            viewer.set_tool_mode("stamp", stamp_path=dlg.saved_signature_path)
-            self.show_status_message("İmza hazır! Belgede imzalamak istediğiniz yere tıklayın.")
-
-    def _open_page_manager(self):
+    def _update_footer_page_info(self):
         doc = self.get_current_doc()
-        if not doc:
-            return
-        dlg = PageManagerDialog(doc, self)
-        if dlg.exec() == PageManagerDialog.DialogCode.Accepted:
-            viewer = self.get_current_viewer()
-            if viewer:
-                viewer.refresh_all_pages()
-            self.thumbnail_bar.load_thumbnails(doc)
-
-    def _rotate_current_page(self):
         viewer = self.get_current_viewer()
-        if viewer and viewer.doc:
-            viewer.doc.rotate_page(viewer.current_page_idx, 90)
-            viewer.refresh_page(viewer.current_page_idx)
-            self.thumbnail_bar.load_thumbnails(viewer.doc)
+        if doc and doc.is_open and viewer:
+            curr = viewer.current_page_idx + 1
+            tot = doc.page_count
+            self.lbl_footer_page.setText(f"Sayfa {curr} / {tot}")
+            self.lbl_footer_zoom.setText(f"%{int(viewer.zoom * 100)}")
+            self.thumbnail_bar.set_active_page(viewer.current_page_idx)
+        else:
+            self.lbl_footer_page.setText("Sayfa: - / -")
+            self.lbl_footer_zoom.setText("%100")
 
-    def _encrypt_current_doc(self):
+    def _prev_page(self):
+        viewer = self.get_current_viewer()
+        if viewer and viewer.current_page_idx > 0:
+            viewer.go_to_page(viewer.current_page_idx - 1)
+
+    def _next_page(self):
+        viewer = self.get_current_viewer()
         doc = self.get_current_doc()
-        if not doc:
-            return
-        dlg = PasswordDialog(mode="encrypt", parent=self)
-        if dlg.exec() == PasswordDialog.DialogCode.Accepted and dlg.password:
-            out_file, _ = QFileDialog.getSaveFileName(self, "Şifreli PDF'i Kaydet", "", "PDF Dosyası (*.pdf)")
-            if out_file:
-                if SecurityManager.encrypt_document(doc, dlg.password, out_file):
-                    QMessageBox.information(self, "Başarılı", "Belge başarıyla parolayla şifrelendi.")
-                else:
-                    QMessageBox.critical(self, "Hata", "Şifreleme başarısız oldu.")
-
-    def _decrypt_current_doc(self):
-        doc = self.get_current_doc()
-        if not doc:
-            return
-        out_file, _ = QFileDialog.getSaveFileName(self, "Parolasız Kopyayı Kaydet", "", "PDF Dosyası (*.pdf)")
-        if out_file:
-            if SecurityManager.remove_password(doc, out_file):
-                QMessageBox.information(self, "Başarılı", "Belgenin şifresi kaldırıldı ve kaydedildi.")
-            else:
-                QMessageBox.critical(self, "Hata", "Şifre kaldırma başarısız oldu.")
-
-    def _export_pages_as_images(self):
-        doc = self.get_current_doc()
-        if not doc:
-            return
-        dir_path = QFileDialog.getExistingDirectory(self, "Resimlerin Kaydedileceği Klasörü Seç")
-        if dir_path:
-            results = FormatConverter.export_all_pages(doc, dir_path, format_ext="png", dpi=300)
-            QMessageBox.information(self, "Tamamlandı", f"{len(results)} sayfa yüksek çözünürlüklü PNG olarak kaydedildi.")
-
-    def _convert_images_to_pdf(self):
-        files, _ = QFileDialog.getOpenFileNames(self, "PDF'e Dönüştürülecek Resimleri Seç", "", "Resimler (*.png *.jpg *.jpeg *.bmp)")
-        if files:
-            out_pdf, _ = QFileDialog.getSaveFileName(self, "Oluşturulacak PDF Dosyası", "", "PDF Dosyası (*.pdf)")
-            if out_pdf:
-                if FormatConverter.images_to_pdf(files, out_pdf):
-                    QMessageBox.information(self, "Başarılı", "Resimler tek bir PDF dosyasında birleştirildi.")
-                    self.open_pdf(out_pdf)
+        if viewer and doc and viewer.current_page_idx < doc.page_count - 1:
+            viewer.go_to_page(viewer.current_page_idx + 1)
 
     def _zoom_in(self):
         viewer = self.get_current_viewer()
         if viewer:
             viewer.zoom_in()
-            self.lbl_status_zoom.setText(f"Yakınlaştırma: %{int(viewer.zoom * 100)}")
+            self.lbl_footer_zoom.setText(f"%{int(viewer.zoom * 100)}")
 
     def _zoom_out(self):
         viewer = self.get_current_viewer()
         if viewer:
             viewer.zoom_out()
-            self.lbl_status_zoom.setText(f"Yakınlaştırma: %{int(viewer.zoom * 100)}")
+            self.lbl_footer_zoom.setText(f"%{int(viewer.zoom * 100)}")
 
-    def _close_tab(self, index: int):
-        widget = self.tabs.widget(index)
-        if isinstance(widget, PDFViewer) and widget.doc:
-            widget.doc.close()
-        self.tabs.removeTab(index)
+    def _on_page_changed(self, page_idx: int):
+        self._update_footer_page_info()
 
-    def _on_tab_changed(self, index: int):
-        viewer = self.get_current_viewer()
-        if viewer and viewer.doc:
-            self.thumbnail_bar.load_thumbnails(viewer.doc)
-            self.lbl_status_page.setText(f"Sayfa: {viewer.current_page_idx + 1} / {viewer.doc.page_count}")
-            self.lbl_status_zoom.setText(f"Yakınlaştırma: %{int(viewer.zoom * 100)}")
-        else:
-            self.thumbnail_bar.list_widget.clear()
-            self.lbl_status_page.setText("Sayfa: - / -")
+    def _on_document_modified(self):
+        curr_idx = self.tabs.currentIndex()
+        doc = self.get_current_doc()
+        if doc:
+            base = os.path.basename(doc.file_path) if doc.file_path else "Yeni Belge"
+            self.tabs.setTabText(curr_idx, f"*{base}")
+            self.thumbnail_bar.load_document(doc)
 
     def _on_thumbnail_page_selected(self, page_idx: int):
         viewer = self.get_current_viewer()
         if viewer:
-            viewer.scroll_to_page(page_idx)
-
-    def _on_viewer_page_changed(self, current: int, total: int):
-        self.lbl_status_page.setText(f"Sayfa: {current} / {total}")
-        self.thumbnail_bar.select_page(current - 1)
-
-    def _on_doc_modified(self):
-        viewer = self.get_current_viewer()
-        if viewer and viewer.doc:
-            self.thumbnail_bar.load_thumbnails(viewer.doc)
+            viewer.go_to_page(page_idx)
 
     def _on_pages_modified(self):
         viewer = self.get_current_viewer()
         if viewer:
             viewer.refresh_all_pages()
+        self._on_document_modified()
 
     def show_status_message(self, message: str):
-        self.status_bar.showMessage(message, 5000)
+        self.lbl_footer_status.setText(message)
+
+    # ==========================================
+    # Tools, Editing, DIFF & OCR
+    # ==========================================
+
+    def _set_viewer_tool(self, tool_name: str):
+        viewer = self.get_current_viewer()
+        if viewer:
+            viewer.set_tool(tool_name)
+        self.floating_toolbar.set_active_tool(tool_name)
+
+    def _edit_selected_text_trigger(self):
+        viewer = self.get_current_viewer()
+        if viewer and viewer.page_widgets:
+            curr_pw = viewer.page_widgets[viewer.current_page_idx]
+            curr_pw.prompt_edit_selected_text()
+
+    def _run_ocr_trigger(self):
+        viewer = self.get_current_viewer()
+        if viewer:
+            viewer.run_ocr(viewer.current_page_idx)
+
+    def _rotate_current_page(self):
+        doc = self.get_current_doc()
+        viewer = self.get_current_viewer()
+        if doc and viewer:
+            doc.rotate_page(viewer.current_page_idx, 90)
+            viewer.refresh_page(viewer.current_page_idx)
+            self._on_document_modified()
+
+    def _open_page_manager(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            return
+        dlg = PageManagerDialog(doc, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            viewer = self.get_current_viewer()
+            if viewer:
+                viewer.refresh_all_pages()
+            self._on_document_modified()
+
+    def _open_signature_dialog(self):
+        dlg = SignatureDialog(parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.signature_path:
+            viewer = self.get_current_viewer()
+            if viewer:
+                viewer.set_stamp_image(dlg.signature_path)
+                self.show_status_message("İmzayı yerleştirmek için sayfada istediğiniz yere tıklayın.")
+
+    def _encrypt_current_doc(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            return
+        dlg = PasswordDialog(mode="encrypt", parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.password:
+            out_path, _ = QFileDialog.getSaveFileName(self, "Şifrelenmiş PDF'i Kaydet", "Sifreli_Belge.pdf", "PDF Dosyaları (*.pdf)")
+            if out_path:
+                SecurityManager.encrypt_pdf(doc, dlg.password, out_path)
+                self.show_status_message(f"Belge parola ile şifrelendi: {os.path.basename(out_path)}")
+
+    def _show_tab_context_menu(self, pos: QPoint):
+        tab_idx = self.tabs.tabBar().tabAt(pos)
+        if tab_idx < 0:
+            return
+        menu = QMenu(self)
+        act_compare = menu.addAction("⚖️ Açık Sekmeleri Karşılaştır (DIFF)")
+        act_close = menu.addAction("Kapat")
+        act = menu.exec(self.tabs.tabBar().mapToGlobal(pos))
+        if act == act_compare:
+            self.compare_open_tabs()
+        elif act == act_close:
+            self._close_tab(tab_idx)
+
+    def compare_open_tabs(self):
+        open_tabs: List[Tuple[int, str, PDFDocument]] = []
+        for i in range(self.tabs.count()):
+            w = self.tabs.widget(i)
+            if isinstance(w, PDFViewer) and w.doc and w.doc.is_open:
+                name = os.path.basename(w.doc.file_path) if w.doc.file_path else f"Sekme {i+1}"
+                open_tabs.append((i, name, w.doc))
+
+        if len(open_tabs) < 2:
+            QMessageBox.information(
+                self, "Bilgi", 
+                "Karşılaştırma (DIFF) yapabilmek için en az 2 PDF sekmesinin açık olması gerekir.\n\n"
+                "İki farklı dosyayı karşılaştırmak için 'İki Dosya Seçip Karşılaştır' seçeneğini kullanabilirsiniz."
+            )
+            return
+
+        if len(open_tabs) == 2:
+            self._launch_diff(open_tabs[0][2], open_tabs[1][2], open_tabs[0][1], open_tabs[1][1])
+            return
+
+        dlg = OpenTabsDiffDialog(open_tabs, default_a=0, default_b=1, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            idx_a = dlg.selected_a_idx
+            idx_b = dlg.selected_b_idx
+            self._launch_diff(open_tabs[idx_a][2], open_tabs[idx_b][2], open_tabs[idx_a][1], open_tabs[idx_b][1])
+
+    def _launch_diff(self, doc_a: PDFDocument, doc_b: PDFDocument, name_a: str, name_b: str):
+        diff_view = DiffView(doc_a, doc_b, parent=self)
+        diff_tab_idx = self.tabs.addTab(diff_view, f"⚖️ DIFF: {name_a} vs {name_b}")
+        self.tabs.setCurrentIndex(diff_tab_idx)
+
+    def open_diff_dialog(self):
+        f_a, _ = QFileDialog.getOpenFileName(self, "Orijinal PDF'i Seçin (A)", "", "PDF Dosyaları (*.pdf)")
+        if not f_a:
+            return
+        f_b, _ = QFileDialog.getOpenFileName(self, "Revize PDF'i Seçin (B)", "", "PDF Dosyaları (*.pdf)")
+        if not f_b:
+            return
+
+        doc_a = PDFDocument(f_a)
+        doc_b = PDFDocument(f_b)
+        diff_view = DiffView(doc_a, doc_b, parent=self)
+        idx = self.tabs.addTab(diff_view, f"⚖️ DIFF: {os.path.basename(f_a)} vs {os.path.basename(f_b)}")
+        self.tabs.setCurrentIndex(idx)
+
+    def _open_settings_dialog(self):
+        dlg = SettingsDialog(current_is_dark=self.is_dark_mode, parent=self)
+        dlg.theme_changed.connect(self._on_settings_theme_changed)
+        dlg.exec()
+
+    def _on_settings_theme_changed(self, theme_name: str):
+        self.is_dark_mode = (theme_name == "dark")
+        self.apply_theme(DARK_THEME if self.is_dark_mode else LIGHT_THEME)
+
+    def _toggle_theme(self):
+        self.is_dark_mode = not self.is_dark_mode
+        self.apply_theme(DARK_THEME if self.is_dark_mode else LIGHT_THEME)
+
+    def apply_theme(self, stylesheet: str):
+        self.setStyleSheet(stylesheet)
