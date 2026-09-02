@@ -38,6 +38,9 @@ class NavigationRail(QWidget):
         layout.setContentsMargins(12, 16, 12, 16)
         layout.setSpacing(6)
 
+        self.is_dark = True
+        self._item_icons: Dict[str, str] = {}
+
         # 1. Brand Logo & Title
         brand_layout = QHBoxLayout()
         brand_layout.setSpacing(10)
@@ -73,18 +76,20 @@ class NavigationRail(QWidget):
         layout.addStretch()
 
         # Divider
-        divider = QFrame()
-        divider.setFrameShape(QFrame.Shape.HLine)
-        divider.setStyleSheet("color: #2D3036; background-color: #2D3036; height: 1px; margin: 8px 0;")
-        layout.addWidget(divider)
+        self.divider = QFrame()
+        self.divider.setFrameShape(QFrame.Shape.HLine)
+        self.divider.setStyleSheet("color: #2D3036; background-color: #2D3036; height: 1px; margin: 8px 0;")
+        layout.addWidget(self.divider)
 
         # 3. Bottom Pinned Settings
         self._add_nav_item(layout, "settings", "settings", "Ayarlar", checkable=False)
 
     def _add_nav_item(self, layout: QVBoxLayout, key: str, icon_name: str, label: str, is_checked: bool = False, checkable: bool = True):
+        self._item_icons[key] = icon_name
         btn = QPushButton(f"  {label}")
         btn.setObjectName("navButton")
-        btn.setIcon(get_svg_icon(icon_name, "#9DA3AE", 18))
+        icon_color = "#FFFFFF" if is_checked else ("#9DA3AE" if self.is_dark else "#475569")
+        btn.setIcon(get_svg_icon(icon_name, icon_color, 18))
         btn.setIconSize(QSize(18, 18))
         btn.setCheckable(checkable)
         btn.setChecked(is_checked)
@@ -104,13 +109,43 @@ class NavigationRail(QWidget):
         )
         if checkable:
             self._button_group.addButton(btn)
-            btn.toggled.connect(lambda is_on, b=btn, name=icon_name: b.setIcon(get_svg_icon(name, "#FFFFFF" if is_on else "#9DA3AE", 18)))
+            btn.toggled.connect(lambda is_on, b=btn, name=icon_name: b.setIcon(get_svg_icon(name, "#FFFFFF" if is_on else ("#9DA3AE" if self.is_dark else "#475569"), 18)))
             if is_checked:
                 btn.setIcon(get_svg_icon(icon_name, "#FFFFFF", 18))
 
         btn.clicked.connect(lambda: self._on_btn_clicked(key))
         self._buttons[key] = btn
         layout.addWidget(btn)
+
+    def update_theme(self, is_dark: bool):
+        """Updates SVG icons and styles dynamically for dark or light theme."""
+        self.is_dark = is_dark
+        text_color = "#9DA3AE" if is_dark else "#475569"
+        hover_bg = "#24272D" if is_dark else "#E2E8F0"
+        hover_text = "#FFFFFF" if is_dark else "#0F172A"
+        div_color = "#2D3036" if is_dark else "#E2E8F0"
+
+        if hasattr(self, "divider"):
+            self.divider.setStyleSheet(f"color: {div_color}; background-color: {div_color}; height: 1px; margin: 8px 0;")
+
+        for key, btn in self._buttons.items():
+            icon_name = self._item_icons.get(key, "")
+            is_checked = btn.isChecked()
+            icon_color = "#FFFFFF" if is_checked else ("#9DA3AE" if is_dark else "#475569")
+            if icon_name:
+                btn.setIcon(get_svg_icon(icon_name, icon_color, 18))
+            btn.setStyleSheet(
+                f"QPushButton#navButton {{"
+                f"  text-align: left; padding: 8px 14px; border: none; border-radius: 8px;"
+                f"  font-size: 13px; font-weight: 500; color: {text_color}; background-color: transparent;"
+                f"}}"
+                f"QPushButton#navButton:hover {{"
+                f"  background-color: {hover_bg}; color: {hover_text};"
+                f"}}"
+                f"QPushButton#navButton:checked {{"
+                f"  background-color: #0078D4; color: #FFFFFF; font-weight: 600;"
+                f"}}"
+            )
 
     def _on_btn_clicked(self, key: str):
         self.nav_changed.emit(key)

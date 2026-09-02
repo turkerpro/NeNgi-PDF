@@ -94,6 +94,7 @@ class DraggableTextWidget(QWidget):
         bar_layout.setSpacing(4)
 
         lbl_hint = QLabel("✥ Taşı")
+        lbl_hint.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         bar_layout.addWidget(lbl_hint)
         bar_layout.addStretch()
 
@@ -117,12 +118,18 @@ class DraggableTextWidget(QWidget):
         btn_delete.clicked.connect(self.discard)
         bar_layout.addWidget(btn_delete)
 
+        # Allow dragging by clicking on the action pill bar
+        self.action_pill.mousePressEvent = self.mousePressEvent
+        self.action_pill.mouseMoveEvent = self.mouseMoveEvent
+        self.action_pill.mouseReleaseEvent = self.mouseReleaseEvent
+
         layout.addWidget(self.action_pill)
 
-        # Text Label Display (Fully Transparent Background)
+        # Text Label Display (Fully Transparent Background & Click-Through to Drag Box)
         self.lbl_content = QLabel(self.text)
         self.lbl_content.setObjectName("textContent")
         self.lbl_content.setWordWrap(True)
+        self.lbl_content.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self._update_text_style()
         layout.addWidget(self.lbl_content)
 
@@ -154,7 +161,7 @@ class DraggableTextWidget(QWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self._dragging = True
-            self._drag_start_pos = event.pos()
+            self._drag_start_pos = event.globalPosition().toPoint() - self.pos()
             self.raise_()
             event.accept()
         else:
@@ -162,10 +169,7 @@ class DraggableTextWidget(QWidget):
 
     def mouseMoveEvent(self, event):
         if self._dragging:
-            delta = event.pos() - self._drag_start_pos
-            new_pos = self.pos() + delta
-
-            # Constrain to parent page bounds
+            new_pos = event.globalPosition().toPoint() - self._drag_start_pos
             parent_rect = self.parentWidget().rect()
             new_x = max(0, min(new_pos.x(), parent_rect.width() - self.width()))
             new_y = max(0, min(new_pos.y(), parent_rect.height() - self.height()))
