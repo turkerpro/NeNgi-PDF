@@ -118,6 +118,56 @@ class TestNeNgiUI(unittest.TestCase):
         txt = pw.doc.get_page(0).get_text()
         self.assertIn("Test Sürüklenebilir Metin", txt)
 
+    def test_draggable_stamp_widget_and_undo(self):
+        """Tests Acrobat style interactive signature box, resizing, committing and undoing."""
+        from nengi.ui.draggable_stamp import DraggableStampWidget
+        from PyQt6.QtCore import QPoint
+        import tempfile
+        from PIL import Image
+
+        self.window.open_pdf(self.orig_pdf)
+        viewer = self.window.get_current_viewer()
+        self.assertIsNotNone(viewer)
+        pw = viewer.page_widgets[0]
+
+        # Create dummy signature image
+        tmp_img = tempfile.mktemp(suffix=".png")
+        img = Image.new("RGBA", (140, 50), color=(0, 100, 200, 255))
+        img.save(tmp_img)
+
+        stamp = DraggableStampWidget(
+            page_widget=pw,
+            initial_pos=QPoint(50, 80),
+            image_path=tmp_img,
+            zoom=1.0,
+            initial_width=140,
+            initial_height=50,
+            parent=pw
+        )
+        self.assertEqual(stamp.pos(), QPoint(50, 80))
+        # Move
+        stamp.move(QPoint(75, 120))
+        self.assertEqual(stamp.pos(), QPoint(75, 120))
+        # Resize
+        stamp.resize(200, 80)
+        self.assertEqual(stamp.width(), 200)
+        self.assertEqual(stamp.height(), 80)
+
+        # Commit to PDF
+        initial_img_count = len(pw.doc.get_page(0).get_images())
+        stamp.commit_to_pdf()
+        after_img_count = len(pw.doc.get_page(0).get_images())
+        self.assertGreater(after_img_count, initial_img_count)
+
+        # Test Undo
+        self.assertTrue(pw.doc.can_undo)
+        pw.doc.undo()
+        undone_img_count = len(pw.doc.get_page(0).get_images())
+        self.assertEqual(undone_img_count, initial_img_count)
+
+        if os.path.exists(tmp_img):
+            os.unlink(tmp_img)
+
 
 if __name__ == "__main__":
     unittest.main()

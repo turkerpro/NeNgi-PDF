@@ -47,6 +47,8 @@ class PageRenderWidget(QWidget):
         self.selected_words: List[Tuple[float, float, float, float, str, int, int, int]] = []
         self.hovered_block: Optional[Tuple[float, float, float, float, str, int, int]] = None
         self.active_text_widgets: List = []
+        self.active_stamp_widgets: List = []
+        self._hover_pos: Optional[QPoint] = None
 
         # Selection state for text / whiteout / drag
         self._is_selecting_text = False
@@ -174,6 +176,24 @@ class PageRenderWidget(QWidget):
             rect = QRect(self._drag_start, self._drag_current).normalized()
             painter.drawRect(rect)
 
+        # Draw live Ghost Preview of signature under cursor when in stamp mode
+        if self.mode == "stamp" and self._hover_pos and self.stamp_image_path and os.path.exists(self.stamp_image_path):
+            pix = QPixmap(self.stamp_image_path)
+            if not pix.isNull():
+                ghost_w = int(160 * self.zoom)
+                ghost_h = int(70 * self.zoom)
+                ghost_pix = pix.scaled(ghost_w, ghost_h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                painter.setOpacity(0.65)
+                gx = self._hover_pos.x() - ghost_pix.width() // 2
+                gy = self._hover_pos.y() - ghost_pix.height() // 2
+                painter.drawPixmap(gx, gy, ghost_pix)
+                # Border box around ghost preview
+                ghost_pen = QPen(QColor(0, 120, 215), 1.5, Qt.PenStyle.DashLine)
+                painter.setPen(ghost_pen)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawRect(gx, gy, ghost_pix.width(), ghost_pix.height())
+                painter.setOpacity(1.0)
+
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
             if self.mode == "view":
@@ -194,6 +214,11 @@ class PageRenderWidget(QWidget):
                 self._apply_stamp(event.pos())
 
     def mouseMoveEvent(self, event: QMouseEvent):
+        if self.mode == "stamp":
+            self._hover_pos = event.pos()
+            self.update()
+            return
+
         if self.mode == "view":
             self._ensure_text_extracted()
             if self._is_selecting_text:
@@ -250,6 +275,12 @@ class PageRenderWidget(QWidget):
                     self.update()
                     self.page_modified.emit()
                 self.update()
+
+    def leaveEvent(self, event):
+        self.hovered_block = None
+        self._hover_pos = None
+        self.update()
+        super().leaveEvent(event)
 
     def mouseDoubleClickEvent(self, event: QMouseEvent):
         if self.mode == "view" and event.button() == Qt.MouseButton.LeftButton:
@@ -395,23 +426,39 @@ class PageRenderWidget(QWidget):
             box.committed.connect(lambda b=box: self.active_text_widgets.remove(b) if b in self.active_text_widgets else None)
             box.discarded.connect(lambda b=box: self.active_text_widgets.remove(b) if b in self.active_text_widgets else None)
 
-    def commit_all_pending_text(self):
-        """Commits all floating text boxes permanently onto the PDF page."""
+    def commit_all_pending_edits(self):
+        """Commits all floating text boxes and signature stamps permanently onto the PDF page."""
         for box in list(self.active_text_widgets):
             box.commit_to_pdf()
+        for stamp in list(self.active_stamp_widgets):
+            stamp.commit_to_pdf()
+
+    def commit_all_pending_text(self):
+        self.commit_all_pending_edits()
 
     def _apply_stamp(self, pos: QPoint):
         if not self.stamp_image_path or not os.path.exists(self.stamp_image_path):
             return
         
-        w = 140.0
-        h = 55.0
-        pdf_x = (pos.x() / self.zoom) - (w / 2)
-        pdf_y = (pos.y() / self.zoom) - (h / 2)
-        stamp_rect = fitz.Rect(pdf_x, pdf_y, pdf_x + w, pdf_y + h)
-        
-        self.doc.add_image_stamp(self.page_idx, stamp_rect, self.stamp_image_path)
-        self.render_cache()
+        from nengi.ui.draggable_stamp import DraggableStampWidget
+        box_w = int(160 * self.zoom)
+        box_h = int(70 * self.zoom)
+        box_pos = QPoint(pos.x() - box_w // 2, pos.y() - box_h // 2)
+
+        stamp_box = DraggableStampWidget(
+            page_widget=self,
+            initial_pos=box_pos,
+            image_path=self.stamp_image_path,
+            zoom=self.zoom,
+            initial_width=160,
+            initial_height=70,
+            parent=self
+        )
+        self.active_stamp_widgets.append(stamp_box)
+        stamp_box.committed.connect(lambda s=stamp_box: self.active_stamp_widgets.remove(s) if s in self.active_stamp_widgets else None)
+        stamp_box.discarded.connect(lambda s=stamp_box: self.active_stamp_widgets.remove(s) if s in self.active_stamp_widgets else None)
+        self.mode = "view"
+        self._hover_pos = None
         self.update()
         self.page_modified.emit()
 

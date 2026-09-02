@@ -580,6 +580,7 @@ class PDFDocument:
         if not self.is_open:
             return False
         try:
+            self.save_state_for_undo()
             page = self.get_page(page_number)
             page.insert_image(rect, filename=image_path, keep_proportion=True)
             self.is_modified = True
