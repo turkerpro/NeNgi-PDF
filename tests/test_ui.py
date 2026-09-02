@@ -70,6 +70,16 @@ class TestNeNgiUI(unittest.TestCase):
         self.assertIsInstance(diff_tab, DiffView)
         self.assertGreater(len(diff_tab.changes), 0)
 
+    def test_merge_files_dialog(self):
+        from nengi.ui.merge_dialog import MergeFilesDialog
+        dlg = MergeFilesDialog(initial_files=[self.orig_pdf, self.rev_pdf], parent=self.window)
+        self.assertEqual(len(dlg.files), 2)
+        # Test move down
+        dlg.list_widget.setCurrentRow(0)
+        dlg._move_down()
+        self.assertEqual(dlg.files[0], self.rev_pdf)
+        dlg.close()
+
 
 if __name__ == "__main__":
     unittest.main()

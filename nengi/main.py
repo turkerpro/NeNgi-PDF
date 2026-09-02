@@ -41,12 +41,9 @@ def main():
     instance_mgr.file_received.connect(window.handle_external_file)
     instance_mgr.start_listening()
 
-    # 4. Open files passed on initial launch
+    # 4. Open files or execute flags passed on initial launch
     if len(sys.argv) > 1:
-        for f in sys.argv[1:]:
-            clean = f.strip().strip('"').strip("'")
-            if clean and os.path.exists(clean):
-                window.open_pdf(os.path.abspath(clean))
+        window.handle_external_file(" ".join(sys.argv[1:]))
 
     window.show()
     sys.exit(app.exec())

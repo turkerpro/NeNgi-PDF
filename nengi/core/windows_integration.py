@@ -71,9 +71,43 @@ def register_as_default_pdf_viewer() -> tuple[bool, str]:
 
 
 def open_windows_default_apps_settings():
-    """Opens Windows 10/11 Default Apps settings page."""
+    """Launches Windows 10/11 Default Apps settings page."""
     if is_windows():
         try:
-            subprocess.Popen(["start", "ms-settings:defaultapps"], shell=True)
+            os.system("start ms-settings:defaultapps")
         except Exception as e:
-            print(f"Could not open Windows settings: {e}")
+            print(f"Failed to open Windows settings: {e}")
+
+
+def register_shell_context_menus() -> tuple[bool, str]:
+    r"""
+    Registers Windows Explorer right-click context menus:
+    - '📑 NeNgi PDF ile Birleştir'
+    - '📄 NeNgi PDF ile PDF'e Dönüştür'
+    """
+    if not is_windows():
+        return False, "Bu özellik yalnızca Windows işletim sisteminde çalışır."
+
+    try:
+        import winreg
+        exe_path = get_executable_path()
+
+        # 1. Merge Menu
+        merge_key_path = r"Software\Classes\*\shell\NeNgiPDF.Merge"
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, merge_key_path) as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "NeNgi PDF ile Birleştir")
+            winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, f"{exe_path},0")
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{merge_key_path}\\command") as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, f'"{exe_path}" --merge "%1"')
+
+        # 2. Convert Menu
+        conv_key_path = r"Software\Classes\*\shell\NeNgiPDF.Convert"
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, conv_key_path) as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "NeNgi PDF ile PDF'e Dönüştür")
+            winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, f"{exe_path},0")
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{conv_key_path}\\command") as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, f'"{exe_path}" --convert "%1"')
+
+        return True, "Windows Gezgini sağ tık menüleri (Birleştir ve Dönüştür) başarıyla kaydedildi."
+    except Exception as e:
+        return False, f"Sağ tık menüleri kaydedilirken hata oluştu: {e}"

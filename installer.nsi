@@ -79,6 +79,17 @@ Section "MainSection" SEC01
   WriteRegStr HKCU "Software\Classes\NeNgiPDF.Document\shell" "" "open"
   WriteRegStr HKCU "Software\Classes\NeNgiPDF.Document\shell\open\command" "" '"$INSTDIR\NeNgi_PDF.exe" "%1"'
 
+  ; Windows Explorer Sağ Tık Menüleri (Shell Context Menus)
+  ; 1. NeNgi PDF ile Birleştir
+  WriteRegStr HKCR "*\shell\NeNgiPDF.Merge" "" "NeNgi PDF ile Birleştir"
+  WriteRegStr HKCR "*\shell\NeNgiPDF.Merge" "Icon" "$INSTDIR\NeNgi_PDF.exe,0"
+  WriteRegStr HKCR "*\shell\NeNgiPDF.Merge\command" "" '"$INSTDIR\NeNgi_PDF.exe" --merge "%1"'
+
+  ; 2. NeNgi PDF ile PDF'e Dönüştür
+  WriteRegStr HKCR "*\shell\NeNgiPDF.Convert" "" "NeNgi PDF ile PDF'e Dönüştür"
+  WriteRegStr HKCR "*\shell\NeNgiPDF.Convert" "Icon" "$INSTDIR\NeNgi_PDF.exe,0"
+  WriteRegStr HKCR "*\shell\NeNgiPDF.Convert\command" "" '"$INSTDIR\NeNgi_PDF.exe" --convert "%1"'
+
   ; Windows Default Apps Registration
   WriteRegStr HKLM "Software\NeNgiPDF\Capabilities" "ApplicationDescription" "NeNgi PDF Okuyucu ve DIFF Düzenleyici"
   WriteRegStr HKLM "Software\NeNgiPDF\Capabilities" "ApplicationName" "NeNgi PDF"
@@ -113,6 +124,8 @@ Section Uninstall
   RMDir "$INSTDIR"
 
   ; Kayıt defteri temizliği
+  DeleteRegKey HKCR "*\shell\NeNgiPDF.Merge"
+  DeleteRegKey HKCR "*\shell\NeNgiPDF.Convert"
   DeleteRegKey HKLM "${PRODUCT_UNINST_KEY}"
   DeleteRegKey HKLM "${PRODUCT_DIR_REGKEY}"
   DeleteRegKey HKLM "Software\NeNgiPDF"

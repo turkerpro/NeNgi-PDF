@@ -20,6 +20,7 @@ from nengi.core.pdf_document import PDFDocument
 from nengi.core.page_manager import PageManager
 from nengi.core.security import SecurityManager
 from nengi.core.converter import FormatConverter
+from nengi.core.printer import PDFPrinter
 from nengi.core.windows_integration import register_as_default_pdf_viewer, open_windows_default_apps_settings, is_windows
 from nengi.ui.pdf_view import PDFViewer
 from nengi.ui.diff_view import DiffView
@@ -28,6 +29,7 @@ from nengi.ui.signature_dialog import SignatureDialog
 from nengi.ui.password_dialog import PasswordDialog
 from nengi.ui.page_manager_dialog import PageManagerDialog
 from nengi.ui.settings_dialog import SettingsDialog
+from nengi.ui.merge_dialog import MergeFilesDialog
 from nengi.ui.styles import DARK_THEME, LIGHT_THEME
 
 
@@ -161,6 +163,15 @@ class MainWindow(QMainWindow):
 
         act_save_as = tb_main.addAction("💾 Farklı Kaydet")
         act_save_as.triggered.connect(self.save_current_file_as)
+
+        act_print = tb_main.addAction("🖨️ Yazdır")
+        act_print.setShortcut(QKeySequence("Ctrl+P"))
+        act_print.setToolTip("Belgeyi fiziksel yazıcıya veya Microsoft Print to PDF sanal yazıcısına yazdır (Ctrl+P)")
+        act_print.triggered.connect(self.print_current_document)
+
+        act_merge = tb_main.addAction("📑 Dosyaları Birleştir")
+        act_merge.setToolTip("Birden çok PDF veya resmi tek bir PDF belgesinde birleştir")
+        act_merge.triggered.connect(lambda: self.open_merge_dialog())
 
         tb_main.addSeparator()
 
@@ -395,10 +406,69 @@ class MainWindow(QMainWindow):
             for f in file_paths:
                 self.open_pdf(f)
 
-    def handle_external_file(self, file_path: str):
-        """Called when a PDF is opened from Windows Explorer or an email attachment."""
-        if file_path and os.path.exists(file_path):
+    def print_current_document(self):
+        """Prints the current PDF document to chosen physical or virtual PDF printer."""
+        doc = self.get_current_doc()
+        viewer = self.get_current_viewer()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen önce yazdırılacak bir PDF açın.")
+            return
+        curr_page = viewer.current_page_idx if viewer else 0
+        PDFPrinter.print_document(doc, parent=self, current_page=curr_page)
+
+    def open_merge_dialog(self, files: Optional[List[str]] = None):
+        """Opens multi-file merge wizard."""
+        dlg = MergeFilesDialog(initial_files=files, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.output_pdf_path:
+            self.open_pdf(dlg.output_pdf_path)
+
+    def convert_file_to_pdf(self, file_path: str):
+        """Converts image or document to PDF and opens it in a new tab."""
+        if not os.path.exists(file_path):
+            return
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext == ".pdf":
             self.open_pdf(file_path)
+            return
+
+        target_pdf = os.path.splitext(file_path)[0] + ".pdf"
+        try:
+            doc = fitz.open(file_path)
+            pdf_bytes = doc.convert_to_pdf()
+            doc.close()
+            with open(target_pdf, "wb") as f:
+                f.write(pdf_bytes)
+            self.open_pdf(target_pdf)
+            self.show_status_message(f"PDF'e dönüştürüldü ve açıldı: {os.path.basename(target_pdf)}")
+        except Exception as e:
+            QMessageBox.critical(self, "Dönüştürme Hatası", f"Dosya PDF'e dönüştürülemedi:\n{e}")
+
+    def handle_external_file(self, raw_arg: str):
+        """Handles incoming files or flags from Windows Explorer or secondary instances."""
+        if not raw_arg:
+            return
+
+        clean_arg = raw_arg.strip()
+        if clean_arg.startswith("--merge"):
+            files = [f.strip().strip('"').strip("'") for f in clean_arg[7:].split() if f.strip()]
+            self.open_merge_dialog(files if files else None)
+        elif clean_arg.startswith("--convert"):
+            file_to_conv = clean_arg[9:].strip().strip('"').strip("'")
+            if os.path.exists(file_to_conv):
+                self.convert_file_to_pdf(file_to_conv)
+        elif clean_arg.startswith("--print"):
+            file_to_print = clean_arg[7:].strip().strip('"').strip("'")
+            if os.path.exists(file_to_print):
+                self.open_pdf(file_to_print)
+                self.print_current_document()
+        else:
+            path = clean_arg.strip('"').strip("'")
+            if os.path.exists(path):
+                ext = os.path.splitext(path)[1].lower()
+                if ext == ".pdf":
+                    self.open_pdf(path)
+                elif ext in [".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".webp"]:
+                    self.convert_file_to_pdf(path)
 
         # Restore from minimized state and bring to foreground
         self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMinimized | Qt.WindowState.WindowActive)
