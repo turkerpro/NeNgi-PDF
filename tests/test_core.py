@@ -152,6 +152,49 @@ class TestNeNgiCore(unittest.TestCase):
         self.assertIn("TEST_METIN_GUNCEL", page_text)
         doc.close()
 
+    def test_undo_redo_and_block_font_detection(self):
+        doc = PDFDocument(self.doc_a_path)
+        orig_text = doc.get_page(0).get_text("text")
+
+        # 1. Blocks detection
+        blocks = doc.get_page_blocks(0)
+        self.assertGreater(len(blocks), 0)
+        block = blocks[0]
+        block_rect = fitz.Rect(block[0], block[1], block[2], block[3])
+
+        # 2. Font style detection
+        style = doc.detect_text_style_at_rect(0, block_rect)
+        self.assertIn("family", style)
+        self.assertIn("size", style)
+        self.assertGreater(style["size"], 0)
+
+        # 3. Replace paragraph block
+        self.assertTrue(doc.replace_text_block(0, block_rect, "PARAGRAF_DEGISIMI_TEST", fontsize=style["size"]))
+        mod_text = doc.get_page(0).get_text("text")
+        self.assertIn("PARAGRAF_DEGISIMI_TEST", mod_text)
+
+        # 4. Undo the change
+        self.assertTrue(doc.can_undo())
+        self.assertTrue(doc.undo())
+        reverted_text = doc.get_page(0).get_text("text")
+        self.assertNotIn("PARAGRAF_DEGISIMI_TEST", reverted_text)
+        self.assertEqual(reverted_text, orig_text)
+
+        # 5. Redo the change
+        self.assertTrue(doc.can_redo())
+        self.assertTrue(doc.redo())
+        redone_text = doc.get_page(0).get_text("text")
+        self.assertIn("PARAGRAF_DEGISIMI_TEST", redone_text)
+
+        # 6. Test insert_new_text with undo
+        pt = fitz.Point(100, 200)
+        self.assertTrue(doc.insert_new_text(0, pt, "YENI_ACROBAT_METIN"))
+        self.assertIn("YENI_ACROBAT_METIN", doc.get_page(0).get_text("text"))
+        self.assertTrue(doc.undo())
+        self.assertNotIn("YENI_ACROBAT_METIN", doc.get_page(0).get_text("text"))
+
+        doc.close()
+
 
 if __name__ == "__main__":
     unittest.main()

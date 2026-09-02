@@ -22,9 +22,69 @@ class PDFDocument:
         self.is_modified: bool = False
         self.is_encrypted: bool = False
         self.is_authenticated: bool = False
+        self._undo_stack: List[bytes] = []
+        self._redo_stack: List[bytes] = []
+        self._max_history: int = 30
         
         if file_path:
             self.open(file_path)
+
+    def save_state_for_undo(self):
+        """Saves current document snapshot into in-memory undo stack."""
+        if not self.is_open:
+            return
+        try:
+            data = self.doc.tobytes(garbage=3, deflate=True)
+            self._undo_stack.append(data)
+            if len(self._undo_stack) > self._max_history:
+                self._undo_stack.pop(0)
+            self._redo_stack.clear()
+        except Exception as e:
+            print(f"Could not save undo state: {e}")
+
+    def can_undo(self) -> bool:
+        return len(self._undo_stack) > 0
+
+    def can_redo(self) -> bool:
+        return len(self._redo_stack) > 0
+
+    def undo(self) -> bool:
+        """Restores previous document state."""
+        if not self.can_undo():
+            return False
+        try:
+            current_data = self.doc.tobytes(garbage=3, deflate=True)
+            self._redo_stack.append(current_data)
+            prev_data = self._undo_stack.pop()
+            
+            file_path = self.file_path
+            self.doc.close()
+            self.doc = fitz.open("pdf", prev_data)
+            self.file_path = file_path
+            self.is_modified = True
+            return True
+        except Exception as e:
+            print(f"Error during undo: {e}")
+            return False
+
+    def redo(self) -> bool:
+        """Restores next document state."""
+        if not self.can_redo():
+            return False
+        try:
+            current_data = self.doc.tobytes(garbage=3, deflate=True)
+            self._undo_stack.append(current_data)
+            next_data = self._redo_stack.pop()
+            
+            file_path = self.file_path
+            self.doc.close()
+            self.doc = fitz.open("pdf", next_data)
+            self.file_path = file_path
+            self.is_modified = True
+            return True
+        except Exception as e:
+            print(f"Error during redo: {e}")
+            return False
 
     def open(self, file_path: str, password: Optional[str] = None) -> bool:
         """Opens a PDF file, checking for encryption."""
@@ -32,6 +92,8 @@ class PDFDocument:
         self.doc = fitz.open(file_path)
         self.is_modified = False
         self.is_encrypted = self.doc.is_encrypted
+        self._undo_stack.clear()
+        self._redo_stack.clear()
 
         if self.is_encrypted:
             if password:
@@ -179,6 +241,7 @@ class PDFDocument:
         if not self.is_open:
             return False
         try:
+            self.save_state_for_undo()
             page = self.get_page(page_number)
             page.add_redact_annot(rect, fill=fill_color)
             page.apply_redactions()
@@ -201,17 +264,132 @@ class PDFDocument:
         except Exception:
             return []
 
-    def edit_text_at_rect(self, page_number: int, rect: fitz.Rect, new_text: str, fontsize: Optional[float] = None) -> bool:
+    def get_page_blocks(self, page_number: int) -> List[Tuple[float, float, float, float, str, int, int]]:
+        """
+        Returns text paragraph blocks on page:
+        (x0, y0, x1, y1, text, block_no, block_type).
+        block_type == 0 is text.
+        """
+        if not self.is_open:
+            return []
+        try:
+            page = self.get_page(page_number)
+            blocks = page.get_text("blocks")
+            return [b for b in blocks if b[6] == 0 and b[4].strip()]
+        except Exception:
+            return []
+
+    def detect_text_style_at_rect(self, page_number: int, rect: fitz.Rect) -> dict:
+        """
+        Inspects spans within or intersecting rect to detect font family,
+        font size, flags (bold/italic), and color.
+        """
+        default_style = {
+            "family": "Arial",
+            "size": 11.0,
+            "is_bold": False,
+            "is_italic": False,
+            "color_rgb": (0.0, 0.0, 0.0),
+            "raw_font": "Helvetica",
+            "fitz_font": "helv"
+        }
+        if not self.is_open:
+            return default_style
+
+        try:
+            page = self.get_page(page_number)
+            d = page.get_text("dict")
+            matching_spans = []
+            for b in d.get("blocks", []):
+                if "lines" in b:
+                    for line in b["lines"]:
+                        for span in line.get("spans", []):
+                            span_rect = fitz.Rect(span["bbox"])
+                            if span_rect.intersects(rect):
+                                matching_spans.append(span)
+
+            if not matching_spans:
+                return default_style
+
+            # Pick largest span as representative
+            span = max(matching_spans, key=lambda s: len(s.get("text", "")))
+            raw_font = span.get("font", "Helvetica")
+            size = float(span.get("size", 11.0))
+            color_int = span.get("color", 0)
+
+            # Convert color int to RGB
+            r = ((color_int >> 16) & 0xFF) / 255.0
+            g = ((color_int >> 8) & 0xFF) / 255.0
+            b_val = (color_int & 0xFF) / 255.0
+            color_rgb = (r, g, b_val)
+
+            # Analyze font name & flags
+            raw_lower = raw_font.lower()
+            flags = span.get("flags", 0)
+            is_bold = bool(flags & 2**4) or any(k in raw_lower for k in ["bold", "black", "heavy", "medium"])
+            is_italic = bool(flags & 2**1) or any(k in raw_lower for k in ["italic", "oblique"])
+
+            clean_family = raw_font.split("+")[-1].split("-")[0].split(",")[0]
+            if "arial" in raw_lower:
+                family = "Arial"
+                fitz_base = "helv"
+            elif "times" in raw_lower:
+                family = "Times New Roman"
+                fitz_base = "times"
+            elif "calibri" in raw_lower:
+                family = "Calibri"
+                fitz_base = "helv"
+            elif "courier" in raw_lower or "mono" in raw_lower:
+                family = "Courier New"
+                fitz_base = "couri"
+            elif "segoe" in raw_lower:
+                family = "Segoe UI"
+                fitz_base = "helv"
+            elif "helv" in raw_lower:
+                family = "Helvetica"
+                fitz_base = "helv"
+            else:
+                family = clean_family
+                fitz_base = "helv"
+
+            # Determine fitz builtin fontname
+            if fitz_base == "helv":
+                fitz_font = "hebi" if is_bold and is_italic else ("hebo" if is_bold else ("heit" if is_italic else "helv"))
+            elif fitz_base == "times":
+                fitz_font = "tibi" if is_bold and is_italic else ("tibo" if is_bold else ("tiit" if is_italic else "tiro"))
+            elif fitz_base == "couri":
+                fitz_font = "cobi" if is_bold and is_italic else ("cobo" if is_bold else ("coit" if is_italic else "couri"))
+            else:
+                fitz_font = "helv"
+
+            return {
+                "family": family,
+                "size": round(size, 1),
+                "is_bold": is_bold,
+                "is_italic": is_italic,
+                "color_rgb": color_rgb,
+                "raw_font": raw_font,
+                "fitz_font": fitz_font
+            }
+        except Exception as e:
+            print(f"Error detecting text style: {e}")
+            return default_style
+
+    def edit_text_at_rect(
+        self, page_number: int, rect: fitz.Rect, new_text: str,
+        fontsize: Optional[float] = None, fontname: str = "helv", color: Tuple[float, float, float] = (0, 0, 0)
+    ) -> bool:
         """
         Directly edits and replaces text at specified rect:
-        1. Whites out the original text bounding rectangle.
-        2. Inserts new_text at the baseline coordinates with matching font size.
+        1. Saves undo state.
+        2. Whites out the original text bounding rectangle.
+        3. Inserts new_text at the baseline coordinates with matching font size.
         """
         if not self.is_open:
             return False
         try:
+            self.save_state_for_undo()
             page = self.get_page(page_number)
-            # Redact / whiteout old text
             page.add_redact_annot(rect, fill=(1, 1, 1))
             page.apply_redactions()
 
@@ -220,11 +398,70 @@ class PDFDocument:
                 fontsize = max(7.0, min(36.0, h * 0.85))
 
             insert_point = fitz.Point(rect.x0, rect.y1 - 1.5)
-            page.insert_text(insert_point, new_text, fontsize=fontsize, fontname="helv", color=(0, 0, 0))
+            page.insert_text(insert_point, new_text, fontsize=fontsize, fontname=fontname, color=color)
             self.is_modified = True
             return True
         except Exception as e:
             print(f"Error editing text at rect: {e}")
+            return False
+
+    def replace_text_block(
+        self, page_number: int, rect: fitz.Rect, new_text: str,
+        fontname: str = "helv", fontsize: float = 11.0, color: Tuple[float, float, float] = (0, 0, 0)
+    ) -> bool:
+        """
+        Replaces a paragraph or multi-line text block:
+        1. Saves undo state.
+        2. Applies whiteout redaction to the block rectangle.
+        3. Inserts replacement text line by line preserving paragraph bounds.
+        """
+        if not self.is_open:
+            return False
+        try:
+            self.save_state_for_undo()
+            page = self.get_page(page_number)
+            page.add_redact_annot(rect, fill=(1, 1, 1))
+            page.apply_redactions()
+
+            lines = new_text.splitlines()
+            line_height = fontsize * 1.25
+            y_pos = rect.y0 + fontsize
+            for line in lines:
+                if y_pos > page.rect.height - 10:
+                    break
+                page.insert_text((rect.x0, y_pos), line, fontsize=fontsize, fontname=fontname, color=color)
+                y_pos += line_height
+
+            self.is_modified = True
+            return True
+        except Exception as e:
+            print(f"Error replacing text block: {e}")
+            return False
+
+    def insert_new_text(
+        self, page_number: int, point: fitz.Point, text: str,
+        fontname: str = "helv", fontsize: float = 11.0, color: Tuple[float, float, float] = (0, 0, 0)
+    ) -> bool:
+        """
+        Acrobat Pro style text insertion at point.
+        Saves undo state and inserts text lines.
+        """
+        if not self.is_open:
+            return False
+        try:
+            self.save_state_for_undo()
+            page = self.get_page(page_number)
+            lines = text.splitlines()
+            line_height = fontsize * 1.25
+            y_pos = point.y
+            for line in lines:
+                page.insert_text((point.x, y_pos), line, fontsize=fontsize, fontname=fontname, color=color)
+                y_pos += line_height
+
+            self.is_modified = True
+            return True
+        except Exception as e:
+            print(f"Error inserting new text: {e}")
             return False
 
     def ocr_page(self, page_number: int) -> List[Tuple[float, float, float, float, str]]:

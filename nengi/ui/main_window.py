@@ -185,6 +185,12 @@ class MainWindow(QMainWindow):
         act_save_as = self._add_action(tb_main, "📑", "Farklı Kaydet", "Farklı Kaydet...")
         act_save_as.triggered.connect(self.save_current_file_as)
 
+        act_undo = self._add_action(tb_main, "↩️", "Geri Al", "Son işlemi geri al (Ctrl+Z)", "Ctrl+Z")
+        act_undo.triggered.connect(self.undo_current)
+
+        act_redo = self._add_action(tb_main, "↪️", "Yinele", "Geri alınan işlemi yinele (Ctrl+Y)", "Ctrl+Y")
+        act_redo.triggered.connect(self.redo_current)
+
         act_print = self._add_action(tb_main, "🖨️", "Yazdır", "Belgeyi Yazdır veya PDF Yap (Ctrl+P)", "Ctrl+P")
         act_print.triggered.connect(self.print_current_document)
 
@@ -415,6 +421,18 @@ class MainWindow(QMainWindow):
             return
         curr_page = viewer.current_page_idx if viewer else 0
         PDFPrinter.print_document(doc, parent=self, current_page=curr_page)
+
+    def undo_current(self):
+        """Reverts the last document action in active tab."""
+        viewer = self.get_current_viewer()
+        if viewer:
+            viewer.undo()
+
+    def redo_current(self):
+        """Redoes the last reverted action in active tab."""
+        viewer = self.get_current_viewer()
+        if viewer:
+            viewer.redo()
 
     def open_merge_dialog(self, files: Optional[List[str]] = None):
         """Opens multi-file merge wizard."""

@@ -10,7 +10,7 @@ from typing import Optional, Tuple, List, Callable
 from PyQt6.QtCore import Qt, QPoint, QRect, QRectF, pyqtSignal, QSize
 from PyQt6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QHBoxLayout, QLabel, 
-    QMenu, QInputDialog, QMessageBox, QFileDialog, QGraphicsDropShadowEffect
+    QMenu, QInputDialog, QMessageBox, QFileDialog, QGraphicsDropShadowEffect, QDialog
 )
 from PyQt6.QtGui import (
     QPainter, QColor, QPen, QBrush, QPixmap, QMouseEvent, 
@@ -20,6 +20,7 @@ import pymupdf as fitz
 
 from nengi.core.pdf_document import PDFDocument
 from nengi.core.image_roundtrip import ImageRoundtripHandler
+from nengi.ui.text_editor_dialog import TextEditorDialog
 
 
 class PageRenderWidget(QWidget):
@@ -40,8 +41,10 @@ class PageRenderWidget(QWidget):
         self.stamp_image_path: Optional[str] = None
         self.highlights: List[Tuple[fitz.Rect, QColor]] = []
 
-        # Text selection & editing state
+        # Text words & Acrobat Pro style paragraph blocks
         self.words: List[Tuple[float, float, float, float, str, int, int, int]] = []
+        self.blocks: List[Tuple[float, float, float, float, str, int, int]] = []
+        self.hovered_block: Optional[Tuple[float, float, float, float, str, int, int]] = None
         self.selected_words: List[Tuple[float, float, float, float, str, int, int, int]] = []
         self._is_selecting_text = False
 
@@ -63,11 +66,12 @@ class PageRenderWidget(QWidget):
             self.update()
 
     def render_cache(self):
-        """Pre-renders page pixmap at current zoom and loads text words."""
+        """Pre-renders page pixmap at current zoom and loads text words & paragraph blocks."""
         if not self.doc or not self.doc.is_open or self.page_idx >= self.doc.page_count:
             return
         self.cached_pixmap = self.doc.render_page_pixmap(self.page_idx, self.zoom)
         self.words = self.doc.get_page_text_words(self.page_idx)
+        self.blocks = self.doc.get_page_blocks(self.page_idx)
         if self.cached_pixmap:
             self.setFixedSize(self.cached_pixmap.size())
 
@@ -111,6 +115,18 @@ class PageRenderWidget(QWidget):
                 sw = (w[2] - w[0]) * self.zoom
                 sh = (w[3] - w[1]) * self.zoom
                 painter.drawRect(QRectF(sx, sy, sw, sh))
+
+        # Draw Acrobat Pro style hovered paragraph/block bounding box
+        if self.mode == "view" and self.hovered_block and not self._is_selecting_text:
+            hb = self.hovered_block
+            hx = hb[0] * self.zoom
+            hy = hb[1] * self.zoom
+            hw = (hb[2] - hb[0]) * self.zoom
+            hh = (hb[3] - hb[1]) * self.zoom
+            pen = QPen(QColor(0, 120, 215, 160), 1, Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(QBrush(QColor(0, 120, 215, 15)))
+            painter.drawRect(QRectF(hx, hy, hw, hh))
 
         # Draw drag selection box
         if self.mode == "view" and self._is_selecting_text:
@@ -167,6 +183,16 @@ class PageRenderWidget(QWidget):
                 is_over = any(w[0] <= pdf_x <= w[2] and w[1] <= pdf_y <= w[3] for w in self.words)
                 self.setCursor(Qt.CursorShape.IBeamCursor if is_over else Qt.CursorShape.ArrowCursor)
 
+                # Track hovered paragraph block
+                prev_b = self.hovered_block
+                self.hovered_block = None
+                for b in self.blocks:
+                    if b[0] <= pdf_x <= b[2] and b[1] <= pdf_y <= b[3]:
+                        self.hovered_block = b
+                        break
+                if self.hovered_block != prev_b:
+                    self.update()
+
         elif self._dragging and self.mode == "whiteout":
             self._drag_current = event.pos()
             self.update()
@@ -196,6 +222,34 @@ class PageRenderWidget(QWidget):
         if self.mode == "view" and event.button() == Qt.MouseButton.LeftButton:
             pdf_x = event.pos().x() / self.zoom
             pdf_y = event.pos().y() / self.zoom
+
+            # Prioritize paragraph block editing (Acrobat Pro style)
+            target_block = None
+            for b in self.blocks:
+                if b[0] <= pdf_x <= b[2] and b[1] <= pdf_y <= b[3]:
+                    target_block = b
+                    break
+
+            if target_block:
+                block_rect = fitz.Rect(target_block[0], target_block[1], target_block[2], target_block[3])
+                style = self.doc.detect_text_style_at_rect(self.page_idx, block_rect)
+                dlg = TextEditorDialog(
+                    initial_text=target_block[4],
+                    detected_style=style,
+                    title="✏️ Paragrafı Düzenle (Acrobat Pro)",
+                    parent=self
+                )
+                if dlg.exec() == QDialog.DialogCode.Accepted and dlg.result_text != target_block[4]:
+                    self.doc.replace_text_block(
+                        self.page_idx, block_rect, dlg.result_text,
+                        fontname=dlg.result_fitz_font, fontsize=dlg.result_fontsize, color=dlg.result_color_rgb
+                    )
+                    self.render_cache()
+                    self.update()
+                    self.page_modified.emit()
+                return
+
+            # Fallback to single word
             for w in self.words:
                 if w[0] <= pdf_x <= w[2] and w[1] <= pdf_y <= w[3]:
                     self.selected_words = [w]
@@ -217,6 +271,25 @@ class PageRenderWidget(QWidget):
 
     def prompt_edit_selected_text(self):
         if not self.selected_words:
+            # If no words are highlighted but a block is hovered, edit the whole block
+            if self.hovered_block:
+                b = self.hovered_block
+                block_rect = fitz.Rect(b[0], b[1], b[2], b[3])
+                style = self.doc.detect_text_style_at_rect(self.page_idx, block_rect)
+                dlg = TextEditorDialog(
+                    initial_text=b[4],
+                    detected_style=style,
+                    title="✏️ Paragrafı Düzenle (Acrobat Pro)",
+                    parent=self
+                )
+                if dlg.exec() == QDialog.DialogCode.Accepted:
+                    self.doc.replace_text_block(
+                        self.page_idx, block_rect, dlg.result_text,
+                        fontname=dlg.result_fitz_font, fontsize=dlg.result_fontsize, color=dlg.result_color_rgb
+                    )
+                    self.render_cache()
+                    self.update()
+                    self.page_modified.emit()
             return
         
         current_text = " ".join(w[4] for w in self.selected_words)
@@ -226,19 +299,22 @@ class PageRenderWidget(QWidget):
         max_y1 = max(w[3] for w in self.selected_words)
         union_rect = fitz.Rect(min_x0, min_y0, max_x1, max_y1)
 
-        new_text, ok = QInputDialog.getText(
-            self, "Metni Düzenle", 
-            f"PDF üzerindeki metni değiştirin:\n(Eski: '{current_text}')", 
-            text=current_text
+        style = self.doc.detect_text_style_at_rect(self.page_idx, union_rect)
+        dlg = TextEditorDialog(
+            initial_text=current_text,
+            detected_style=style,
+            title="✏️ Seçili Metni Düzenle (Acrobat Pro)",
+            parent=self
         )
-        if ok and new_text != current_text:
-            h = max_y1 - min_y0
-            fs = max(7.0, min(36.0, h * 0.85))
-            if self.doc.edit_text_at_rect(self.page_idx, union_rect, new_text, fs):
-                self.selected_words = []
-                self.render_cache()
-                self.update()
-                self.page_modified.emit()
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self.doc.edit_text_at_rect(
+                self.page_idx, union_rect, dlg.result_text,
+                fontsize=dlg.result_fontsize, fontname=dlg.result_fitz_font, color=dlg.result_color_rgb
+            )
+            self.selected_words = []
+            self.render_cache()
+            self.update()
+            self.page_modified.emit()
 
     def whiteout_selected_text(self):
         if not self.selected_words:
@@ -255,11 +331,25 @@ class PageRenderWidget(QWidget):
         self.page_modified.emit()
 
     def _prompt_add_text(self, pos: QPoint):
-        text, ok = QInputDialog.getText(self, "Metin Ekle", "Sayfaya eklenecek metni girin:")
-        if ok and text:
-            pdf_x = pos.x() / self.zoom
-            pdf_y = pos.y() / self.zoom
-            self.doc.add_text(self.page_idx, (pdf_x, pdf_y), text, fontsize=12.0)
+        pdf_x = pos.x() / self.zoom
+        pdf_y = pos.y() / self.zoom
+        insert_pt = fitz.Point(pdf_x, pdf_y)
+
+        # Detect nearby style for smart font inheritance
+        nearby_rect = fitz.Rect(pdf_x - 60, pdf_y - 30, pdf_x + 60, pdf_y + 30)
+        style = self.doc.detect_text_style_at_rect(self.page_idx, nearby_rect)
+
+        dlg = TextEditorDialog(
+            initial_text="",
+            detected_style=style,
+            title="✍️ Metin Ekle (Acrobat Pro)",
+            parent=self
+        )
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.result_text.strip():
+            self.doc.insert_new_text(
+                self.page_idx, insert_pt, dlg.result_text,
+                fontname=dlg.result_fitz_font, fontsize=dlg.result_fontsize, color=dlg.result_color_rgb
+            )
             self.render_cache()
             self.update()
             self.page_modified.emit()
@@ -502,6 +592,20 @@ class PDFViewer(QScrollArea):
                 self, "Bilgi", 
                 "Sayfada ek metin tanınamadı veya metin zaten mevcut."
             )
+
+    def undo(self):
+        """Reverts the last document action (Ctrl+Z)."""
+        if self.doc and self.doc.undo():
+            self.refresh_all_pages()
+            self.document_modified.emit()
+            self.status_message.emit("İşlem geri alındı.")
+
+    def redo(self):
+        """Redoes the last reverted action (Ctrl+Y)."""
+        if self.doc and self.doc.redo():
+            self.refresh_all_pages()
+            self.document_modified.emit()
+            self.status_message.emit("İşlem yinelendi.")
 
     def wheelEvent(self, event: QWheelEvent):
         """Handles Ctrl + Wheel zooming."""
