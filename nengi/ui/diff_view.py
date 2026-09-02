@@ -11,7 +11,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QRectF
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QLabel, 
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
-    QFrame, QScrollArea, QMessageBox, QFileDialog
+    QFrame, QScrollArea, QMessageBox, QFileDialog, QSizePolicy
 )
 from PyQt6.QtGui import QColor, QFont
 import pymupdf as fitz
@@ -66,11 +66,13 @@ class DiffView(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Top Control Bar
+        # Top Control Bar (Fixed height to eliminate empty vertical space)
         top_bar = QFrame()
-        top_bar.setStyleSheet("background-color: #282828; border-bottom: 1px solid #383838; padding: 6px;")
+        top_bar.setFixedHeight(46)
+        top_bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        top_bar.setStyleSheet("background-color: #282828; border-bottom: 1px solid #383838; padding: 4px;")
         top_layout = QHBoxLayout(top_bar)
-        top_layout.setContentsMargins(10, 4, 10, 4)
+        top_layout.setContentsMargins(10, 2, 10, 2)
 
         self.lbl_summary = QLabel("📊 Karşılaştırma Bekleniyor...")
         self.lbl_summary.setStyleSheet("font-weight: bold; font-size: 13px; color: #FFFFFF;")
@@ -105,7 +107,7 @@ class DiffView(QWidget):
         btn_export.clicked.connect(self._export_diff_report)
         top_layout.addWidget(btn_export)
 
-        main_layout.addWidget(top_bar)
+        main_layout.addWidget(top_bar, 0)
 
         # Splitter: Left Doc, Right Doc, and Far Right Changes List
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -114,22 +116,26 @@ class DiffView(QWidget):
         box_left = QWidget()
         lay_left = QVBoxLayout(box_left)
         lay_left.setContentsMargins(0, 0, 0, 0)
+        lay_left.setSpacing(0)
         self.lbl_title_a = QLabel(" 🔴 Orijinal Belge")
-        self.lbl_title_a.setStyleSheet("background-color: #331A1A; color: #FF6B6B; font-weight: bold; padding: 6px; border-bottom: 1px solid #4D2626;")
-        lay_left.addWidget(self.lbl_title_a)
+        self.lbl_title_a.setFixedHeight(28)
+        self.lbl_title_a.setStyleSheet("background-color: #331A1A; color: #FF6B6B; font-weight: bold; padding: 4px 8px; border-bottom: 1px solid #4D2626;")
+        lay_left.addWidget(self.lbl_title_a, 0)
         self.pane_a = DiffScrollPane("A")
-        lay_left.addWidget(self.pane_a)
+        lay_left.addWidget(self.pane_a, 1)
         self.main_splitter.addWidget(box_left)
 
         # Right Container (Doc B - Revised)
         box_right = QWidget()
         lay_right = QVBoxLayout(box_right)
         lay_right.setContentsMargins(0, 0, 0, 0)
+        lay_right.setSpacing(0)
         self.lbl_title_b = QLabel(" 🟢 Revize Edilmiş Belge")
-        self.lbl_title_b.setStyleSheet("background-color: #1A331E; color: #6BFF84; font-weight: bold; padding: 6px; border-bottom: 1px solid #264D2D;")
-        lay_right.addWidget(self.lbl_title_b)
+        self.lbl_title_b.setFixedHeight(28)
+        self.lbl_title_b.setStyleSheet("background-color: #1A331E; color: #6BFF84; font-weight: bold; padding: 4px 8px; border-bottom: 1px solid #264D2D;")
+        lay_right.addWidget(self.lbl_title_b, 0)
         self.pane_b = DiffScrollPane("B")
-        lay_right.addWidget(self.pane_b)
+        lay_right.addWidget(self.pane_b, 1)
         self.main_splitter.addWidget(box_right)
 
         # Right Side Changes Table
@@ -153,7 +159,7 @@ class DiffView(QWidget):
         self.main_splitter.addWidget(side_panel)
         self.main_splitter.setSizes([450, 450, 300])
 
-        main_layout.addWidget(self.main_splitter)
+        main_layout.addWidget(self.main_splitter, 1)
 
         # Connect synchronized scrolling
         self.pane_a.scrolled.connect(self._on_pane_a_scroll)

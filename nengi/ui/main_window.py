@@ -191,6 +191,14 @@ class MainWindow(QMainWindow):
         self.act_tool_text.setToolTip("Sayfa üzerinde istenen yere tıklayıp yeni metin ekle")
         self.act_tool_text.triggered.connect(lambda: self._set_viewer_tool("text"))
 
+        act_edit_text = tb_main.addAction("✏️ Metni Düzenle")
+        act_edit_text.setToolTip("Seçili metni veya çift tıklanan kelimeyi doğrudan PDF üzerinde değiştir")
+        act_edit_text.triggered.connect(self._edit_selected_text_trigger)
+
+        act_ocr = tb_main.addAction("🔍 Metin Tanı (OCR)")
+        act_ocr.setToolTip("Sayfadaki metinleri tanı, seçilebilir ve düzenlenebilir yap")
+        act_ocr.triggered.connect(self._run_ocr_trigger)
+
         act_paint = tb_main.addAction("🖌️ Paint'te Aç ve Düzenle")
         act_paint.setToolTip("Taranmış evrağı Paint programında açıp temizle; kaydedince PDF otomatik güncellenir")
         act_paint.triggered.connect(self._launch_external_image_edit)
@@ -478,6 +486,28 @@ class MainWindow(QMainWindow):
                 self.show_status_message(f"Farklı kaydedildi: {file_path}")
             else:
                 QMessageBox.critical(self, "Hata", "Dosya kaydedilemedi.")
+
+    def _edit_selected_text_trigger(self):
+        viewer = self.get_current_viewer()
+        if not viewer or not viewer.page_widgets:
+            QMessageBox.information(self, "Bilgi", "Lütfen önce bir PDF açın.")
+            return
+        for pw in viewer.page_widgets:
+            if pw.selected_words:
+                pw.prompt_edit_selected_text()
+                return
+        QMessageBox.information(
+            self, "Metin Düzenleme İpucu",
+            "PDF üzerindeki herhangi bir kelimeye çift tıklayarak doğrudan düzenleyebilir "
+            "veya fareyle seçip bu butona basabilirsiniz."
+        )
+
+    def _run_ocr_trigger(self):
+        viewer = self.get_current_viewer()
+        if viewer and viewer.doc:
+            viewer.run_ocr(viewer.current_page_idx)
+        else:
+            QMessageBox.information(self, "Bilgi", "Lütfen önce bir PDF açın.")
 
     def _set_viewer_tool(self, tool_mode: str):
         self.act_tool_view.setChecked(tool_mode == "view")

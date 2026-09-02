@@ -130,6 +130,27 @@ class TestNeNgiCore(unittest.TestCase):
         new_pdf_out = os.path.join(self.temp_dir, "from_image.pdf")
         self.assertTrue(FormatConverter.images_to_pdf([img_out], new_pdf_out))
         self.assertTrue(os.path.exists(new_pdf_out))
+        res_doc = PDFDocument(new_pdf_out)
+        self.assertEqual(res_doc.page_count, 1)
+        res_doc.close()
+
+    def test_text_words_and_in_place_edit(self):
+        doc = PDFDocument(self.doc_a_path)
+        words = doc.get_page_text_words(0)
+        self.assertGreater(len(words), 0)
+        
+        # Find first word
+        target_word = words[0]
+        rect = fitz.Rect(target_word[0], target_word[1], target_word[2], target_word[3])
+        
+        # Edit text in-place
+        self.assertTrue(doc.edit_text_at_rect(0, rect, "TEST_METIN_GUNCEL"))
+        self.assertTrue(doc.is_modified)
+        
+        # Verify that "TEST_METIN_GUNCEL" appears in the page text
+        page_text = doc.get_page(0).get_text("text")
+        self.assertIn("TEST_METIN_GUNCEL", page_text)
+        doc.close()
 
 
 if __name__ == "__main__":

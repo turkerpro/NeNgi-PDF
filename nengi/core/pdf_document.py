@@ -188,21 +188,89 @@ class PDFDocument:
             print(f"Error whiting out area: {e}")
             return False
 
-    def add_text(self, page_number: int, point: Tuple[float, float], text: str, 
-                 fontsize: float = 12.0, fontname: str = "helv", 
-                 color: Tuple[float, float, float] = (0, 0, 0)) -> bool:
-        """Inserts text at a specific coordinate on the page."""
+    def get_page_text_words(self, page_number: int) -> List[Tuple[float, float, float, float, str, int, int, int]]:
+        """
+        Returns list of words on page with coordinates:
+        (x0, y0, x1, y1, word_text, block_no, line_no, word_no).
+        """
+        if not self.is_open:
+            return []
+        try:
+            page = self.get_page(page_number)
+            return page.get_text("words")
+        except Exception:
+            return []
+
+    def edit_text_at_rect(self, page_number: int, rect: fitz.Rect, new_text: str, fontsize: Optional[float] = None) -> bool:
+        """
+        Directly edits and replaces text at specified rect:
+        1. Whites out the original text bounding rectangle.
+        2. Inserts new_text at the baseline coordinates with matching font size.
+        """
         if not self.is_open:
             return False
         try:
             page = self.get_page(page_number)
-            page.insert_text(fitz.Point(point[0], point[1]), text, 
-                             fontsize=fontsize, fontname=fontname, color=color)
+            # Redact / whiteout old text
+            page.add_redact_annot(rect, fill=(1, 1, 1))
+            page.apply_redactions()
+
+            if fontsize is None:
+                h = rect.y1 - rect.y0
+                fontsize = max(7.0, min(36.0, h * 0.85))
+
+            insert_point = fitz.Point(rect.x0, rect.y1 - 1.5)
+            page.insert_text(insert_point, new_text, fontsize=fontsize, fontname="helv", color=(0, 0, 0))
             self.is_modified = True
             return True
         except Exception as e:
-            print(f"Error inserting text: {e}")
+            print(f"Error editing text at rect: {e}")
             return False
+
+    def ocr_page(self, page_number: int) -> List[Tuple[float, float, float, float, str]]:
+        """
+        Runs OCR on a scanned page, extracts text blocks and coordinates,
+        and embeds a searchable text layer onto the page.
+        """
+        if not self.is_open:
+            return []
+        try:
+            # Check if RapidOCR is installed
+            try:
+                from rapidocr_onnxruntime import RapidOCR
+                import numpy as np
+                from PIL import Image
+                ocr = RapidOCR()
+                page = self.get_page(page_number)
+                pix = page.get_pixmap(dpi=150)
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                results, _ = ocr(np.array(img))
+                if not results:
+                    return []
+                
+                scale_x = page.rect.width / pix.width
+                scale_y = page.rect.height / pix.height
+
+                recognized_items = []
+                for box, text, score in results:
+                    x0 = min(p[0] for p in box) * scale_x
+                    y0 = min(p[1] for p in box) * scale_y
+                    x1 = max(p[0] for p in box) * scale_x
+                    y1 = max(p[1] for p in box) * scale_y
+                    recognized_items.append((x0, y0, x1, y1, text))
+                    
+                    # Insert invisible/searchable text layer onto the page
+                    h = y1 - y0
+                    fs = max(6.0, min(32.0, h * 0.8))
+                    page.insert_text(fitz.Point(x0, y1 - 1), text, fontsize=fs, fontname="helv", color=(0, 0, 0), render_mode=3)
+
+                self.is_modified = True
+                return recognized_items
+            except ImportError:
+                return []
+        except Exception as e:
+            print(f"Error running OCR: {e}")
+            return []
 
     def add_image_stamp(self, page_number: int, rect: fitz.Rect, image_path: str) -> bool:
         """Places an image (e.g. signature, stamp) onto the page at specified rect."""

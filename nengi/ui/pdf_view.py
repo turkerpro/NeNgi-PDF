@@ -40,12 +40,18 @@ class PageRenderWidget(QWidget):
         self.stamp_image_path: Optional[str] = None
         self.highlights: List[Tuple[fitz.Rect, QColor]] = []
 
+        # Text selection & editing state
+        self.words: List[Tuple[float, float, float, float, str, int, int, int]] = []
+        self.selected_words: List[Tuple[float, float, float, float, str, int, int, int]] = []
+        self._is_selecting_text = False
+
         # Selection state for whiteout / drag
         self._dragging = False
         self._drag_start = QPoint()
         self._drag_current = QPoint()
 
         self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.cached_pixmap: Optional[QPixmap] = None
         self.render_cache()
 
@@ -57,10 +63,11 @@ class PageRenderWidget(QWidget):
             self.update()
 
     def render_cache(self):
-        """Pre-renders page pixmap at current zoom."""
+        """Pre-renders page pixmap at current zoom and loads text words."""
         if not self.doc or not self.doc.is_open or self.page_idx >= self.doc.page_count:
             return
         self.cached_pixmap = self.doc.render_page_pixmap(self.page_idx, self.zoom)
+        self.words = self.doc.get_page_text_words(self.page_idx)
         if self.cached_pixmap:
             self.setFixedSize(self.cached_pixmap.size())
 
@@ -79,7 +86,6 @@ class PageRenderWidget(QWidget):
 
         # Draw diff or search highlight overlays
         for rect, color in self.highlights:
-            # Transform PDF coordinates to screen pixels
             screen_x = rect.x0 * self.zoom
             screen_y = rect.y0 * self.zoom
             screen_w = (rect.x1 - rect.x0) * self.zoom
@@ -89,10 +95,29 @@ class PageRenderWidget(QWidget):
                 QRectF(screen_x, screen_y, screen_w, screen_h),
                 QBrush(color)
             )
-            # Outline border
             border_pen = QPen(color.darker(130), 1.5)
             painter.setPen(border_pen)
             painter.drawRect(QRectF(screen_x, screen_y, screen_w, screen_h))
+
+        # Draw selected text highlights (Blue Fluent Selection)
+        if self.selected_words:
+            sel_brush = QBrush(QColor(0, 120, 215, 80))
+            sel_pen = QPen(QColor(0, 120, 215, 180), 1)
+            painter.setBrush(sel_brush)
+            painter.setPen(sel_pen)
+            for w in self.selected_words:
+                sx = w[0] * self.zoom
+                sy = w[1] * self.zoom
+                sw = (w[2] - w[0]) * self.zoom
+                sh = (w[3] - w[1]) * self.zoom
+                painter.drawRect(QRectF(sx, sy, sw, sh))
+
+        # Draw drag selection box
+        if self.mode == "view" and self._is_selecting_text:
+            pen = QPen(QColor(0, 120, 215), 1, Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(QBrush(QColor(0, 120, 215, 30)))
+            painter.drawRect(QRect(self._drag_start, self._drag_current).normalized())
 
         # Draw active whiteout rectangle preview while dragging
         if self.mode == "whiteout" and self._dragging:
@@ -102,14 +127,15 @@ class PageRenderWidget(QWidget):
             rect = QRect(self._drag_start, self._drag_current).normalized()
             painter.drawRect(rect)
 
-        # Draw stamp preview
-        if self.mode == "stamp" and not self._dragging:
-            # Draw cursor preview for stamp
-            pass
-
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
-            if self.mode == "whiteout":
+            if self.mode == "view":
+                self._is_selecting_text = True
+                self._drag_start = event.pos()
+                self._drag_current = event.pos()
+                self.selected_words = []
+                self.update()
+            elif self.mode == "whiteout":
                 self._dragging = True
                 self._drag_start = event.pos()
                 self._drag_current = event.pos()
@@ -120,27 +146,113 @@ class PageRenderWidget(QWidget):
                 self._apply_stamp(event.pos())
 
     def mouseMoveEvent(self, event: QMouseEvent):
-        if self._dragging and self.mode == "whiteout":
+        if self.mode == "view":
+            if self._is_selecting_text:
+                self._drag_current = event.pos()
+                sel_rect = QRect(self._drag_start, self._drag_current).normalized()
+                pdf_sel = fitz.Rect(
+                    sel_rect.left() / self.zoom,
+                    sel_rect.top() / self.zoom,
+                    sel_rect.right() / self.zoom,
+                    sel_rect.bottom() / self.zoom
+                )
+                self.selected_words = [
+                    w for w in self.words 
+                    if fitz.Rect(w[0], w[1], w[2], w[3]).intersects(pdf_sel)
+                ]
+                self.update()
+            else:
+                pdf_x = event.pos().x() / self.zoom
+                pdf_y = event.pos().y() / self.zoom
+                is_over = any(w[0] <= pdf_x <= w[2] and w[1] <= pdf_y <= w[3] for w in self.words)
+                self.setCursor(Qt.CursorShape.IBeamCursor if is_over else Qt.CursorShape.ArrowCursor)
+
+        elif self._dragging and self.mode == "whiteout":
             self._drag_current = event.pos()
             self.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent):
-        if event.button() == Qt.MouseButton.LeftButton and self._dragging and self.mode == "whiteout":
-            self._dragging = False
-            rect = QRect(self._drag_start, event.pos()).normalized()
-            if rect.width() > 4 and rect.height() > 4:
-                # Convert screen coordinates to PDF points
-                pdf_rect = fitz.Rect(
-                    rect.left() / self.zoom,
-                    rect.top() / self.zoom,
-                    rect.right() / self.zoom,
-                    rect.bottom() / self.zoom
-                )
-                self.doc.whiteout_area(self.page_idx, pdf_rect)
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.mode == "view" and self._is_selecting_text:
+                self._is_selecting_text = False
+                self.update()
+            elif self._dragging and self.mode == "whiteout":
+                self._dragging = False
+                rect = QRect(self._drag_start, event.pos()).normalized()
+                if rect.width() > 4 and rect.height() > 4:
+                    pdf_rect = fitz.Rect(
+                        rect.left() / self.zoom,
+                        rect.top() / self.zoom,
+                        rect.right() / self.zoom,
+                        rect.bottom() / self.zoom
+                    )
+                    self.doc.whiteout_area(self.page_idx, pdf_rect)
+                    self.render_cache()
+                    self.update()
+                    self.page_modified.emit()
+                self.update()
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent):
+        if self.mode == "view" and event.button() == Qt.MouseButton.LeftButton:
+            pdf_x = event.pos().x() / self.zoom
+            pdf_y = event.pos().y() / self.zoom
+            for w in self.words:
+                if w[0] <= pdf_x <= w[2] and w[1] <= pdf_y <= w[3]:
+                    self.selected_words = [w]
+                    self.update()
+                    self.prompt_edit_selected_text()
+                    break
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_C and (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
+            self.copy_selected_text()
+        else:
+            super().keyPressEvent(event)
+
+    def copy_selected_text(self):
+        if self.selected_words:
+            from PyQt6.QtWidgets import QApplication
+            text = " ".join(w[4] for w in self.selected_words)
+            QApplication.clipboard().setText(text)
+
+    def prompt_edit_selected_text(self):
+        if not self.selected_words:
+            return
+        
+        current_text = " ".join(w[4] for w in self.selected_words)
+        min_x0 = min(w[0] for w in self.selected_words)
+        min_y0 = min(w[1] for w in self.selected_words)
+        max_x1 = max(w[2] for w in self.selected_words)
+        max_y1 = max(w[3] for w in self.selected_words)
+        union_rect = fitz.Rect(min_x0, min_y0, max_x1, max_y1)
+
+        new_text, ok = QInputDialog.getText(
+            self, "Metni Düzenle", 
+            f"PDF üzerindeki metni değiştirin:\n(Eski: '{current_text}')", 
+            text=current_text
+        )
+        if ok and new_text != current_text:
+            h = max_y1 - min_y0
+            fs = max(7.0, min(36.0, h * 0.85))
+            if self.doc.edit_text_at_rect(self.page_idx, union_rect, new_text, fs):
+                self.selected_words = []
                 self.render_cache()
                 self.update()
                 self.page_modified.emit()
-            self.update()
+
+    def whiteout_selected_text(self):
+        if not self.selected_words:
+            return
+        min_x0 = min(w[0] for w in self.selected_words)
+        min_y0 = min(w[1] for w in self.selected_words)
+        max_x1 = max(w[2] for w in self.selected_words)
+        max_y1 = max(w[3] for w in self.selected_words)
+        union_rect = fitz.Rect(min_x0, min_y0, max_x1, max_y1)
+        self.doc.whiteout_area(self.page_idx, union_rect)
+        self.selected_words = []
+        self.render_cache()
+        self.update()
+        self.page_modified.emit()
 
     def _prompt_add_text(self, pos: QPoint):
         text, ok = QInputDialog.getText(self, "Metin Ekle", "Sayfaya eklenecek metni girin:")
@@ -156,7 +268,6 @@ class PageRenderWidget(QWidget):
         if not self.stamp_image_path or not os.path.exists(self.stamp_image_path):
             return
         
-        # Stamp default size: 150 x 60 pt
         w = 140.0
         h = 55.0
         pdf_x = (pos.x() / self.zoom) - (w / 2)
@@ -304,10 +415,26 @@ class PDFViewer(QScrollArea):
         
         # Determine which page was clicked
         target_page_idx = self.current_page_idx
+        target_pw: Optional[PageRenderWidget] = None
+        container_pos = self.container.mapFrom(self, pos)
         for pw in self.page_widgets:
-            if pw.geometry().contains(self.container.mapFrom(self, pos)):
+            if pw.geometry().contains(container_pos):
                 target_page_idx = pw.page_idx
+                target_pw = pw
                 break
+
+        # Text selection actions if text is highlighted
+        act_copy = None
+        act_edit = None
+        act_whiteout_sel = None
+        if target_pw and target_pw.selected_words:
+            act_copy = menu.addAction("📋 Seçili Metni Kopyala (Ctrl+C)")
+            act_edit = menu.addAction("✏️ Seçili Metni Düzenle / Değiştir")
+            act_whiteout_sel = menu.addAction("◻️ Seçili Metni Sil / Beyazlat")
+            menu.addSeparator()
+
+        act_ocr = menu.addAction("🔍 Sayfadaki Metinleri Tanı (OCR / Kelimeler)")
+        menu.addSeparator()
 
         act_paint = menu.addAction(f"🖌️ Bu Sayfayı Harici Resim Editöründe (Paint vb.) Aç ve Temizle")
         act_rotate = menu.addAction("🔄 Sayfayı 90° Sağa Döndür")
@@ -316,7 +443,16 @@ class PDFViewer(QScrollArea):
         act_export_img = menu.addAction("🖼️ Bu Sayfayı Resim Olarak Dışa Aktar (PNG)")
 
         action = menu.exec(self.mapToGlobal(pos))
-        if action == act_paint:
+        if action == act_copy and target_pw:
+            target_pw.copy_selected_text()
+            self.status_message.emit("Metin panoya kopyalandı.")
+        elif action == act_edit and target_pw:
+            target_pw.prompt_edit_selected_text()
+        elif action == act_whiteout_sel and target_pw:
+            target_pw.whiteout_selected_text()
+        elif action == act_ocr:
+            self.run_ocr(target_page_idx)
+        elif action == act_paint:
             self.roundtrip_handler.edit_scanned_page(self.doc, target_page_idx)
         elif action == act_rotate:
             self.doc.rotate_page(target_page_idx, 90)
@@ -335,6 +471,37 @@ class PDFViewer(QScrollArea):
                 from nengi.core.converter import FormatConverter
                 FormatConverter.export_page_as_image(self.doc, target_page_idx, file_path)
                 QMessageBox.information(self, "Başarılı", "Sayfa resim olarak kaydedildi.")
+
+    def run_ocr(self, page_idx: int):
+        """Runs OCR on page or checks for existing digital text."""
+        if not self.doc or not self.doc.is_open:
+            return
+        words = self.doc.get_page_text_words(page_idx)
+        if words:
+            QMessageBox.information(
+                self, "Metin Bilgisi", 
+                f"Bu sayfada zaten {len(words)} adet dijital kelime mevcut!\n\n"
+                "• Metinleri fareyle seçip kopyalayabilirsiniz (Ctrl+C).\n"
+                "• Herhangi bir kelimeye çift tıklayarak doğrudan düzenleyebilirsiniz.\n"
+                "• Sağ tıklayıp 'Seçili Metni Düzenle' veya 'Sil' diyebilirsiniz."
+            )
+            return
+
+        self.status_message.emit("Sayfa taranıyor (OCR)...")
+        items = self.doc.ocr_page(page_idx)
+        if items:
+            self.refresh_page(page_idx)
+            self.document_modified.emit()
+            QMessageBox.information(
+                self, "OCR Tamamlandı", 
+                f"Sayfada {len(items)} satır metin başarıyla tanındı ve aranabilir/seçilebilir hale getirildi!\n\n"
+                "Artık metinleri fareyle seçip düzenleyebilirsiniz."
+            )
+        else:
+            QMessageBox.information(
+                self, "Bilgi", 
+                "Sayfada ek metin tanınamadı veya metin zaten mevcut."
+            )
 
     def wheelEvent(self, event: QWheelEvent):
         """Handles Ctrl + Wheel zooming."""
