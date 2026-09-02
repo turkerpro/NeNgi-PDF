@@ -56,6 +56,7 @@ class PageRenderWidget(QWidget):
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.cached_pixmap: Optional[QPixmap] = None
+        self._text_extracted = False
 
         # Instant Open / Lazy Virtualization:
         # Render first page immediately; subsequent pages render on-demand in paintEvent!
@@ -68,10 +69,18 @@ class PageRenderWidget(QWidget):
             except Exception:
                 self.render_cache()
 
+    def _ensure_text_extracted(self):
+        """Extracts text words and blocks on-demand only when user interacts with text."""
+        if not self._text_extracted and self.doc and self.doc.is_open:
+            self.words = self.doc.get_page_text_words(self.page_idx)
+            self.blocks = self.doc.get_page_blocks(self.page_idx)
+            self._text_extracted = True
+
     def set_zoom(self, zoom: float):
         if abs(self.zoom - zoom) > 0.01:
             self.zoom = zoom
             self.cached_pixmap = None
+            self._text_extracted = False
             try:
                 p_rect = self.doc.get_page(self.page_idx).rect
                 self.setFixedSize(int(p_rect.width * self.zoom), int(p_rect.height * self.zoom))
@@ -85,12 +94,11 @@ class PageRenderWidget(QWidget):
             self.update()
 
     def render_cache(self):
-        """Pre-renders page pixmap at current zoom and loads text words & paragraph blocks."""
+        """Pre-renders page pixmap at current zoom without blocking on heavy text parsing."""
         if not self.doc or not self.doc.is_open or self.page_idx >= self.doc.page_count:
             return
         self.cached_pixmap = self.doc.render_page_pixmap(self.page_idx, self.zoom)
-        self.words = self.doc.get_page_text_words(self.page_idx)
-        self.blocks = self.doc.get_page_blocks(self.page_idx)
+        self._text_extracted = False
         if self.cached_pixmap:
             self.setFixedSize(self.cached_pixmap.size())
 
@@ -168,6 +176,7 @@ class PageRenderWidget(QWidget):
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
             if self.mode == "view":
+                self._ensure_text_extracted()
                 self._is_selecting_text = True
                 self._drag_start = event.pos()
                 self._drag_current = event.pos()
@@ -185,6 +194,7 @@ class PageRenderWidget(QWidget):
 
     def mouseMoveEvent(self, event: QMouseEvent):
         if self.mode == "view":
+            self._ensure_text_extracted()
             if self._is_selecting_text:
                 self._drag_current = event.pos()
                 sel_rect = QRect(self._drag_start, self._drag_current).normalized()
@@ -242,6 +252,7 @@ class PageRenderWidget(QWidget):
 
     def mouseDoubleClickEvent(self, event: QMouseEvent):
         if self.mode == "view" and event.button() == Qt.MouseButton.LeftButton:
+            self._ensure_text_extracted()
             pdf_x = event.pos().x() / self.zoom
             pdf_y = event.pos().y() / self.zoom
 
@@ -292,6 +303,7 @@ class PageRenderWidget(QWidget):
             QApplication.clipboard().setText(text)
 
     def prompt_edit_selected_text(self):
+        self._ensure_text_extracted()
         if not self.selected_words:
             # If no words are highlighted but a block is hovered, edit the whole block
             if self.hovered_block:
