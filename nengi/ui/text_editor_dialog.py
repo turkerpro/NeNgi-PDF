@@ -101,7 +101,7 @@ class TextEditorDialog(QDialog):
         tools_layout.addWidget(lbl_s)
 
         self.sp_size = QDoubleSpinBox()
-        self.sp_size.setRange(5.0, 96.0)
+        self.sp_size.setRange(4.0, 120.0)
         self.sp_size.setSingleStep(0.5)
         self.sp_size.setValue(self.current_size)
         tools_layout.addWidget(self.sp_size)

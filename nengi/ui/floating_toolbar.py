@@ -62,8 +62,6 @@ class FloatingPillToolbar(QFrame):
         # 2. Action Tools
         self._add_tool_btn("rotate", "Sayfayı Döndür", "rotate", checkable=False)
         self._add_tool_btn("pages", "Sayfaları Yönet", "pages", checkable=False)
-        self._add_tool_btn("undo", "Geri Al (Ctrl+Z)", "undo", checkable=False)
-        self._add_tool_btn("redo", "Yinele (Ctrl+Y)", "redo", checkable=False)
 
     def _add_tool_btn(self, icon_name: str, tooltip: str, tool_id: str, checkable: bool = False, checked: bool = False) -> QPushButton:
         btn = QPushButton()

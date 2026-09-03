@@ -282,7 +282,9 @@ class PDFDocument:
         try:
             self.save_state_for_undo()
             page = self.get_page(page_number)
-            page.add_redact_annot(rect, fill=fill_color)
+            rot = page.rotation
+            target_rect = (rect * ~page.rotation_matrix).normalize() if rot != 0 else rect
+            page.add_redact_annot(target_rect, fill=fill_color)
             page.apply_redactions()
             self.is_modified = True
             return True
@@ -517,12 +519,16 @@ class PDFDocument:
                 except Exception:
                     pass
 
+            rot = page.rotation
             lines = text.splitlines()
             line_height = fontsize * 1.25
-            y_pos = point.y
-            for line in lines:
-                page.insert_text((point.x, y_pos), line, fontsize=fontsize, fontname=target_font, color=color)
-                y_pos += line_height
+            for i, line in enumerate(lines):
+                vis_pt = fitz.Point(point.x, point.y + i * line_height)
+                if rot != 0:
+                    internal_pt = vis_pt * ~page.rotation_matrix
+                    page.insert_text(internal_pt, line, fontsize=fontsize, fontname=target_font, color=color, rotate=rot)
+                else:
+                    page.insert_text(vis_pt, line, fontsize=fontsize, fontname=target_font, color=color)
 
             self.is_modified = True
             return True
@@ -582,7 +588,12 @@ class PDFDocument:
         try:
             self.save_state_for_undo()
             page = self.get_page(page_number)
-            page.insert_image(rect, filename=image_path, keep_proportion=True)
+            rot = page.rotation
+            if rot != 0:
+                internal_rect = (rect * ~page.rotation_matrix).normalize()
+                page.insert_image(internal_rect, filename=image_path, keep_proportion=True, rotate=rot)
+            else:
+                page.insert_image(rect, filename=image_path, keep_proportion=True)
             self.is_modified = True
             return True
         except Exception as e:

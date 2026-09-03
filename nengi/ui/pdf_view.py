@@ -7,14 +7,14 @@ stamp placement, and right-click context menu for external image editing roundtr
 from __future__ import annotations
 import os
 from typing import Optional, Tuple, List, Callable
-from PyQt6.QtCore import Qt, QPoint, QRect, QRectF, pyqtSignal, QSize
+from PyQt6.QtCore import Qt, QPoint, QRect, QRectF, pyqtSignal, QSize, QEvent
 from PyQt6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QHBoxLayout, QLabel, 
     QMenu, QInputDialog, QMessageBox, QFileDialog, QGraphicsDropShadowEffect, QDialog
 )
 from PyQt6.QtGui import (
     QPainter, QColor, QPen, QBrush, QPixmap, QMouseEvent, 
-    QWheelEvent, QPaintEvent, QCursor, QFont, QAction
+    QWheelEvent, QPaintEvent, QCursor, QFont, QAction, QKeyEvent
 )
 import pymupdf as fitz
 
@@ -482,6 +482,14 @@ class PDFViewer(QScrollArea):
         self.roundtrip_handler.image_updated.connect(self._on_external_image_updated)
         self.roundtrip_handler.status_message.connect(self.status_message)
 
+        # Spacebar Hand Pan State
+        self._space_held = False
+        self._is_panning = False
+        self._pan_start_pos = QPoint()
+        self._pan_start_h = 0
+        self._pan_start_v = 0
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
         # Setup scroll container
         self.container = QWidget()
         self.layout_pages = QVBoxLayout(self.container)
@@ -490,6 +498,9 @@ class PDFViewer(QScrollArea):
         self.layout_pages.setContentsMargins(20, 20, 20, 20)
         self.setWidget(self.container)
         self.setWidgetResizable(True)
+
+        self.viewport().installEventFilter(self)
+        self.container.installEventFilter(self)
 
         self.page_widgets: List[PageRenderWidget] = []
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -512,6 +523,7 @@ class PDFViewer(QScrollArea):
             pw.mode = self.current_mode
             pw.stamp_image_path = self.stamp_image_path
             pw.page_modified.connect(self.document_modified)
+            pw.installEventFilter(self)
             
             # Subtle card shadow for modern look
             shadow = QGraphicsDropShadowEffect(pw)
@@ -719,6 +731,52 @@ class PDFViewer(QScrollArea):
             self.refresh_all_pages()
             self.document_modified.emit()
             self.status_message.emit("İşlem yinelendi.")
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.KeyPress:
+            if isinstance(event, QKeyEvent) and event.key() == Qt.Key.Key_Space and not event.isAutoRepeat():
+                self._space_held = True
+                self._update_hand_cursor(Qt.CursorShape.OpenHandCursor)
+                return True
+        elif event.type() == QEvent.Type.KeyRelease:
+            if isinstance(event, QKeyEvent) and event.key() == Qt.Key.Key_Space and not event.isAutoRepeat():
+                self._space_held = False
+                self._is_panning = False
+                self._restore_active_cursor()
+                return True
+        elif self._space_held:
+            if event.type() == QEvent.Type.MouseButtonPress:
+                if isinstance(event, QMouseEvent) and event.button() == Qt.MouseButton.LeftButton:
+                    self._is_panning = True
+                    self._pan_start_pos = event.globalPosition().toPoint()
+                    self._pan_start_h = self.horizontalScrollBar().value()
+                    self._pan_start_v = self.verticalScrollBar().value()
+                    self._update_hand_cursor(Qt.CursorShape.ClosedHandCursor)
+                    return True
+            elif event.type() == QEvent.Type.MouseMove and self._is_panning:
+                if isinstance(event, QMouseEvent):
+                    delta = event.globalPosition().toPoint() - self._pan_start_pos
+                    self.horizontalScrollBar().setValue(self._pan_start_h - delta.x())
+                    self.verticalScrollBar().setValue(self._pan_start_v - delta.y())
+                    return True
+            elif event.type() == QEvent.Type.MouseButtonRelease:
+                if isinstance(event, QMouseEvent) and event.button() == Qt.MouseButton.LeftButton and self._is_panning:
+                    self._is_panning = False
+                    self._update_hand_cursor(Qt.CursorShape.OpenHandCursor if self._space_held else Qt.CursorShape.ArrowCursor)
+                    return True
+
+        return super().eventFilter(obj, event)
+
+    def _update_hand_cursor(self, cursor_shape):
+        self.viewport().setCursor(cursor_shape)
+        self.container.setCursor(cursor_shape)
+        for pw in self.page_widgets:
+            pw.setCursor(cursor_shape)
+
+    def _restore_active_cursor(self):
+        self.viewport().unsetCursor()
+        self.container.unsetCursor()
+        self.set_tool_mode(self.current_mode, self.stamp_image_path)
 
     def wheelEvent(self, event: QWheelEvent):
         """Handles Ctrl + Wheel zooming."""

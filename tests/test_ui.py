@@ -6,12 +6,14 @@ import os
 import sys
 import unittest
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QPoint, QEvent
+from PyQt6.QtGui import QKeyEvent
 
 # Ensure offscreen Qt application
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 app = QApplication.instance() or QApplication(sys.argv)
 
+import pymupdf as fitz
 from nengi.ui.main_window import MainWindow
 from nengi.ui.diff_view import DiffView
 from nengi.core.pdf_document import PDFDocument
@@ -167,6 +169,31 @@ class TestNeNgiUI(unittest.TestCase):
 
         if os.path.exists(tmp_img):
             os.unlink(tmp_img)
+
+    def test_spacebar_hand_pan_and_rotated_page_insertion(self):
+        """Tests spacebar pan activation and text insertion on rotated pages."""
+        self.window.open_pdf(self.orig_pdf)
+        viewer = self.window.get_current_viewer()
+        self.assertIsNotNone(viewer)
+
+        # Test Spacebar Pan activation
+        event_press = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier)
+        viewer.eventFilter(viewer.viewport(), event_press)
+        self.assertTrue(viewer._space_held)
+
+        event_release = QKeyEvent(QEvent.Type.KeyRelease, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier)
+        viewer.eventFilter(viewer.viewport(), event_release)
+        self.assertFalse(viewer._space_held)
+
+        # Test Rotated Page Text Insertion
+        pw = viewer.page_widgets[0]
+        pw.doc.rotate_page(0, 90)
+        self.assertEqual(pw.doc.get_page(0).rotation, 90)
+
+        # Insert text on 90-degree rotated page
+        pw.doc.insert_new_text(0, fitz.Point(100, 150), "Rotated Test Text", fontsize=12)
+        words = [w[4] for w in pw.doc.get_page_text_words(0)]
+        self.assertTrue(any("Rotated" in w for w in words))
 
 
 if __name__ == "__main__":

@@ -44,11 +44,14 @@ class ThumbnailBar(QWidget):
         layout.addWidget(self.list_widget)
 
     def load_thumbnails(self, doc: PDFDocument):
-        """Generates thumbnails for all pages of doc."""
+        """Generates thumbnails for all pages of doc without forcing unwanted page scrolls."""
         self.doc = doc
+        curr_row = self.list_widget.currentRow()
+        self.list_widget.blockSignals(True)
         self.list_widget.clear()
 
         if not self.doc or not self.doc.is_open:
+            self.list_widget.blockSignals(False)
             return
 
         for i in range(self.doc.page_count):
@@ -59,7 +62,9 @@ class ThumbnailBar(QWidget):
             self.list_widget.addItem(item)
 
         if self.doc.page_count > 0:
-            self.list_widget.setCurrentRow(0)
+            target_row = curr_row if 0 <= curr_row < self.doc.page_count else 0
+            self.list_widget.setCurrentRow(target_row)
+        self.list_widget.blockSignals(False)
 
     def load_document(self, doc: PDFDocument):
         """Alias for load_thumbnails."""

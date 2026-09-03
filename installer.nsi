@@ -4,8 +4,10 @@
 ; Masaüstü ve Başlat Menüsü kısayollarını ve .pdf ilişkisini kurar.
 ; =========================================================
 
+Unicode true
+
 !define PRODUCT_NAME "NeNgi PDF"
-!define PRODUCT_VERSION "1.5.1"
+!define PRODUCT_VERSION "1.6.0"
 !define PRODUCT_PUBLISHER "NeNgi"
 !define PRODUCT_WEB_SITE "https://github.com/turkerpro/NeNgi-PDF"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\NeNgi_PDF.exe"
@@ -24,12 +26,19 @@ RequestExecutionLevel admin
 !define MUI_UNICON "resources\app_icon.ico"
 
 ; Welcome page
+!define MUI_WELCOMEPAGE_TITLE "NeNgi PDF Kurulum Sihirbazına Hoş Geldiniz"
+!define MUI_WELCOMEPAGE_TEXT "Bu sihirbaz, NeNgi PDF ${PRODUCT_VERSION} sürümünü bilgisayarınıza kuracaktır.$\r$\n$\r$\nÖne Çıkan Geliştirmeler:$\r$\n• Acrobat Pro tarzı canlı katmanlar ve düzenlenebilir metin/imza nesneleri$\r$\n• Spacebar (Boşluk) tuşu ile serbest el aracı (Pan/Sayfa Sürükleme)$\r$\n• Çoklu dosya seçerek tek tıkla sıralı birleştirme$\r$\n• Taranmış sayfalarda tam açılı metin yerleşimi ve zıplamayan silgi aracı$\r$\n$\r$\nDevam etmek için İleri'ye tıklayın."
 !insertmacro MUI_PAGE_WELCOME
+
 ; Directory page
 !insertmacro MUI_PAGE_DIRECTORY
+
 ; Instfiles page
 !insertmacro MUI_PAGE_INSTFILES
+
 ; Finish page
+!define MUI_FINISHPAGE_TITLE "Kurulum Başarıyla Tamamlandı"
+!define MUI_FINISHPAGE_TEXT "NeNgi PDF bilgisayarınıza başarıyla kuruldu. Artık PDF dosyalarınızı ultra hızlı açabilir, düzenleyebilir ve yönetebilirsiniz."
 !define MUI_FINISHPAGE_RUN "$INSTDIR\NeNgi_PDF.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "NeNgi PDF uygulamasını şimdi başlat"
 !insertmacro MUI_PAGE_FINISH

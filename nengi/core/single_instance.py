@@ -37,14 +37,19 @@ class SingleInstanceManager(QObject):
         for _ in range(3):
             socket.connectToServer(IPC_SOCKET_NAME)
             if socket.waitForConnected(200):
-                # Clean and resolve file paths
-                clean_files = []
+                # Clean and resolve arguments/file paths
+                clean_args = []
                 for a in args:
                     clean = a.strip().strip('"').strip("'")
                     if clean:
-                        clean_files.append(os.path.abspath(clean))
+                        if clean.startswith("--"):
+                            clean_args.append(clean)
+                        elif os.path.exists(clean):
+                            clean_args.append(os.path.abspath(clean))
+                        else:
+                            clean_args.append(clean)
 
-                payload = "\n".join(clean_files) if clean_files else "__ACTIVATE__"
+                payload = " ".join(clean_args) if clean_args else "__ACTIVATE__"
                 socket.write(payload.encode("utf-8"))
                 socket.waitForBytesWritten(1500)
                 # Wait briefly for server ACK

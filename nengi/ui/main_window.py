@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import sys
 from typing import Optional, List, Tuple
-from PyQt6.QtCore import Qt, QSize, QPoint, QRect
+from PyQt6.QtCore import Qt, QSize, QPoint, QRect, QTimer
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, 
     QStatusBar, QFileDialog, QMessageBox, QLabel, QLineEdit,
@@ -126,6 +126,12 @@ class MainWindow(QMainWindow):
         self.is_dark_mode = True
         self.recent_files: List[str] = []
         self.tray_agent = None
+        self._is_running_ocr = False
+
+        self._pending_merge_files: List[str] = []
+        self._merge_debounce_timer = QTimer(self)
+        self._merge_debounce_timer.setSingleShot(True)
+        self._merge_debounce_timer.timeout.connect(self._flush_pending_merge_files)
 
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         icon_path = os.path.join(base_dir, "resources", "app_icon.png")
@@ -195,6 +201,23 @@ class MainWindow(QMainWindow):
         self.txt_search.setPlaceholderText("Belgelerde veya metinlerde ara... (Enter)")
         self.txt_search.returnPressed.connect(self._on_search_triggered)
         h_layout.addWidget(self.txt_search, 1)
+
+        # Undo & Redo buttons
+        self.btn_undo = QPushButton()
+        self.btn_undo.setIcon(get_svg_icon("undo", "#D0D4DC", 16))
+        self.btn_undo.setIconSize(QSize(16, 16))
+        self.btn_undo.setFixedSize(34, 34)
+        self.btn_undo.setToolTip("Geri Al (Ctrl+Z)")
+        self.btn_undo.clicked.connect(self.undo_current)
+        h_layout.addWidget(self.btn_undo)
+
+        self.btn_redo = QPushButton()
+        self.btn_redo.setIcon(get_svg_icon("redo", "#D0D4DC", 16))
+        self.btn_redo.setIconSize(QSize(16, 16))
+        self.btn_redo.setFixedSize(34, 34)
+        self.btn_redo.setToolTip("Yinele (Ctrl+Y)")
+        self.btn_redo.clicked.connect(self.redo_current)
+        h_layout.addWidget(self.btn_redo)
 
         # Right quick action buttons with SVG icons
         self.btn_print = QPushButton("  Yazdır")
@@ -541,9 +564,18 @@ class MainWindow(QMainWindow):
             self._update_footer_page_info()
 
     def open_merge_dialog(self, files: Optional[List[str]] = None):
-        dlg = MergeFilesDialog(initial_files=files, parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.output_pdf_path:
-            self.open_pdf(dlg.output_pdf_path)
+        try:
+            dlg = MergeFilesDialog(initial_files=files, parent=self)
+            if dlg.exec() == QDialog.DialogCode.Accepted and dlg.output_pdf_path:
+                self.open_pdf(dlg.output_pdf_path)
+        except Exception as e:
+            print(f"Error opening merge dialog: {e}")
+
+    def _flush_pending_merge_files(self):
+        if self._pending_merge_files:
+            files_to_merge = list(self._pending_merge_files)
+            self._pending_merge_files.clear()
+            self.open_merge_dialog(files_to_merge)
 
     def convert_file_to_pdf(self, file_path: str):
         if not os.path.exists(file_path):
@@ -577,7 +609,11 @@ class MainWindow(QMainWindow):
         clean_arg = raw_arg.strip()
         if clean_arg.startswith("--merge"):
             files = [f.strip().strip('"').strip("'") for f in clean_arg[7:].split() if f.strip()]
-            self.open_merge_dialog(files if files else None)
+            for f in files:
+                if f and os.path.exists(f) and f not in self._pending_merge_files:
+                    self._pending_merge_files.append(f)
+            # Debounce timer to aggregate rapid multi-file right-click selections from Windows
+            self._merge_debounce_timer.start(250)
         elif clean_arg.startswith("--convert"):
             file_to_conv = clean_arg[9:].strip().strip('"').strip("'")
             if os.path.exists(file_to_conv):
@@ -776,9 +812,15 @@ class MainWindow(QMainWindow):
             curr_pw.prompt_edit_selected_text()
 
     def _run_ocr_trigger(self):
-        viewer = self.get_current_viewer()
-        if viewer:
-            viewer.run_ocr(viewer.current_page_idx)
+        if self._is_running_ocr:
+            return
+        self._is_running_ocr = True
+        try:
+            viewer = self.get_current_viewer()
+            if viewer:
+                viewer.run_ocr(viewer.current_page_idx)
+        finally:
+            self._is_running_ocr = False
 
     def _rotate_current_page(self):
         doc = self.get_current_doc()
@@ -899,6 +941,10 @@ class MainWindow(QMainWindow):
         """Updates all SVG icon colors across the interface to contrast with current theme."""
         icon_color = "#D0D4DC" if is_dark else "#374151"
 
+        if hasattr(self, "btn_undo"):
+            self.btn_undo.setIcon(get_svg_icon("undo", icon_color, 16))
+        if hasattr(self, "btn_redo"):
+            self.btn_redo.setIcon(get_svg_icon("redo", icon_color, 16))
         if hasattr(self, "btn_print"):
             self.btn_print.setIcon(get_svg_icon("print", icon_color, 16))
         if hasattr(self, "btn_save"):
