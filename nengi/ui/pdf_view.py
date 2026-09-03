@@ -301,7 +301,7 @@ class PageRenderWidget(QWidget):
                 dlg = TextEditorDialog(
                     initial_text=target_block[4],
                     detected_style=style,
-                    title="✏️ Paragrafı Düzenle (Acrobat Pro)",
+                    title="✏️ Paragrafı Düzenle",
                     parent=self
                 )
                 if dlg.exec() == QDialog.DialogCode.Accepted and dlg.result_text != target_block[4]:
@@ -345,7 +345,7 @@ class PageRenderWidget(QWidget):
                 dlg = TextEditorDialog(
                     initial_text=b[4],
                     detected_style=style,
-                    title="✏️ Paragrafı Düzenle (Acrobat Pro)",
+                    title="✏️ Paragrafı Düzenle",
                     parent=self
                 )
                 if dlg.exec() == QDialog.DialogCode.Accepted:
@@ -369,7 +369,7 @@ class PageRenderWidget(QWidget):
         dlg = TextEditorDialog(
             initial_text=current_text,
             detected_style=style,
-            title="✏️ Seçili Metni Düzenle (Acrobat Pro)",
+            title="✏️ Seçili Metni Düzenle",
             parent=self
         )
         if dlg.exec() == QDialog.DialogCode.Accepted:
@@ -407,7 +407,7 @@ class PageRenderWidget(QWidget):
         dlg = TextEditorDialog(
             initial_text="",
             detected_style=style,
-            title="✍️ Metin Ekle (Acrobat Pro)",
+            title="✍️ Metin Ekle",
             parent=self
         )
         if dlg.exec() == QDialog.DialogCode.Accepted and dlg.result_text.strip():

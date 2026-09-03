@@ -461,6 +461,13 @@ class MainWindow(QMainWindow):
         menu.exec(self.nav_rail.mapToGlobal(QPoint(220, 100)))
 
     def _on_copilot_action(self, action_key: str):
+        if action_key == "merge":
+            self.open_merge_dialog()
+            return
+        elif action_key == "diff":
+            self.compare_open_tabs()
+            return
+
         doc = self.get_current_doc()
         viewer = self.get_current_viewer()
         if not doc or not doc.is_open:
@@ -483,10 +490,6 @@ class MainWindow(QMainWindow):
         elif action_key == "ocr":
             self.copilot_panel.add_message("🔍 OCR metin taraması başlatılıyor...")
             self._run_ocr_trigger()
-        elif action_key == "diff":
-            self.compare_open_tabs()
-        elif action_key == "merge":
-            self.open_merge_dialog()
         elif action_key == "protect":
             self._encrypt_current_doc()
 
@@ -607,19 +610,29 @@ class MainWindow(QMainWindow):
             return
 
         clean_arg = raw_arg.strip()
-        if clean_arg.startswith("--merge"):
-            files = [f.strip().strip('"').strip("'") for f in clean_arg[7:].split() if f.strip()]
+        import shlex
+        try:
+            tokens = shlex.split(clean_arg)
+        except Exception:
+            tokens = clean_arg.split()
+
+        if not tokens:
+            return
+
+        cmd = tokens[0]
+        if cmd == "--merge":
+            files = [f.strip().strip('"').strip("'") for f in tokens[1:] if f.strip()]
             for f in files:
                 if f and os.path.exists(f) and f not in self._pending_merge_files:
                     self._pending_merge_files.append(f)
             # Debounce timer to aggregate rapid multi-file right-click selections from Windows
             self._merge_debounce_timer.start(250)
-        elif clean_arg.startswith("--convert"):
-            file_to_conv = clean_arg[9:].strip().strip('"').strip("'")
+        elif cmd == "--convert":
+            file_to_conv = " ".join(tokens[1:]).strip().strip('"').strip("'") if len(tokens) > 1 else ""
             if os.path.exists(file_to_conv):
                 self.convert_file_to_pdf(file_to_conv)
-        elif clean_arg.startswith("--print"):
-            file_to_print = clean_arg[7:].strip().strip('"').strip("'")
+        elif cmd == "--print":
+            file_to_print = " ".join(tokens[1:]).strip().strip('"').strip("'") if len(tokens) > 1 else ""
             if os.path.exists(file_to_print):
                 self.open_pdf(file_to_print)
                 self.print_current_document()

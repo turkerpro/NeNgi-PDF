@@ -18,7 +18,7 @@ from nengi.core.converter import FormatConverter
 class MergeFilesDialog(QDialog):
     """Modern dialog allowing user to reorder and merge multiple files into one PDF."""
 
-    def __init__(self, initial_files: Optional[List[str]] = None, parent: Optional[QDialog] = None):
+    def __init__(self, initial_files: Optional[List[str]] = None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setWindowTitle("📑 NeNgi PDF - Dosyaları Birleştir")
         self.resize(600, 450)
@@ -95,15 +95,18 @@ class MergeFilesDialog(QDialog):
             self.list_widget.addItem(item)
 
     def _add_files(self):
-        selected, _ = QFileDialog.getOpenFileNames(
-            self, "Birleştirilecek Dosyaları Seç", "", 
-            "Desteklenen Dosyalar (*.pdf *.png *.jpg *.jpeg *.bmp *.tiff);;PDF Dosyaları (*.pdf);;Resim Dosyaları (*.png *.jpg *.jpeg)"
-        )
-        if selected:
-            for f in selected:
-                if f not in self.files:
-                    self.files.append(os.path.abspath(f))
-            self._refresh_list()
+        try:
+            selected, _ = QFileDialog.getOpenFileNames(
+                self, "Birleştirilecek Dosyaları Seç", "", 
+                "Desteklenen Dosyalar (*.pdf *.png *.jpg *.jpeg *.bmp *.tiff);;PDF Dosyaları (*.pdf);;Resim Dosyaları (*.png *.jpg *.jpeg)"
+            )
+            if selected:
+                for f in selected:
+                    if f and os.path.exists(f) and f not in self.files:
+                        self.files.append(os.path.abspath(f))
+                self._refresh_list()
+        except Exception as e:
+            print(f"Error adding files: {e}")
 
     def _remove_selected(self):
         current_row = self.list_widget.currentRow()
@@ -130,33 +133,56 @@ class MergeFilesDialog(QDialog):
             QMessageBox.warning(self, "Uyarı", "Lütfen en az bir dosya ekleyin.")
             return
 
-        save_path, _ = QFileDialog.getSaveFileName(
-            self, "Birleştirilen PDF'i Kaydet", "Birlesik_Belge.pdf", "PDF Dosyaları (*.pdf)"
-        )
-        if not save_path:
-            return
-
         try:
+            save_path, _ = QFileDialog.getSaveFileName(
+                self, "Birleştirilen PDF'i Kaydet", "Birlesik_Belge.pdf", "PDF Dosyaları (*.pdf)"
+            )
+            if not save_path:
+                return
+
             merged_doc = fitz.open()
+            failed_files = []
+
             for file_path in self.files:
-                ext = os.path.splitext(file_path)[1].lower()
-                if ext == ".pdf":
-                    src = fitz.open(file_path)
-                    merged_doc.insert_pdf(src)
-                    src.close()
-                elif ext in [".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".webp"]:
-                    # Convert image to PDF page
-                    img = fitz.open(file_path)
-                    pdf_bytes = img.convert_to_pdf()
-                    img_pdf = fitz.open("pdf", pdf_bytes)
-                    merged_doc.insert_pdf(img_pdf)
-                    img.close()
-                    img_pdf.close()
+                if not os.path.exists(file_path):
+                    failed_files.append(f"{os.path.basename(file_path)} (Dosya bulunamadı)")
+                    continue
+
+                try:
+                    ext = os.path.splitext(file_path)[1].lower()
+                    if ext == ".pdf":
+                        src = fitz.open(file_path)
+                        if src.is_encrypted and not src.authenticate(""):
+                            failed_files.append(f"{os.path.basename(file_path)} (Parola korumalı)")
+                            src.close()
+                            continue
+                        merged_doc.insert_pdf(src)
+                        src.close()
+                    elif ext in [".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".webp"]:
+                        img = fitz.open(file_path)
+                        pdf_bytes = img.convert_to_pdf()
+                        img_pdf = fitz.open("pdf", pdf_bytes)
+                        merged_doc.insert_pdf(img_pdf)
+                        img.close()
+                        img_pdf.close()
+                    else:
+                        failed_files.append(f"{os.path.basename(file_path)} (Desteklenmeyen biçim)")
+                except Exception as ex:
+                    failed_files.append(f"{os.path.basename(file_path)} ({ex})")
+
+            if merged_doc.page_count == 0:
+                merged_doc.close()
+                QMessageBox.critical(self, "Hata", "Hiçbir dosya birleştirilemedi.\n\nHatalar:\n" + "\n".join(failed_files))
+                return
 
             merged_doc.save(save_path)
             merged_doc.close()
             self.output_pdf_path = save_path
-            QMessageBox.information(self, "Başarılı", f"Dosyalar başarıyla birleştirildi:\n{save_path}")
+
+            msg = f"Dosyalar başarıyla birleştirildi:\n{save_path}"
+            if failed_files:
+                msg += f"\n\nAtlanan dosyalar:\n" + "\n".join(failed_files)
+            QMessageBox.information(self, "Başarılı", msg)
             self.accept()
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Dosyalar birleştirilirken bir hata oluştu:\n{e}")
+            QMessageBox.critical(self, "Hata", f"Dosyalar birleştirilirken beklenmedik bir hata oluştu:\n{e}")

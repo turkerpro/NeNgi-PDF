@@ -1,4 +1,4 @@
-; =========================================================
+﻿; =========================================================
 ; NeNgi PDF - Windows NSIS Kurulum Paketi Betiği (Setup.exe)
 ; C:\Program Files\NeNgi PDF dizinine kurulum yapar,
 ; Masaüstü ve Başlat Menüsü kısayollarını ve .pdf ilişkisini kurar.
@@ -7,7 +7,7 @@
 Unicode true
 
 !define PRODUCT_NAME "NeNgi PDF"
-!define PRODUCT_VERSION "1.6.0"
+!define PRODUCT_VERSION "1.6.1"
 !define PRODUCT_PUBLISHER "NeNgi"
 !define PRODUCT_WEB_SITE "https://github.com/turkerpro/NeNgi-PDF"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\NeNgi_PDF.exe"
@@ -27,7 +27,7 @@ RequestExecutionLevel admin
 
 ; Welcome page
 !define MUI_WELCOMEPAGE_TITLE "NeNgi PDF Kurulum Sihirbazına Hoş Geldiniz"
-!define MUI_WELCOMEPAGE_TEXT "Bu sihirbaz, NeNgi PDF ${PRODUCT_VERSION} sürümünü bilgisayarınıza kuracaktır.$\r$\n$\r$\nÖne Çıkan Geliştirmeler:$\r$\n• Acrobat Pro tarzı canlı katmanlar ve düzenlenebilir metin/imza nesneleri$\r$\n• Spacebar (Boşluk) tuşu ile serbest el aracı (Pan/Sayfa Sürükleme)$\r$\n• Çoklu dosya seçerek tek tıkla sıralı birleştirme$\r$\n• Taranmış sayfalarda tam açılı metin yerleşimi ve zıplamayan silgi aracı$\r$\n$\r$\nDevam etmek için İleri'ye tıklayın."
+!define MUI_WELCOMEPAGE_TEXT "Bu sihirbaz, NeNgi PDF ${PRODUCT_VERSION} sürümünü bilgisayarınıza kuracaktır.$\r$\n$\r$\nÖne Çıkan Geliştirmeler:$\r$\n• Gelişmiş canlı katmanlar ve düzenlenebilir metin/imza nesneleri$\r$\n• Spacebar (Boşluk) tuşu ile serbest el aracı (Pan/Sayfa Sürükleme)$\r$\n• Çoklu dosya seçerek tek tıkla sıralı birleştirme$\r$\n• Taranmış sayfalarda tam açılı metin yerleşimi ve zıplamayan silgi aracı$\r$\n$\r$\nDevam etmek için İleri'ye tıklayın."
 !insertmacro MUI_PAGE_WELCOME
 
 ; Directory page
