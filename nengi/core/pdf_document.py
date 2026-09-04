@@ -131,23 +131,29 @@ class PDFDocument:
             return False
 
     def open(self, file_path: str, password: Optional[str] = None) -> bool:
-        """Opens a PDF file, checking for encryption."""
+        """Opens a PDF file, checking for encryption and corrupted files."""
         self.file_path = file_path
-        self.doc = fitz.open(file_path)
-        self.is_modified = False
-        self.is_encrypted = self.doc.is_encrypted
         self._undo_stack.clear()
         self._redo_stack.clear()
+        self.is_modified = False
 
-        if self.is_encrypted:
-            if password:
-                self.is_authenticated = self.doc.authenticate(password) > 0
+        try:
+            self.doc = fitz.open(file_path)
+            self.is_encrypted = self.doc.is_encrypted
+            if self.is_encrypted:
+                if password:
+                    self.is_authenticated = self.doc.authenticate(password) > 0
+                else:
+                    self.is_authenticated = False
             else:
-                self.is_authenticated = False
-        else:
-            self.is_authenticated = True
-
-        return self.is_authenticated
+                self.is_authenticated = True
+            return self.is_authenticated
+        except Exception as e:
+            print(f"Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
 
     def authenticate(self, password: str) -> bool:
         """Attempts to authenticate an encrypted document."""

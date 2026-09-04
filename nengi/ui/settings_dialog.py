@@ -150,7 +150,7 @@ class SettingsDialog(QDialog):
         lbl_app_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #0078D4;")
         lay_abt.addWidget(lbl_app_title)
 
-        lbl_version = QLabel("Sürüm: 1.7.0 (Sanal Yazıcı Entegrasyonu & Canlı Katmanlar)")
+        lbl_version = QLabel("Sürüm: 1.7.1 (Sanal Yazıcı Entegrasyonu & Kararlı Baskı)")
         lbl_version.setStyleSheet("color: #AAAAAA;")
         lay_abt.addWidget(lbl_version)
 

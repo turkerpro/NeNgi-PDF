@@ -228,6 +228,18 @@ class TestNeNgiCore(unittest.TestCase):
         res = VirtualPrinterManager.is_printer_installed()
         self.assertIsInstance(res, bool)
 
+    def test_corrupted_pdf_handling(self):
+        # Create a half-written/corrupted PDF file
+        bad_file = os.path.join(self.temp_dir, "corrupted.pdf")
+        with open(bad_file, "wb") as f:
+            f.write(b"%PDF-1.4\n%corrupted truncated content without EOF")
+
+        doc = PDFDocument()
+        is_ok = doc.open(bad_file)
+        self.assertFalse(is_ok)
+        self.assertFalse(doc.is_open)
+        self.assertEqual(doc.page_count, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

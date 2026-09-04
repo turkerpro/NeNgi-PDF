@@ -7,7 +7,7 @@
 Unicode true
 
 !define PRODUCT_NAME "NeNgi PDF"
-!define PRODUCT_VERSION "1.7.0"
+!define PRODUCT_VERSION "1.7.1"
 !define PRODUCT_PUBLISHER "NeNgi"
 !define PRODUCT_WEB_SITE "https://github.com/turkerpro/NeNgi-PDF"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\NeNgi_PDF.exe"

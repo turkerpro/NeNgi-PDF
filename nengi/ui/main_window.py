@@ -661,14 +661,21 @@ class MainWindow(QMainWindow):
 
         doc = PDFDocument()
         is_ok = doc.open(file_path)
-        
-        if doc.is_encrypted and not is_ok:
-            dlg = PasswordDialog(mode="decrypt", parent=self)
-            if dlg.exec() == QDialog.DialogCode.Accepted and dlg.password:
-                if not doc.authenticate(dlg.password):
-                    QMessageBox.critical(self, "Hata", "Hatalı parola girdiniz.")
+
+        if not doc.is_open or doc.page_count == 0:
+            if doc.is_encrypted:
+                dlg = PasswordDialog(mode="decrypt", parent=self)
+                if dlg.exec() == QDialog.DialogCode.Accepted and dlg.password:
+                    if not doc.authenticate(dlg.password):
+                        QMessageBox.critical(self, "Hata", "Hatalı parola girdiniz.")
+                        return
+                else:
                     return
             else:
+                QMessageBox.critical(
+                    self, "Belge Açılamadı",
+                    f"Belge açılamadı veya bozuk:\n{os.path.basename(file_path)}\n\nDosya geçerli bir PDF formatında değil veya henüz diske yazılması tamamlanmamış olabilir."
+                )
                 return
 
         viewer = PDFViewer(doc=doc, parent=self)

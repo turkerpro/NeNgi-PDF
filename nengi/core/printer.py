@@ -55,12 +55,13 @@ class PDFPrinter:
                 return False
 
             try:
+                # Use 200 DPI for optimal high-res quality without overwhelming Windows GDI spooler
+                print_dpi = 200
                 for idx, page_num in enumerate(range(from_page, to_page + 1)):
                     if idx > 0:
                         printer.newPage()
 
-                    # Render page at 300 DPI high resolution for sharp print quality
-                    qimg = doc.render_page_qimage(page_num, dpi=300)
+                    qimg = doc.render_page_qimage(page_num, dpi=print_dpi)
                     if qimg.isNull():
                         continue
 
@@ -75,10 +76,14 @@ class PDFPrinter:
                     dest_rect = QRectF(x, y, scaled_size.width(), scaled_size.height())
 
                     painter.drawImage(dest_rect, qimg)
-                return True
             finally:
                 if painter.isActive():
                     painter.end()
+                del painter
+
+            if parent:
+                QMessageBox.information(parent, "Yazdırma Tamamlandı", "Belge yazıcıya/dosyaya başarıyla aktarıldı.")
+            return True
 
         except Exception as e:
             if parent:
