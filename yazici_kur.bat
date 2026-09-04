@@ -7,7 +7,7 @@ echo.
 echo 'NeNgi PDF' yazicisi Windows'a ekleniyor...
 echo.
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = 'NeNgi PDF'; $d = 'Microsoft Print to PDF'; if (-not (Get-Printer -Name $p -ErrorAction SilentlyContinue)) { $port = (Get-Printer -Name $d -ErrorAction SilentlyContinue).PortName; if (-not $port) { $port = (Get-PrinterPort | Where-Object { $_.Name -like '*PROMPT*' -or $_.Name -like '*PDF*' -or $_.Name -eq 'FILE:' } | Select-Object -First 1 -ExpandProperty Name) }; if (-not $port) { $port = 'FILE:' }; Add-Printer -Name $p -DriverName $d -PortName $port }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = 'NeNgi PDF'; $d = 'Microsoft Print to PDF'; $source = Get-Printer -Name $d -ErrorAction SilentlyContinue; Remove-Printer -Name $p -ErrorAction SilentlyContinue; if ($source) { Add-Printer -Name $p -DriverName $source.DriverName -PortName $source.PortName -PrintProcessor 'winprint' } else { $port = (Get-PrinterPort | Where-Object { $_.Name -like '*PROMPT*' -or $_.Name -like '*PDF*' -or $_.Name -eq 'FILE:' } | Select-Object -First 1 -ExpandProperty Name); if (-not $port) { $port = 'FILE:' }; Add-Printer -Name $p -DriverName $d -PortName $port -PrintProcessor 'winprint' }"
 
 if %ERRORLEVEL% EQU 0 (
     echo.
