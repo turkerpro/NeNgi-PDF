@@ -60,6 +60,13 @@ class TestNeNgiCore(unittest.TestCase):
         pix = doc.render_page_pixmap(0, zoom=1.0)
         self.assertGreater(pix.width(), 0)
         self.assertGreater(pix.height(), 0)
+
+        # Test DPI rendering for printing
+        qimg_dpi = doc.render_page_qimage(0, dpi=300)
+        self.assertFalse(qimg_dpi.isNull())
+        self.assertGreater(qimg_dpi.width(), pix.width())
+        self.assertGreater(qimg_dpi.height(), pix.height())
+
         doc.close()
 
     def test_diff_engine(self):

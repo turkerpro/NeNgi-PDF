@@ -166,10 +166,14 @@ class PDFDocument:
             raise IndexError(f"Page index {page_number} out of range (total: {self.page_count})")
         return self.doc[page_number]
 
-    def render_page_qimage(self, page_number: int, zoom: float = 1.0) -> QImage:
-        """Renders a page at the specified zoom level into a PyQt6 QImage."""
+    def render_page_qimage(self, page_number: int, zoom: float = 1.0, dpi: Optional[int] = None) -> QImage:
+        """Renders a page at the specified zoom level or DPI into a PyQt6 QImage."""
         page = self.get_page(page_number)
-        mat = fitz.Matrix(zoom, zoom)
+        if dpi is not None and dpi > 0:
+            eff_zoom = dpi / 72.0
+        else:
+            eff_zoom = zoom
+        mat = fitz.Matrix(eff_zoom, eff_zoom)
         pix = page.get_pixmap(matrix=mat, alpha=False)
         
         # FormatRGB888 is compatible with pix.samples
@@ -182,9 +186,9 @@ class PDFDocument:
         )
         return qimg.copy()
 
-    def render_page_pixmap(self, page_number: int, zoom: float = 1.0) -> QPixmap:
-        """Renders a page at the specified zoom level into a PyQt6 QPixmap."""
-        qimg = self.render_page_qimage(page_number, zoom)
+    def render_page_pixmap(self, page_number: int, zoom: float = 1.0, dpi: Optional[int] = None) -> QPixmap:
+        """Renders a page at the specified zoom level or DPI into a PyQt6 QPixmap."""
+        qimg = self.render_page_qimage(page_number, zoom, dpi=dpi)
         return QPixmap.fromImage(qimg)
 
     def get_page_text_words(self, page_number: int) -> List[Tuple[float, float, float, float, str, int, int, int]]:
