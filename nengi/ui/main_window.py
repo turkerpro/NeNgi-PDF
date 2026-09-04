@@ -133,6 +133,13 @@ class MainWindow(QMainWindow):
         self._merge_debounce_timer.setSingleShot(True)
         self._merge_debounce_timer.timeout.connect(self._flush_pending_merge_files)
 
+        # Virtual printer spool watcher (auto-detects documents printed to 'NeNgi PDF')
+        self._spool_timer = QTimer(self)
+        self._spool_timer.setInterval(800)
+        self._spool_timer.timeout.connect(self._check_printer_spool)
+        self._spool_timer.start()
+        QTimer.singleShot(150, self._check_printer_spool)
+
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         icon_path = os.path.join(base_dir, "resources", "app_icon.png")
         if hasattr(sys, "_MEIPASS"):
@@ -649,6 +656,67 @@ class MainWindow(QMainWindow):
         self.show()
         self.raise_()
         self.activateWindow()
+
+    def _check_printer_spool(self):
+        """Monitors virtual printer spool files, copies new documents to user's Documents, and opens them."""
+        try:
+            from nengi.core.virtual_printer import VirtualPrinterManager
+            for spool_path in VirtualPrinterManager.get_spool_candidate_paths():
+                if not os.path.exists(spool_path):
+                    continue
+                try:
+                    file_size = os.path.getsize(spool_path)
+                except OSError:
+                    continue
+
+                if file_size < 200:
+                    continue
+
+                # Test if Windows spooler has finished writing and closed the file handle
+                try:
+                    with open(spool_path, "r+b") as f:
+                        header = f.read(1024)
+                        if not header.startswith(b"%PDF"):
+                            continue
+                        f.seek(max(0, file_size - 2048))
+                        tail = f.read(2048)
+                        if b"%%EOF" not in tail:
+                            # Incomplete write, wait for next tick
+                            continue
+                        f.seek(0)
+                        content = f.read()
+                except (IOError, PermissionError, OSError):
+                    # Spooler is actively writing or file is locked
+                    continue
+
+                # Successfully read complete PDF, truncate spool file
+                try:
+                    with open(spool_path, "wb") as f:
+                        f.truncate(0)
+                except Exception:
+                    pass
+
+                # Save to user's Documents/NeNgi PDF
+                import datetime
+                docs_dir = os.path.join(os.path.expanduser("~"), "Documents", "NeNgi PDF")
+                os.makedirs(docs_dir, exist_ok=True)
+                ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                dest_path = os.path.join(docs_dir, f"Yazdirilan_Belge_{ts}.pdf")
+                with open(dest_path, "wb") as f:
+                    f.write(content)
+
+                # Open in UI
+                self.open_pdf(dest_path)
+
+                # Bring NeNgi PDF to foreground
+                self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMinimized | Qt.WindowState.WindowActive)
+                self.show()
+                self.raise_()
+                self.activateWindow()
+                self.show_status_message(f"Yazdırılan belge açıldı: {os.path.basename(dest_path)}")
+                break
+        except Exception:
+            pass
 
     def open_pdf(self, file_path: str):
         # Check if already open

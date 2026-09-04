@@ -121,7 +121,7 @@ class TestNeNgiUI(unittest.TestCase):
         self.assertIn("Test Sürüklenebilir Metin", txt)
 
     def test_draggable_stamp_widget_and_undo(self):
-        """Tests Acrobat style interactive signature box, resizing, committing and undoing."""
+        """Tests Studio style interactive signature box, resizing, committing and undoing."""
         from nengi.ui.draggable_stamp import DraggableStampWidget
         from PyQt6.QtCore import QPoint
         import tempfile
@@ -195,6 +195,31 @@ class TestNeNgiUI(unittest.TestCase):
         words = [w[4] for w in pw.doc.get_page_text_words(0)]
         self.assertTrue(any("Rotated" in w for w in words))
 
+    def test_virtual_printer_spool_watcher(self):
+        """Tests the automatic detection, ingest, and tab opening of documents printed to the spool file."""
+        import tempfile
+        from unittest.mock import patch
+        from nengi.core.virtual_printer import VirtualPrinterManager
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            test_spool = os.path.join(tmp_dir, "nengi_print.pdf")
+            with open(self.orig_pdf, "rb") as f:
+                pdf_data = f.read()
+
+            with open(test_spool, "wb") as f:
+                f.write(pdf_data)
+
+            with patch.object(VirtualPrinterManager, "get_spool_candidate_paths", return_value=[test_spool]):
+                initial_tabs = self.window.tabs.count()
+                self.window._check_printer_spool()
+                self.assertEqual(self.window.tabs.count(), initial_tabs + 1)
+                # Spool file should have been truncated
+                self.assertEqual(os.path.getsize(test_spool), 0)
+                viewer = self.window.get_current_viewer()
+                self.assertIsNotNone(viewer)
+                self.assertEqual(viewer.doc.page_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
+

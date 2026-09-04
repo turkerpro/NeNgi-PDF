@@ -516,7 +516,7 @@ class PDFDocument:
         fontname: str = "helv", fontsize: float = 11.0, color: Tuple[float, float, float] = (0, 0, 0)
     ) -> bool:
         """
-        Acrobat Pro style text insertion at point.
+        Studio style text insertion at point.
         Saves undo state and inserts text lines with full Turkish/Unicode support.
         """
         if not self.is_open:

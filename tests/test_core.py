@@ -198,10 +198,10 @@ class TestNeNgiCore(unittest.TestCase):
 
         # 6. Test insert_new_text with undo
         pt = fitz.Point(100, 200)
-        self.assertTrue(doc.insert_new_text(0, pt, "YENI_ACROBAT_METIN"))
-        self.assertIn("YENI_ACROBAT_METIN", doc.get_page(0).get_text("text"))
+        self.assertTrue(doc.insert_new_text(0, pt, "YENI_STUDIO_METIN"))
+        self.assertIn("YENI_STUDIO_METIN", doc.get_page(0).get_text("text"))
         self.assertTrue(doc.undo())
-        self.assertNotIn("YENI_ACROBAT_METIN", doc.get_page(0).get_text("text"))
+        self.assertNotIn("YENI_STUDIO_METIN", doc.get_page(0).get_text("text"))
 
         doc.close()
 

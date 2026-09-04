@@ -1,5 +1,5 @@
 """
-NeNgi PDF - Acrobat Pro Style Text & Paragraph Editor Dialog
+NeNgi PDF - Studio Style Text & Paragraph Editor Dialog
 Provides font detection badges, family/size/style selectors, color picker,
 and multi-line editing for paragraphs or new text insertion.
 """
@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 
 class TextEditorDialog(QDialog):
     """
-    Rich text editor dialog inspired by Adobe Acrobat Pro.
+    Rich text editor dialog for NeNgi PDF Studio.
     Displays detected original font styles and allows editing or adding text.
     """
 
@@ -63,7 +63,7 @@ class TextEditorDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        # 1. Detected Font Badge (Acrobat style)
+        # 1. Detected Font Badge (Studio style)
         badge_frame = QFrame()
         badge_frame.setStyleSheet("background-color: #24272D; border: 1px solid #353942; border-radius: 6px; padding: 6px 10px;")
         badge_lay = QHBoxLayout(badge_frame)

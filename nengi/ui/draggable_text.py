@@ -1,6 +1,6 @@
 """
 NeNgi PDF - Interactive Draggable Text Box
-Acrobat Pro style movable text element that allows the user to freely
+Studio style movable text element that allows the user to freely
 drag, reposition, resize, edit, and commit newly added text on the PDF canvas.
 """
 
@@ -133,7 +133,7 @@ class DraggableTextWidget(QWidget):
         self._update_text_style()
         layout.addWidget(self.lbl_content)
 
-        # Acrobat Pro Style Transparent Bounding Box
+        # Studio Style Transparent Bounding Box
         self.setStyleSheet(
             "QWidget#draggableTextBox {"
             "  background: transparent;"

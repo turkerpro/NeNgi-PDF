@@ -1,6 +1,6 @@
 """
 NeNgi PDF - Interactive Draggable & Resizable Signature / Stamp Box
-Acrobat Pro style movable and resizable signature element.
+Studio style movable and resizable signature element.
 Allows the user to freely drag, stretch/shorten, reposition, and commit signatures onto the PDF.
 """
 
@@ -180,7 +180,7 @@ class DraggableStampWidget(QWidget):
         self.resize_handle = ResizeHandle(self)
         self.resize_handle.show()
 
-        # Acrobat Pro Style Transparent Box with Dashed Border
+        # Studio Style Transparent Box with Dashed Border
         self.setStyleSheet(
             "QWidget#draggableStampBox {"
             "  background: transparent;"

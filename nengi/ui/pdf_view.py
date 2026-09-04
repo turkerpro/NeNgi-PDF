@@ -41,7 +41,7 @@ class PageRenderWidget(QWidget):
         self.stamp_image_path: Optional[str] = None
         self.highlights: List[Tuple[fitz.Rect, QColor]] = []
 
-        # Text words & Acrobat Pro style paragraph blocks
+        # Text words & Studio style paragraph blocks
         self.words: List[Tuple[float, float, float, float, str, int, int, int]] = []
         self.blocks: List[Tuple[float, float, float, float, str, int, int]] = []
         self.selected_words: List[Tuple[float, float, float, float, str, int, int, int]] = []
@@ -149,7 +149,7 @@ class PageRenderWidget(QWidget):
                 sh = (w[3] - w[1]) * self.zoom
                 painter.drawRect(QRectF(sx, sy, sw, sh))
 
-        # Draw Acrobat Pro style hovered paragraph/block bounding box
+        # Draw Studio style hovered paragraph/block bounding box
         if self.mode == "view" and self.hovered_block and not self._is_selecting_text:
             hb = self.hovered_block
             hx = hb[0] * self.zoom
@@ -288,7 +288,7 @@ class PageRenderWidget(QWidget):
             pdf_x = event.pos().x() / self.zoom
             pdf_y = event.pos().y() / self.zoom
 
-            # Prioritize paragraph block editing (Acrobat Pro style)
+            # Prioritize paragraph block editing (Studio style)
             target_block = None
             for b in self.blocks:
                 if b[0] <= pdf_x <= b[2] and b[1] <= pdf_y <= b[3]:
