@@ -61,6 +61,9 @@ class TestNeNgiCore(unittest.TestCase):
         self.assertGreater(pix.width(), 0)
         self.assertGreater(pix.height(), 0)
 
+        # Test file_name property
+        self.assertEqual(doc.file_name, os.path.basename(self.doc_a_path))
+
         # Test DPI rendering for printing
         qimg_dpi = doc.render_page_qimage(0, dpi=300)
         self.assertFalse(qimg_dpi.isNull())

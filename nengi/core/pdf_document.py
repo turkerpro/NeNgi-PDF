@@ -68,6 +68,11 @@ class PDFDocument:
         if file_path:
             self.open(file_path)
 
+    @property
+    def file_name(self) -> str:
+        """Returns the base filename of the currently loaded document."""
+        return os.path.basename(self.file_path) if self.file_path else "NeNgi_PDF_Belge.pdf"
+
     def save_state_for_undo(self):
         """Saves current document snapshot into in-memory undo stack."""
         if not self.is_open:

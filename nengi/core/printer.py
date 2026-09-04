@@ -29,7 +29,8 @@ class PDFPrinter:
 
         try:
             printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-            printer.setDocName(doc.file_name or "NeNgi_PDF_Yazdir")
+            doc_name = getattr(doc, "file_name", None) or (os.path.basename(doc.file_path) if getattr(doc, "file_path", None) else "NeNgi_PDF_Yazdir")
+            printer.setDocName(str(doc_name))
             printer.setFromTo(1, doc.page_count)
 
             dialog = QPrintDialog(printer, parent)
