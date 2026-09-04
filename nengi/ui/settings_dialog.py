@@ -16,6 +16,7 @@ from nengi.core.windows_integration import (
     open_windows_default_apps_settings, 
     is_windows
 )
+from nengi.core.virtual_printer import VirtualPrinterManager
 
 
 class SettingsDialog(QDialog):
@@ -67,6 +68,31 @@ class SettingsDialog(QDialog):
 
         lay_gen.addWidget(grp_default)
 
+        # Virtual Printer Card
+        grp_printer = QGroupBox("🖨️ NeNgi PDF Sanal Yazıcısı (Print to NeNgi PDF)")
+        lay_ptr = QVBoxLayout(grp_printer)
+        lay_ptr.setSpacing(8)
+
+        lbl_ptr_info = QLabel(
+            "Excel, Word, Chrome veya herhangi bir programdan 'Yazdır (Ctrl+P)' dediğinizde 'NeNgi PDF' yazıcısını seçerek belgeleri doğrudan PDF olarak kaydedebilirsiniz."
+        )
+        lbl_ptr_info.setWordWrap(True)
+        lbl_ptr_info.setStyleSheet("color: #CCCCCC; font-size: 12px;")
+        lay_ptr.addWidget(lbl_ptr_info)
+
+        h_ptr_btns = QHBoxLayout()
+        self.btn_install_printer = QPushButton("🖨️ NeNgi PDF Yazıcısını Kur / Aktifleştir")
+        self.btn_install_printer.setObjectName("accentButton")
+        self.btn_install_printer.clicked.connect(self._on_install_printer)
+        h_ptr_btns.addWidget(self.btn_install_printer)
+
+        self.btn_uninstall_printer = QPushButton("🗑️ Yazıcıyı Kaldır")
+        self.btn_uninstall_printer.clicked.connect(self._on_uninstall_printer)
+        h_ptr_btns.addWidget(self.btn_uninstall_printer)
+        lay_ptr.addLayout(h_ptr_btns)
+
+        lay_gen.addWidget(grp_printer)
+
         # Single Instance Card
         grp_instance = QGroupBox("📑 Sekme ve Açılış Davranışı")
         lay_inst = QVBoxLayout(grp_instance)
@@ -80,7 +106,7 @@ class SettingsDialog(QDialog):
 
         lay_gen.addWidget(grp_instance)
         lay_gen.addStretch()
-        tabs.addTab(tab_general, "Genel & Varsayılan")
+        tabs.addTab(tab_general, "Genel & Yazıcı")
 
         # ---------------- Tab 2: Görünüm & Tema ----------------
         tab_appearance = QWidget()
@@ -124,7 +150,7 @@ class SettingsDialog(QDialog):
         lbl_app_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #0078D4;")
         lay_abt.addWidget(lbl_app_title)
 
-        lbl_version = QLabel("Sürüm: 1.6.3 (Gelişmiş Canlı Katmanlar & Akıllı El Aracı)")
+        lbl_version = QLabel("Sürüm: 1.7.0 (Sanal Yazıcı Entegrasyonu & Canlı Katmanlar)")
         lbl_version.setStyleSheet("color: #AAAAAA;")
         lay_abt.addWidget(lbl_version)
 
@@ -179,6 +205,29 @@ class SettingsDialog(QDialog):
             QMessageBox.information(self, "Bilgi", "Bu kısayol Windows 10 ve Windows 11 üzerinde çalışır.")
             return
         open_windows_default_apps_settings()
+
+    def _on_install_printer(self):
+        if not is_windows():
+            QMessageBox.information(
+                self, "Bilgi",
+                "Windows sanal yazıcı entegrasyonu Windows 10 ve Windows 11 üzerinde aktiftir.\n\nKurulum yapıldığında Excel, Word, Chrome gibi tüm programların yazıcı listesinde 'NeNgi PDF' belirecektir."
+            )
+            return
+
+        ok, msg = VirtualPrinterManager.install_printer()
+        if ok:
+            QMessageBox.information(
+                self, "Başarılı",
+                f"{msg}\n\nArtık Excel, Word ve tüm programlardan 'Yazdır' diyerek 'NeNgi PDF' yazıcısını seçebilirsiniz."
+            )
+        else:
+            QMessageBox.warning(self, "Yazıcı Kurulum Hatası", msg)
+
+    def _on_uninstall_printer(self):
+        if not is_windows():
+            return
+        ok, msg = VirtualPrinterManager.uninstall_printer()
+        QMessageBox.information(self, "Bilgi", msg)
 
     def _on_theme_changed(self, index: int):
         theme_name = "dark" if index == 0 else "light"

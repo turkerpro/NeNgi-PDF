@@ -220,6 +220,14 @@ class TestNeNgiCore(unittest.TestCase):
         self.assertIn("Üü", txt)
         doc.close()
 
+    def test_virtual_printer_manager(self):
+        from nengi.core.virtual_printer import VirtualPrinterManager
+        self.assertEqual(VirtualPrinterManager.PRINTER_NAME, "NeNgi PDF")
+        self.assertEqual(VirtualPrinterManager.DRIVER_NAME, "Microsoft Print to PDF")
+        # Ensure is_printer_installed runs safely without throwing
+        res = VirtualPrinterManager.is_printer_installed()
+        self.assertIsInstance(res, bool)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,7 +7,7 @@
 Unicode true
 
 !define PRODUCT_NAME "NeNgi PDF"
-!define PRODUCT_VERSION "1.6.3"
+!define PRODUCT_VERSION "1.7.0"
 !define PRODUCT_PUBLISHER "NeNgi"
 !define PRODUCT_WEB_SITE "https://github.com/turkerpro/NeNgi-PDF"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\NeNgi_PDF.exe"
@@ -107,10 +107,13 @@ Section "MainSection" SEC01
   WriteRegStr HKCR "*\shell\NeNgiPDF.Convert\command" "" '"$INSTDIR\NeNgi_PDF.exe" --convert "%1"'
 
   ; Windows Default Apps Registration
-  WriteRegStr HKLM "Software\NeNgiPDF\Capabilities" "ApplicationDescription" "NeNgi PDF Okuyucu ve DIFF Düzenleyici"
+  WriteRegStr HKLM "Software\NeNgiPDF\Capabilities" "ApplicationDescription" "NeNgi PDF Okuyucu ve Belge Düzenleyici"
   WriteRegStr HKLM "Software\NeNgiPDF\Capabilities" "ApplicationName" "NeNgi PDF"
   WriteRegStr HKLM "Software\NeNgiPDF\Capabilities\FileAssociations" ".pdf" "NeNgiPDF.Document"
   WriteRegStr HKLM "Software\RegisteredApplications" "NeNgi PDF" "Software\NeNgiPDF\Capabilities"
+
+  ; Windows Virtual Printer ("NeNgi PDF" Yazıcısı)
+  nsExec::Exec 'powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = '\''NeNgi PDF\''; $d = '\''Microsoft Print to PDF\''; if (-not (Get-Printer -Name $p -ErrorAction SilentlyContinue)) { Add-Printer -Name $p -DriverName $d -PortName '\''PORTPROMPT:'\'' }"'
 
   ; Windows Explorer icon refresh
   System::Call 'shell32.dll::SHChangeNotify(i, i, i, i) v (0x08000000, 0, 0, 0)'
@@ -131,6 +134,9 @@ Section Uninstall
   ; Kaldırmadan önce çalışan programı kapat
   nsExec::Exec 'taskkill /F /IM NeNgi_PDF.exe'
   Sleep 500
+
+  ; Sanal yazıcıyı kaldır
+  nsExec::Exec 'powershell -NoProfile -ExecutionPolicy Bypass -Command "Remove-Printer -Name '\''NeNgi PDF'\'' -ErrorAction SilentlyContinue"'
 
   ; Kısayolları sil
   Delete "$DESKTOP\NeNgi PDF.lnk"
