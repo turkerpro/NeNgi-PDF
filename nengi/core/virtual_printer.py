@@ -46,7 +46,10 @@ class VirtualPrinterManager:
             ps_script = (
                 f"$p = '{cls.PRINTER_NAME}'; $d = '{cls.DRIVER_NAME}'; "
                 f"if (-not (Get-Printer -Name $p -ErrorAction SilentlyContinue)) {{ "
-                f"Add-Printer -Name $p -DriverName $d -PortName 'PORTPROMPT:' }}"
+                f"$port = (Get-Printer -Name $d -ErrorAction SilentlyContinue).PortName; "
+                f"if (-not $port) {{ $port = (Get-PrinterPort | Where-Object {{ $_.Name -like '*PROMPT*' -or $_.Name -like '*PDF*' -or $_.Name -eq 'FILE:' }} | Select-Object -First 1 -ExpandProperty Name) }}; "
+                f"if (-not $port) {{ $port = 'FILE:' }}; "
+                f"Add-Printer -Name $p -DriverName $d -PortName $port }}"
             )
             cmd = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ps_script]
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
