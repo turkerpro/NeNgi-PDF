@@ -139,7 +139,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("NeNgi PDF")
+        self.setWindowTitle("NeNgi PDF v1.8.0")
         self.resize(1340, 860)
         self.is_dark_mode = True
         self.recent_files: List[str] = []
