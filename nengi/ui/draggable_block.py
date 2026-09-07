@@ -18,12 +18,14 @@ class DraggableBlockWidget(QWidget):
         initial_pos: QPoint,
         pixmap: QPixmap,
         pdf_rect: fitz.Rect,
+        source_rects: list = None,
         zoom: float = 1.0,
         parent: Optional[QWidget] = None
     ):
         super().__init__(parent or page_widget)
         self.page_widget = page_widget
         self.pdf_rect = pdf_rect
+        self.source_rects = source_rects or [pdf_rect]
         self.zoom = zoom
         self._drag_start_pos = QPoint()
 
@@ -100,9 +102,10 @@ class DraggableBlockWidget(QWidget):
         # Save undo state
         doc.save_state_for_undo()
 
-        # Redact old area
+        # Redact old area(s)
         page = doc.get_page(page_idx)
-        page.add_redact_annot(self.pdf_rect, fill=(1,1,1))
+        for r in self.source_rects:
+            page.add_redact_annot(r, fill=(1,1,1))
         page.apply_redactions()
 
         # Draw to new area

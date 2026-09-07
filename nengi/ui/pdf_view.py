@@ -138,11 +138,12 @@ class PageRenderWidget(QWidget):
         from PyQt6.QtCore import QRectF
         for w in self.active_text_widgets:
             if type(w).__name__ == "DraggableBlockWidget":
-                sx = w.pdf_rect.x0 * self.zoom
-                sy = w.pdf_rect.y0 * self.zoom
-                sw = w.pdf_rect.width * self.zoom
-                sh = w.pdf_rect.height * self.zoom
-                painter.fillRect(QRectF(sx, sy, sw, sh), QBrush(QColor(255, 255, 255)))
+                for r in getattr(w, "source_rects", [w.pdf_rect]):
+                    sx = r.x0 * self.zoom
+                    sy = r.y0 * self.zoom
+                    sw = r.width * self.zoom
+                    sh = r.height * self.zoom
+                    painter.fillRect(QRectF(sx, sy, sw, sh), QBrush(QColor(255, 255, 255)))
 
         # Draw diff or search highlight overlays
         for rect, color in self.highlights:
@@ -172,8 +173,20 @@ class PageRenderWidget(QWidget):
                 sh = (w[3] - w[1]) * self.zoom
                 painter.drawRect(QRectF(sx, sy, sw, sh))
 
+        # Draw selected blocks
+        if self.mode == "view":
+            for sb in self.selected_blocks:
+                sx = sb[0] * self.zoom
+                sy = sb[1] * self.zoom
+                sw = (sb[2] - sb[0]) * self.zoom
+                sh = (sb[3] - sb[1]) * self.zoom
+                pen = QPen(QColor(0, 120, 215, 200), 1.5, Qt.PenStyle.SolidLine)
+                painter.setPen(pen)
+                painter.setBrush(QBrush(QColor(0, 120, 215, 25)))
+                painter.drawRect(QRectF(sx, sy, sw, sh))
+
         # Draw Studio style hovered paragraph/block bounding box
-        if self.mode == "view" and self.hovered_block and not self._is_selecting_text:
+        if self.mode == "view" and self.hovered_block and not self._is_selecting_text and self.hovered_block not in self.selected_blocks:
             hb = self.hovered_block
             hx = hb[0] * self.zoom
             hy = hb[1] * self.zoom
@@ -314,11 +327,28 @@ class PageRenderWidget(QWidget):
             if self.mode == "view" and self._check_form_widget_click(event.pos()):
                 return
             if self.mode in ["view", "highlight", "underline", "strikethrough"]:
+                from PyQt6.QtWidgets import QApplication
+                modifiers = QApplication.keyboardModifiers()
                 self._ensure_text_extracted()
                 self._is_selecting_text = True
                 self._drag_start = event.pos()
                 self._drag_current = event.pos()
                 self.selected_words = []
+                
+                # Handle block selection
+                if self.mode == "view":
+                    if self.hovered_block:
+                        from PyQt6.QtCore import Qt
+                        if modifiers & Qt.KeyboardModifier.ControlModifier:
+                            if self.hovered_block in self.selected_blocks:
+                                self.selected_blocks.remove(self.hovered_block)
+                            else:
+                                self.selected_blocks.append(self.hovered_block)
+                        else:
+                            if self.hovered_block not in self.selected_blocks:
+                                self.selected_blocks = [self.hovered_block]
+                    else:
+                        self.selected_blocks = []
                 self.update()
             elif self.mode in ["whiteout", "line", "arrow", "rect", "oval", "polygon", "cloud"]:
                 self._dragging = True
@@ -400,6 +430,8 @@ class PageRenderWidget(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             if self.mode in ["view", "highlight", "underline", "strikethrough"] and self._is_selecting_text:
                 self._is_selecting_text = False
+                if self.selected_words:
+                    self.selected_blocks = []
                 
                 if self.selected_words and self.mode in ["highlight", "underline", "strikethrough"]:
                     page = self.doc.get_page(self.page_idx)
@@ -585,7 +617,13 @@ class PageRenderWidget(QWidget):
         self._ensure_text_extracted()
         
         target_rect = None
-        if not self.selected_words and self.hovered_block:
+        if not self.selected_words and self.selected_blocks:
+            min_x = min(b[0] for b in self.selected_blocks)
+            min_y = min(b[1] for b in self.selected_blocks)
+            max_x = max(b[2] for b in self.selected_blocks)
+            max_y = max(b[3] for b in self.selected_blocks)
+            target_rect = fitz.Rect(min_x, min_y, max_x, max_y)
+        elif not self.selected_words and self.hovered_block:
             b = self.hovered_block
             target_rect = fitz.Rect(b[0], b[1], b[2], b[3])
         elif self.selected_words:
@@ -612,11 +650,18 @@ class PageRenderWidget(QWidget):
         qpixmap = QPixmap.fromImage(qimg)
 
         from nengi.ui.draggable_block import DraggableBlockWidget
+        source_rects = []
+        if not self.selected_words and self.selected_blocks:
+            source_rects = [fitz.Rect(b[0], b[1], b[2], b[3]) for b in self.selected_blocks]
+        else:
+            source_rects = [target_rect]
+
         box = DraggableBlockWidget(
             page_widget=self,
             initial_pos=pos,
             pixmap=qpixmap,
             pdf_rect=target_rect,
+            source_rects=source_rects,
             zoom=self.zoom,
             parent=self
         )
@@ -626,6 +671,7 @@ class PageRenderWidget(QWidget):
         box.show()
 
         self.selected_words = []
+        self.selected_blocks = []
         self._is_selecting_text = False
         self.update()
 
@@ -1001,7 +1047,7 @@ class PDFViewer(QScrollArea):
         act_edit = None
         act_move = None
         act_whiteout_sel = None
-        if target_pw and (target_pw.selected_words or target_pw.hovered_block):
+        if target_pw and (target_pw.selected_words or target_pw.selected_blocks or target_pw.hovered_block):
             act_copy = menu.addAction("📋 Seçili Metni Kopyala (Ctrl+C)")
             act_edit = menu.addAction("✏️ Seçili Metni Düzenle / Değiştir")
             act_move = menu.addAction("✂️ Seçili Metni Taşı (Serbest Sürükle)")
