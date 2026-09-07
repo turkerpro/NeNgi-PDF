@@ -6,7 +6,7 @@ drag, reposition, resize, edit, and commit newly added text on the PDF canvas.
 
 from __future__ import annotations
 from typing import Optional, Tuple, TYPE_CHECKING
-import pymupdf as fitz
+import fitz
 from PyQt6.QtCore import Qt, QPoint, pyqtSignal, QRect
 from PyQt6.QtGui import QColor, QFont, QCursor
 from PyQt6.QtWidgets import (

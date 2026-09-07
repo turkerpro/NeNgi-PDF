@@ -6,7 +6,7 @@ Manages embedded file attachments inside PDF documents (list, extract, add, dele
 from __future__ import annotations
 from typing import List, Dict, Any, Optional
 import os
-import pymupdf as fitz
+import fitz
 from nengi.core.pdf_document import PDFDocument
 
 

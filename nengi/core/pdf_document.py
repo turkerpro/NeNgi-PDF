@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import io
 from typing import List, Tuple, Dict, Any, Optional
-import pymupdf as fitz
+import fitz
 from PIL import Image
 from PyQt6.QtGui import QImage, QPixmap
 import sys

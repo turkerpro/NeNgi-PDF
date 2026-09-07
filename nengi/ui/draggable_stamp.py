@@ -7,7 +7,7 @@ Allows the user to freely drag, stretch/shorten, reposition, and commit signatur
 from __future__ import annotations
 import os
 from typing import Optional, TYPE_CHECKING
-import pymupdf as fitz
+import fitz
 from PyQt6.QtCore import Qt, QPoint, pyqtSignal, QRect, QSize
 from PyQt6.QtGui import QColor, QPixmap, QPainter, QCursor
 from PyQt6.QtWidgets import (

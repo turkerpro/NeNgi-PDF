@@ -7,7 +7,7 @@ Redaction & Sanitization, Accessibility, Attachments, and Optimization.
 import unittest
 import os
 import tempfile
-import pymupdf as fitz
+import fitz
 
 from nengi.core.pdf_document import PDFDocument
 from nengi.core.annotations import AnnotationManager

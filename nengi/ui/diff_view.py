@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QFrame, QScrollArea, QMessageBox, QFileDialog, QSizePolicy
 )
 from PyQt6.QtGui import QColor, QFont
-import pymupdf as fitz
+import fitz
 
 from nengi.core.pdf_document import PDFDocument
 from nengi.core.diff_engine import DiffEngine, DiffChangeItem, DiffHighlight

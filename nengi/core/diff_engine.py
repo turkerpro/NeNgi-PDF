@@ -9,7 +9,7 @@ from __future__ import annotations
 import difflib
 from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional, Any
-import pymupdf as fitz
+import fitz
 from .pdf_document import PDFDocument
 
 

@@ -7,7 +7,7 @@ import os
 import sys
 import tempfile
 import unittest
-import pymupdf as fitz
+import fitz
 from PIL import Image
 from PyQt6.QtWidgets import QApplication
 

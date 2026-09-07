@@ -4,7 +4,7 @@ Converts PDF to various formats (Word, Excel, PowerPoint, HTML).
 """
 import os
 import io
-import pymupdf as fitz
+import fitz
 from PIL import Image
 
 class ExportEngine:

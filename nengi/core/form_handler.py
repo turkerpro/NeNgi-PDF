@@ -5,7 +5,7 @@ Reads form fields (text boxes, checkboxes, dropdowns) and allows filling/updatin
 
 from __future__ import annotations
 from typing import List, Dict, Any, Optional
-import pymupdf as fitz
+import fitz
 from .pdf_document import PDFDocument
 
 

@@ -13,7 +13,7 @@ from PyQt6.QtGui import QKeyEvent
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 app = QApplication.instance() or QApplication(sys.argv)
 
-import pymupdf as fitz
+import fitz
 from nengi.ui.main_window import MainWindow
 from nengi.ui.diff_view import DiffView
 from nengi.core.pdf_document import PDFDocument

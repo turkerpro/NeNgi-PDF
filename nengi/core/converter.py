@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from typing import List
 from PIL import Image
-import pymupdf as fitz
+import fitz
 from .pdf_document import PDFDocument
 
 

@@ -6,7 +6,7 @@ radio, dropdown, listbox, button, signature) using PyMuPDF Widget API.
 
 from __future__ import annotations
 from typing import List, Dict, Any, Optional, Tuple
-import pymupdf as fitz
+import fitz
 from .pdf_document import PDFDocument
 
 

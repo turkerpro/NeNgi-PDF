@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QPixmap, QImage, QFont
 from PyQt6.QtCore import Qt
 
-import pymupdf as fitz
+import fitz
 from nengi.core.pdf_document import PDFDocument
 
 

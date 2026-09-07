@@ -7,7 +7,7 @@ using customizable scale ratios and unit conversion (mm, cm, m, inch, pt).
 from __future__ import annotations
 from typing import List, Tuple, Dict, Any, Optional
 import math
-import pymupdf as fitz
+import fitz
 from nengi.core.pdf_document import PDFDocument
 
 

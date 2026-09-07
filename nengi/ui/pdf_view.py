@@ -17,7 +17,7 @@ from PyQt6.QtGui import (
     QPainter, QColor, QPen, QBrush, QPixmap, QMouseEvent, 
     QWheelEvent, QPaintEvent, QCursor, QFont, QAction, QKeyEvent
 )
-import pymupdf as fitz
+import fitz
 
 from nengi.core.pdf_document import PDFDocument
 from nengi.core.image_roundtrip import ImageRoundtripHandler

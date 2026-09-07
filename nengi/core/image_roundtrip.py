@@ -13,7 +13,7 @@ import tempfile
 import time
 from typing import Optional, Dict, Any
 from PyQt6.QtCore import QObject, pyqtSignal, QFileSystemWatcher, QTimer
-import pymupdf as fitz
+import fitz
 from .pdf_document import PDFDocument
 
 

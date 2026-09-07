@@ -6,7 +6,7 @@ alternative text, language specification, form field descriptions, and reading o
 
 from __future__ import annotations
 from typing import List, Dict, Any
-import pymupdf as fitz
+import fitz
 from nengi.core.pdf_document import PDFDocument
 
 

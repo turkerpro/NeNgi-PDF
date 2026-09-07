@@ -7,7 +7,7 @@ Phone Numbers, Emails, IBANs), hidden metadata, and attachments.
 from __future__ import annotations
 from typing import List, Dict, Any, Tuple, Optional
 import re
-import pymupdf as fitz
+import fitz
 from nengi.core.pdf_document import PDFDocument
 
 

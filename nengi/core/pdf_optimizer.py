@@ -2,7 +2,7 @@
 NeNgi PDF - PDF Optimizer
 Analyzes and optimizes PDF files for size and performance.
 """
-import pymupdf as fitz
+import fitz
 import os
 
 class PDFOptimizer:

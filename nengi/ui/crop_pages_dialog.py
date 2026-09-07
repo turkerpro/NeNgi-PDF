@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
     QComboBox, QSpinBox, QPushButton, QGroupBox
 )
-import pymupdf as fitz
+import fitz
 
 class CropPagesDialog(QDialog):
     def __init__(self, current_rect=None, parent=None):

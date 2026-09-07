@@ -5,7 +5,7 @@ Supports password protection (AES-256) and removing protection.
 
 from __future__ import annotations
 from typing import Optional
-import pymupdf as fitz
+import fitz
 from .pdf_document import PDFDocument
 
 

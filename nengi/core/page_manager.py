@@ -5,7 +5,7 @@ Reordering, rotating, deleting, inserting blank/external pages, merging, and spl
 
 from __future__ import annotations
 from typing import List, Optional
-import pymupdf as fitz
+import fitz
 from .pdf_document import PDFDocument
 
 

@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QFrame
 )
-import pymupdf as fitz
+import fitz
 from nengi.core.converter import FormatConverter
 
 

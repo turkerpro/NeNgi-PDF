@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
     QFrame
 )
 from PyQt6.QtGui import QIcon, QAction, QKeySequence, QPixmap, QPainter, QFont
-import pymupdf as fitz
+import fitz
 
 from nengi.core.pdf_document import PDFDocument
 from nengi.core.page_manager import PageManager
@@ -139,14 +139,19 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        from PyQt6.QtCore import QSettings
+        self.settings = QSettings('NeNgi', 'NeNgiPDF')
+
         self.setWindowTitle("NeNgi PDF v1.8.1")
         self.resize(1340, 860)
-        self.is_dark_mode = True
+        self.is_dark_mode = self.settings.value("theme", "dark") == "dark"
         self.recent_files: List[str] = []
-        self.tray_agent = None
-        self._is_running_ocr = False
 
+        self.doc = None
+        self.current_page_idx = 0
+        self.tray_agent = None
         self._pending_merge_files: List[str] = []
+        
         self._merge_debounce_timer = QTimer(self)
         self._merge_debounce_timer.setSingleShot(True)
         self._merge_debounce_timer.timeout.connect(self._flush_pending_merge_files)
@@ -166,10 +171,7 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(QIcon(icon_path))
 
         self._init_ui()
-        self.apply_theme(DARK_THEME)
-        
-        from PyQt6.QtCore import QSettings
-        self.settings = QSettings('NeNgi', 'NeNgiPDF')
+        self.apply_theme(DARK_THEME if self.is_dark_mode else LIGHT_THEME)
         self._load_recent_files()
 
     def _load_recent_files(self):
