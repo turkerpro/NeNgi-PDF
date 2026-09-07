@@ -853,7 +853,8 @@ class MainWindow(QMainWindow):
             view.set_current_property(prop, value)
 
     def _on_floating_tool_changed(self, tool_id: str):
-        if tool_id in ["view", "text", "whiteout"]:
+        if tool_id in ["view", "text", "whiteout", "highlight", "underline", "strikethrough", 
+                       "line", "arrow", "rect", "oval", "polygon", "cloud", "draw", "sticky_note", "stamp"]:
             self._set_viewer_tool(tool_id)
         elif tool_id == "edit_text":
             self._edit_selected_text_trigger()
