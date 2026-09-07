@@ -339,7 +339,6 @@ class PageRenderWidget(QWidget):
                 # Handle block selection
                 if self.mode == "view":
                     if self.hovered_block:
-                        from PyQt6.QtCore import Qt
                         if modifiers & Qt.KeyboardModifier.ControlModifier:
                             if self.hovered_block in self.selected_blocks:
                                 self.selected_blocks.remove(self.hovered_block)
