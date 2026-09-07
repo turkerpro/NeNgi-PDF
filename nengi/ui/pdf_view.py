@@ -20,6 +20,7 @@ import pymupdf as fitz
 
 from nengi.core.pdf_document import PDFDocument
 from nengi.core.image_roundtrip import ImageRoundtripHandler
+from nengi.core.annotations import AnnotationManager
 from nengi.ui.text_editor_dialog import TextEditorDialog
 
 
@@ -38,8 +39,18 @@ class PageRenderWidget(QWidget):
         self.zoom = zoom
         self.mode = "view"  # "view", "whiteout", "text", "stamp"
         
+        
         self.stamp_image_path: Optional[str] = None
         self.highlights: List[Tuple[fitz.Rect, QColor]] = []
+        
+        self.current_color = (1, 1, 0)
+        self.current_opacity = 0.5
+        self.current_width = 1.5
+        self.current_stamp_name = "Taslak"
+        
+        self._ink_paths = []
+        self._current_ink_path = []
+
 
         # Text words & Studio style paragraph blocks
         self.words: List[Tuple[float, float, float, float, str, int, int, int]] = []
@@ -168,7 +179,33 @@ class PageRenderWidget(QWidget):
             painter.setBrush(QBrush(QColor(0, 120, 215, 30)))
             painter.drawRect(QRect(self._drag_start, self._drag_current).normalized())
 
-        # Draw active whiteout rectangle preview while dragging
+        
+        if self.mode == "whiteout" and self._dragging:
+            pen = QPen(QColor(0, 120, 212), 1.5, Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(QBrush(QColor(255, 255, 255, 200)))
+            rect = QRect(self._drag_start, self._drag_current).normalized()
+            painter.drawRect(rect)
+            
+        # Draw active shapes
+        if self._dragging and self.mode in ['line', 'arrow', 'rect', 'oval']:
+            pen = QPen(QColor(int(self.current_color[0]*255), int(self.current_color[1]*255), int(self.current_color[2]*255)), self.current_width * self.zoom)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            if self.mode == 'line' or self.mode == 'arrow':
+                painter.drawLine(self._drag_start, self._drag_current)
+            elif self.mode == 'rect':
+                painter.drawRect(QRect(self._drag_start, self._drag_current).normalized())
+            elif self.mode == 'oval':
+                painter.drawEllipse(QRect(self._drag_start, self._drag_current).normalized())
+                
+        # Draw ink
+        if self.mode == 'draw' and self._current_ink_path:
+            pen = QPen(QColor(int(self.current_color[0]*255), int(self.current_color[1]*255), int(self.current_color[2]*255)), self.current_width * self.zoom)
+            painter.setPen(pen)
+            for i in range(len(self._current_ink_path) - 1):
+                painter.drawLine(self._current_ink_path[i], self._current_ink_path[i+1])
+
         if self.mode == "whiteout" and self._dragging:
             pen = QPen(QColor(0, 120, 212), 1.5, Qt.PenStyle.DashLine)
             painter.setPen(pen)
@@ -194,24 +231,113 @@ class PageRenderWidget(QWidget):
                 painter.drawRect(gx, gy, ghost_pix.width(), ghost_pix.height())
                 painter.setOpacity(1.0)
 
+    def _check_form_widget_click(self, pos: QPoint) -> bool:
+        """Checks if a click intersects with an interactive form widget and handles it."""
+        if not self.doc or not self.doc.is_open:
+            return False
+        page = self.doc.get_page(self.page_idx)
+        click_pt = fitz.Point(pos.x() / self.zoom, pos.y() / self.zoom)
+
+        for w in page.widgets():
+            if w.rect.contains(click_pt):
+                if w.field_type == fitz.PDF_WIDGET_TYPE_TEXT:
+                    val, ok = QInputDialog.getText(
+                        self, f"Form Alanı: {w.field_name}",
+                        f"{getattr(w, 'field_label', '') or w.field_name}:",
+                        QLineEdit.EchoMode.Normal, w.field_value or ""
+                    )
+                    if ok:
+                        self.doc.save_state_for_undo()
+                        w.field_value = val
+                        w.update()
+                        self.doc.is_modified = True
+                        self.render_cache()
+                        self.update()
+                        self.page_modified.emit()
+                    return True
+
+                elif w.field_type == fitz.PDF_WIDGET_TYPE_CHECKBOX:
+                    self.doc.save_state_for_undo()
+                    w.field_value = "Off" if w.field_value in ("Yes", "On", "true", "True") else "Yes"
+                    w.update()
+                    self.doc.is_modified = True
+                    self.render_cache()
+                    self.update()
+                    self.page_modified.emit()
+                    return True
+
+                elif w.field_type == fitz.PDF_WIDGET_TYPE_RADIOBUTTON:
+                    self.doc.save_state_for_undo()
+                    w.field_value = "Yes"
+                    w.update()
+                    self.doc.is_modified = True
+                    self.render_cache()
+                    self.update()
+                    self.page_modified.emit()
+                    return True
+
+                elif w.field_type in (fitz.PDF_WIDGET_TYPE_COMBOBOX, fitz.PDF_WIDGET_TYPE_LISTBOX):
+                    choices = getattr(w, "choice_values", [])
+                    if choices:
+                        menu = QMenu(self)
+                        for choice in choices:
+                            act = menu.addAction(str(choice))
+                            act.triggered.connect(lambda chk, c=choice, widget=w: self._set_widget_choice(widget, c))
+                        menu.exec(self.mapToGlobal(pos))
+                    return True
+
+        return False
+
+    def _set_widget_choice(self, widget: fitz.Widget, choice: str):
+        self.doc.save_state_for_undo()
+        widget.field_value = choice
+        widget.update()
+        self.doc.is_modified = True
+        self.render_cache()
+        self.update()
+        self.page_modified.emit()
+
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
-            if self.mode == "view":
+            if self.mode == "view" and self._check_form_widget_click(event.pos()):
+                return
+            if self.mode in ["view", "highlight", "underline", "strikethrough"]:
                 self._ensure_text_extracted()
                 self._is_selecting_text = True
                 self._drag_start = event.pos()
                 self._drag_current = event.pos()
                 self.selected_words = []
                 self.update()
-            elif self.mode == "whiteout":
+            elif self.mode in ["whiteout", "line", "arrow", "rect", "oval", "polygon", "cloud"]:
                 self._dragging = True
                 self._drag_start = event.pos()
                 self._drag_current = event.pos()
+                self.update()
+            elif self.mode == "draw":
+                self._dragging = True
+                self._current_ink_path = [event.pos()]
                 self.update()
             elif self.mode == "text":
                 self._prompt_add_text(event.pos())
             elif self.mode == "stamp" and self.stamp_image_path:
                 self._apply_stamp(event.pos())
+            elif self.mode == "stamp_preset":
+                pdf_x = event.pos().x() / self.zoom
+                pdf_y = event.pos().y() / self.zoom
+                rect = fitz.Rect(pdf_x, pdf_y, pdf_x + 100, pdf_y + 40)
+                AnnotationManager.add_stamp(self.doc.get_page(self.page_idx), rect, self.current_stamp_name)
+                self.render_cache()
+                self.update()
+                self.page_modified.emit()
+            elif self.mode == "sticky_note":
+                pdf_x = event.pos().x() / self.zoom
+                pdf_y = event.pos().y() / self.zoom
+                text, ok = QInputDialog.getText(self, "Not Ekle", "Notunuzu yazın:")
+                if ok and text:
+                    AnnotationManager.add_sticky_note(self.doc.get_page(self.page_idx), fitz.Point(pdf_x, pdf_y), text, color=self.current_color)
+                    self.render_cache()
+                    self.update()
+                    self.page_modified.emit()
 
     def mouseMoveEvent(self, event: QMouseEvent):
         if self.mode == "stamp":
@@ -219,9 +345,24 @@ class PageRenderWidget(QWidget):
             self.update()
             return
 
-        if self.mode == "view":
+        if self.mode in ["view", "highlight", "underline", "strikethrough"]:
             self._ensure_text_extracted()
             if self._is_selecting_text:
+                self._drag_current = event.pos()
+                sel_rect = QRect(self._drag_start, self._drag_current).normalized()
+                pdf_sel = fitz.Rect(
+                    sel_rect.left() / self.zoom,
+                    sel_rect.top() / self.zoom,
+                    sel_rect.right() / self.zoom,
+                    sel_rect.bottom() / self.zoom
+                )
+                self.selected_words = [
+                    w for w in self.words 
+                    if fitz.Rect(w[0], w[1], w[2], w[3]).intersects(pdf_sel)
+                ]
+                self.update()
+            elif self.mode == "view":
+                
                 self._drag_current = event.pos()
                 sel_rect = QRect(self._drag_start, self._drag_current).normalized()
                 pdf_sel = fitz.Rect(
@@ -251,30 +392,70 @@ class PageRenderWidget(QWidget):
                 if self.hovered_block != prev_b:
                     self.update()
 
-        elif self._dragging and self.mode == "whiteout":
+        elif self._dragging and self.mode in ["whiteout", "line", "arrow", "rect", "oval", "polygon", "cloud"]:
             self._drag_current = event.pos()
+            self.update()
+        elif self._dragging and self.mode == "draw":
+            self._current_ink_path.append(event.pos())
             self.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
-            if self.mode == "view" and self._is_selecting_text:
+            if self.mode in ["view", "highlight", "underline", "strikethrough"] and self._is_selecting_text:
                 self._is_selecting_text = False
-                self.update()
-            elif self._dragging and self.mode == "whiteout":
-                self._dragging = False
-                rect = QRect(self._drag_start, event.pos()).normalized()
-                if rect.width() > 4 and rect.height() > 4:
-                    pdf_rect = fitz.Rect(
-                        rect.left() / self.zoom,
-                        rect.top() / self.zoom,
-                        rect.right() / self.zoom,
-                        rect.bottom() / self.zoom
-                    )
-                    self.doc.whiteout_area(self.page_idx, pdf_rect)
+                
+                if self.selected_words and self.mode in ["highlight", "underline", "strikethrough"]:
+                    page = self.doc.get_page(self.page_idx)
+                    quads = []
+                    for w in self.selected_words:
+                        rect = fitz.Rect(w[0], w[1], w[2], w[3])
+                        quads.append(rect.quad)
+                    
+                    if self.mode == "highlight":
+                        AnnotationManager.add_highlight(page, quads, color=self.current_color, opacity=self.current_opacity)
+                    elif self.mode == "underline":
+                        AnnotationManager.add_underline(page, quads, color=self.current_color)
+                    elif self.mode == "strikethrough":
+                        AnnotationManager.add_strikethrough(page, quads, color=self.current_color)
+                        
+                    self.selected_words = []
                     self.render_cache()
-                    self.update()
                     self.page_modified.emit()
+                    
                 self.update()
+            elif self._dragging and self.mode in ["whiteout", "line", "arrow", "rect", "oval", "polygon", "cloud"]:
+                self._dragging = False
+                p1 = fitz.Point(self._drag_start.x() / self.zoom, self._drag_start.y() / self.zoom)
+                p2 = fitz.Point(event.pos().x() / self.zoom, event.pos().y() / self.zoom)
+                rect = fitz.Rect(p1, p2).normalize()
+                
+                page = self.doc.get_page(self.page_idx)
+                
+                if self.mode == "whiteout" and rect.width > 4 and rect.height > 4:
+                    self.doc.whiteout_area(self.page_idx, rect)
+                elif self.mode == "line":
+                    AnnotationManager.add_line(page, p1, p2, color=self.current_color, width=self.current_width)
+                elif self.mode == "arrow":
+                    AnnotationManager.add_line(page, p1, p2, color=self.current_color, width=self.current_width, end_style=fitz.PDF_ANNOT_LE_CLOSED_ARROW)
+                elif self.mode == "rect":
+                    AnnotationManager.add_rect(page, rect, color=self.current_color, width=self.current_width)
+                elif self.mode == "oval":
+                    AnnotationManager.add_circle(page, rect, color=self.current_color, width=self.current_width)
+                    
+                self.render_cache()
+                self.update()
+                self.page_modified.emit()
+            elif self._dragging and self.mode == "draw":
+                self._dragging = False
+                if len(self._current_ink_path) > 1:
+                    page = self.doc.get_page(self.page_idx)
+                    pts = [[fitz.Point(p.x() / self.zoom, p.y() / self.zoom) for p in self._current_ink_path]]
+                    AnnotationManager.add_ink(page, pts, color=self.current_color, width=self.current_width)
+                    self.render_cache()
+                    self.page_modified.emit()
+                self._current_ink_path = []
+                self.update()
+
 
     def leaveEvent(self, event):
         self.hovered_block = None
@@ -477,6 +658,9 @@ class PDFViewer(QScrollArea):
         self.zoom = 1.2
         self.current_mode = "view"
         self.stamp_image_path: Optional[str] = None
+        self.page_layout_mode = 'continuous'
+        self._history = []
+        self._history_idx = -1
         
         self.roundtrip_handler = ImageRoundtripHandler(self)
         self.roundtrip_handler.image_updated.connect(self._on_external_image_updated)
@@ -525,25 +709,88 @@ class PDFViewer(QScrollArea):
             pw.page_modified.connect(self.document_modified)
             pw.installEventFilter(self)
             
-            # Subtle card shadow for modern look
             shadow = QGraphicsDropShadowEffect(pw)
             shadow.setBlurRadius(15)
             shadow.setColor(QColor(0, 0, 0, 80))
             shadow.setOffset(0, 4)
             pw.setGraphicsEffect(shadow)
 
-            self.layout_pages.addWidget(pw)
             self.page_widgets.append(pw)
 
+        self._apply_page_layout()
+        self._add_to_history(0)
         self.page_changed.emit(1, self.doc.page_count)
         self.status_message.emit(f"Belge yüklendi: {self.doc.page_count} sayfa")
 
     def clear_pages(self):
         """Removes all page widgets from view."""
         for pw in self.page_widgets:
-            self.layout_pages.removeWidget(pw)
+            if pw.parentWidget():
+                pw.setParent(None)
             pw.deleteLater()
+        
+        while self.layout_pages.count():
+            item = self.layout_pages.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                while item.layout().count():
+                    sub = item.layout().takeAt(0)
+                    if sub.widget(): sub.widget().deleteLater()
         self.page_widgets.clear()
+
+    def _apply_page_layout(self):
+        if not self.page_widgets: return
+        
+        while self.layout_pages.count():
+            item = self.layout_pages.takeAt(0)
+            if item.widget():
+                item.widget().hide()
+            elif item.layout():
+                while item.layout().count():
+                    sub = item.layout().takeAt(0)
+                    if sub.widget(): sub.widget().hide()
+
+        if self.page_layout_mode == 'single':
+            pw = self.page_widgets[self.current_page_idx]
+            pw.show()
+            self.layout_pages.addWidget(pw)
+        elif self.page_layout_mode == 'two_page':
+            h_layout = QHBoxLayout()
+            h_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            p1 = self.current_page_idx
+            p2 = p1 + 1 if p1 % 2 == 0 else p1
+            p1 = p2 - 1
+            if 0 <= p1 < len(self.page_widgets):
+                w1 = self.page_widgets[p1]
+                w1.show()
+                h_layout.addWidget(w1)
+            if p2 < len(self.page_widgets):
+                w2 = self.page_widgets[p2]
+                w2.show()
+                h_layout.addWidget(w2)
+            self.layout_pages.addLayout(h_layout)
+        elif self.page_layout_mode == 'two_page_continuous':
+            for i in range(0, len(self.page_widgets), 2):
+                h_layout = QHBoxLayout()
+                h_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                w1 = self.page_widgets[i]
+                w1.show()
+                h_layout.addWidget(w1)
+                if i + 1 < len(self.page_widgets):
+                    w2 = self.page_widgets[i+1]
+                    w2.show()
+                    h_layout.addWidget(w2)
+                self.layout_pages.addLayout(h_layout)
+        else: # continuous
+            for pw in self.page_widgets:
+                pw.show()
+                self.layout_pages.addWidget(pw)
+
+    def set_page_layout(self, mode: str):
+        if mode in ['continuous', 'single', 'two_page', 'two_page_continuous']:
+            self.page_layout_mode = mode
+            self._apply_page_layout()
 
     def set_zoom(self, zoom: float):
         """Clamps and updates zoom level."""
@@ -560,6 +807,24 @@ class PDFViewer(QScrollArea):
         self.set_zoom(self.zoom - 0.15)
 
     def reset_zoom(self):
+        self.set_zoom(1.0)
+        
+    def zoom_fit_page(self):
+        if not self.page_widgets or not self.doc: return
+        view_rect = self.viewport().rect()
+        page_rect = self.doc.get_page(self.current_page_idx).rect
+        zx = (view_rect.width() - 40) / page_rect.width
+        zy = (view_rect.height() - 40) / page_rect.height
+        self.set_zoom(min(zx, zy))
+
+    def zoom_fit_width(self):
+        if not self.page_widgets or not self.doc: return
+        view_rect = self.viewport().rect()
+        page_rect = self.doc.get_page(self.current_page_idx).rect
+        zx = (view_rect.width() - 50) / page_rect.width
+        self.set_zoom(zx)
+
+    def zoom_actual_size(self):
         self.set_zoom(1.0)
 
     def set_tool_mode(self, mode: str, stamp_path: Optional[str] = None):
@@ -601,9 +866,30 @@ class PDFViewer(QScrollArea):
             self.current_page_idx = page_idx
             self.page_changed.emit(page_idx + 1, len(self.page_widgets))
 
-    def go_to_page(self, page_idx: int):
+    def _add_to_history(self, page_idx: int):
+        if not self._history or self._history[self._history_idx] != page_idx:
+            self._history = self._history[:self._history_idx+1]
+            self._history.append(page_idx)
+            self._history_idx = len(self._history) - 1
+
+    def go_back(self):
+        if self._history_idx > 0:
+            self._history_idx -= 1
+            self.go_to_page(self._history[self._history_idx], record_history=False)
+
+    def go_forward(self):
+        if self._history_idx < len(self._history) - 1:
+            self._history_idx += 1
+            self.go_to_page(self._history[self._history_idx], record_history=False)
+
+    def go_to_page(self, page_idx: int, record_history: bool = True):
         """Navigates to specific page."""
+        self.current_page_idx = page_idx
+        if self.page_layout_mode in ['single', 'two_page']:
+            self._apply_page_layout()
         self.scroll_to_page(page_idx)
+        if record_history:
+            self._add_to_history(page_idx)
 
     def refresh_page(self, page_idx: int):
         """Forces re-render of a specific page widget."""

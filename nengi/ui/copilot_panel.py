@@ -74,6 +74,13 @@ class CopilotPanel(QWidget):
         self._add_action_card(layout, "diff", "Açık Sekmelerle Karşılaştır (DIFF)", "diff")
         self._add_action_card(layout, "pages", "Birden Çok Dosyayı Birleştir", "merge")
         self._add_action_card(layout, "settings", "Belgeyi Parola ile Şifrele", "protect")
+        self._add_action_card(layout, "text_add", "Üstbilgi & Altbilgi Ekle", "header_footer")
+        self._add_action_card(layout, "stamp", "Filigran Ekle", "watermark")
+        self._add_action_card(layout, "rect", "Sayfaları Kırp", "crop")
+        self._add_action_card(layout, "pages", "Belgeyi Böl", "split")
+        self._add_action_card(layout, "save", "Dışa Aktar", "export")
+        self._add_action_card(layout, "settings", "PDF'i Optimize Et", "optimize")
+
 
         # 4. Message & Activity Area (Scrollable)
         self.msg_area = QScrollArea()
@@ -133,7 +140,7 @@ class CopilotPanel(QWidget):
             "  background-color: #26292E; border-color: #0078D4; color: #FFFFFF;"
             "}"
         )
-        btn.clicked.connect(lambda: self.action_requested.emit(action_key))
+        btn.clicked.connect(lambda: self.action_triggered.emit(action_key))
         self._action_buttons.append((btn, icon_name))
         layout.addWidget(btn)
 

@@ -70,3 +70,102 @@ class PageManager:
         except Exception as e:
             print(f"Extract error: {e}")
             return False
+
+    @staticmethod
+    def split_document(doc: PDFDocument, mode: str, value: Any, output_dir: str, prefix: str = 'split') -> bool:
+        """Splits PDF into multiple files.
+        mode can be: 'page_count' (value=int), 'file_size' (value=MB), 'bookmarks' (value=None)
+        """
+        import os
+        if not doc.is_open:
+            return False
+        
+        try:
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+                
+            total_pages = doc.page_count
+            
+            if mode == 'page_count':
+                pages_per_file = int(value)
+                if pages_per_file <= 0:
+                    return False
+                    
+                file_idx = 1
+                for start_page in range(0, total_pages, pages_per_file):
+                    end_page = min(start_page + pages_per_file - 1, total_pages - 1)
+                    new_doc = fitz.open()
+                    new_doc.insert_pdf(doc.doc, from_page=start_page, to_page=end_page)
+                    out_path = os.path.join(output_dir, f"{prefix}_{file_idx}.pdf")
+                    new_doc.save(out_path, garbage=3, deflate=True)
+                    new_doc.close()
+                    file_idx += 1
+                return True
+                
+            elif mode == 'file_size':
+                # Splitting by file size is complex, usually involves binary search or estimating page size.
+                # A basic implementation could just split page by page and check size, but that's slow.
+                # We'll do a simple estimation here: (doc_size / total_pages)
+                max_bytes = float(value) * 1024 * 1024
+                
+                start_page = 0
+                file_idx = 1
+                
+                while start_page < total_pages:
+                    new_doc = fitz.open()
+                    current_size = 0
+                    added = False
+                    for p in range(start_page, total_pages):
+                        # Approximate size: save memory doc and check len
+                        temp_doc = fitz.open()
+                        temp_doc.insert_pdf(doc.doc, from_page=p, to_page=p)
+                        bz = temp_doc.tobytes()
+                        page_size = len(bz)
+                        temp_doc.close()
+                        
+                        if current_size + page_size > max_bytes and added:
+                            break
+                        
+                        new_doc.insert_pdf(doc.doc, from_page=p, to_page=p)
+                        current_size += page_size
+                        start_page = p + 1
+                        added = True
+                    
+                    out_path = os.path.join(output_dir, f"{prefix}_{file_idx}.pdf")
+                    new_doc.save(out_path, garbage=3, deflate=True)
+                    new_doc.close()
+                    file_idx += 1
+                
+                return True
+                
+            elif mode == 'bookmarks':
+                # Split by top-level bookmarks
+                toc = doc.doc.get_toc(simple=False)
+                if not toc:
+                    return False
+                
+                bookmarks = [t for t in toc if t[0] == 1] # Level 1
+                if not bookmarks:
+                    return False
+                    
+                file_idx = 1
+                for i, b in enumerate(bookmarks):
+                    start_page = b[2] - 1
+                    end_page = bookmarks[i+1][2] - 2 if i + 1 < len(bookmarks) else total_pages - 1
+                    if start_page > end_page or start_page < 0:
+                        continue
+                        
+                    new_doc = fitz.open()
+                    new_doc.insert_pdf(doc.doc, from_page=start_page, to_page=end_page)
+                    out_path = os.path.join(output_dir, f"{prefix}_{file_idx}.pdf")
+                    new_doc.save(out_path, garbage=3, deflate=True)
+                    new_doc.close()
+                    file_idx += 1
+                
+                return True
+                
+            return False
+        except Exception as e:
+            print(f"Split error: {e}")
+            return False
+

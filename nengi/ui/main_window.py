@@ -37,11 +37,29 @@ from nengi.ui.page_manager_dialog import PageManagerDialog
 from nengi.ui.settings_dialog import SettingsDialog
 from nengi.ui.merge_dialog import MergeFilesDialog
 from nengi.ui.navigation_rail import NavigationRail
-from nengi.ui.floating_toolbar import FloatingPillToolbar
+from nengi.ui.annotation_toolbar import AnnotationToolbar
+from nengi.ui.comments_panel import CommentsPanel
 from nengi.ui.copilot_panel import CopilotPanel
+from nengi.ui.bookmarks_panel import BookmarksPanel
 from nengi.ui.styles import DARK_THEME, LIGHT_THEME
 from nengi.ui.icons import get_svg_icon
 
+from nengi.ui.header_footer_dialog import HeaderFooterDialog
+from nengi.ui.watermark_dialog import WatermarkDialog
+from nengi.ui.crop_pages_dialog import CropPagesDialog
+from nengi.ui.split_document_dialog import SplitDocumentDialog
+from nengi.ui.export_dialog import ExportDialog
+from nengi.ui.optimizer_dialog import OptimizerDialog
+from nengi.core.export_engine import ExportEngine
+from nengi.core.pdf_optimizer import PDFOptimizer
+from nengi.ui.form_designer_dialog import FormDesignerDialog
+from nengi.ui.form_data_dialog import FormDataDialog
+from nengi.ui.redaction_dialog import SearchAndRedactDialog, SanitizeDocumentDialog
+from nengi.ui.accessibility_dialog import AccessibilityDialog
+from nengi.ui.action_wizard_dialog import ActionWizardDialog
+from nengi.ui.ocr_correction_dialog import OCRCorrectionDialog
+from nengi.ui.measurement_dialog import MeasurementScaleDialog
+from nengi.ui.attachments_panel import AttachmentsPanel
 
 class OpenTabsDiffDialog(QDialog):
     """Dialog allowing user to choose which two open tabs to compare with DIFF."""
@@ -149,6 +167,25 @@ class MainWindow(QMainWindow):
 
         self._init_ui()
         self.apply_theme(DARK_THEME)
+        
+        from PyQt6.QtCore import QSettings
+        self.settings = QSettings('NeNgi', 'NeNgiPDF')
+        self._load_recent_files()
+
+    def _load_recent_files(self):
+        recent = self.settings.value("recent_files", [])
+        self.recent_files = [f for f in recent if os.path.exists(f)]
+
+    def _save_recent_files(self):
+        self.settings.setValue("recent_files", self.recent_files)
+
+    def _add_to_recent_files(self, file_path: str):
+        if file_path in self.recent_files:
+            self.recent_files.remove(file_path)
+        self.recent_files.insert(0, file_path)
+        if len(self.recent_files) > 20:
+            self.recent_files = self.recent_files[:20]
+        self._save_recent_files()
 
     def _init_ui(self):
         root_widget = QWidget()
@@ -157,8 +194,8 @@ class MainWindow(QMainWindow):
         root_layout.setSpacing(0)
 
         # 1. Top Global Header Bar
-        header = self._create_header()
-        root_layout.addWidget(header, 0)
+        self.header = self._create_header()
+        root_layout.addWidget(self.header, 0)
 
         # 2. Main Central Splitter (Left Rail + Center Canvas + Right Copilot)
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -180,17 +217,274 @@ class MainWindow(QMainWindow):
         self.copilot_panel.query_submitted.connect(self._on_copilot_query)
         self.main_splitter.addWidget(self.copilot_panel)
 
-        self.main_splitter.setSizes([220, 820, 300])
+        # 2d. Right Comments Panel
+        self.comments_panel = CommentsPanel()
+        self.comments_panel.annotation_clicked.connect(self._on_comment_clicked)
+        self.main_splitter.addWidget(self.comments_panel)
+        self.comments_panel.hide()
+
+        self.main_splitter.setSizes([220, 820, 300, 0])
         root_layout.addWidget(self.main_splitter, 1)
 
         # 3. Bottom Footer (Pagination & Zoom)
-        footer = self._create_footer()
-        root_layout.addWidget(footer, 0)
+        self.footer = self._create_footer()
+        root_layout.addWidget(self.footer, 0)
 
         self.setCentralWidget(root_widget)
 
+        # Reading mode HUD overlay
+        self.reading_hud = QFrame(self)
+        self.reading_hud.setObjectName("readingHud")
+        self.reading_hud.setStyleSheet("background-color: rgba(30, 30, 30, 200); border-radius: 20px; color: white;")
+        self.reading_hud.setFixedSize(200, 40)
+        hud_layout = QHBoxLayout(self.reading_hud)
+        self.lbl_hud_page = QLabel("Sayfa: -")
+        self.lbl_hud_page.setStyleSheet("color: white;")
+        hud_layout.addWidget(self.lbl_hud_page)
+        self.reading_hud.setVisible(False)
+        self.reading_hud.raise_()
+
         # Keyboard shortcuts
         self._setup_shortcuts()
+
+        # Mouse tracking for HUD
+        self.setMouseTracking(True)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover)
+
+        # Annotations shortcuts
+        from PyQt6.QtGui import QShortcut
+        QShortcut(QKeySequence("U"), self).activated.connect(lambda: self.floating_toolbar._tool_clicked("highlight"))
+        QShortcut(QKeySequence("S"), self).activated.connect(lambda: self.floating_toolbar._tool_clicked("sticky_note"))
+        QShortcut(QKeySequence("Shift+L"), self).activated.connect(lambda: self.floating_toolbar._tool_clicked("line"))
+        
+        self._init_menus()
+
+    def _init_menus(self):
+        menubar = self.menuBar()
+        
+        file_menu = menubar.addMenu("Dosya")
+        file_menu.addAction("Belgeyi Böl...", self.action_split_document)
+        file_menu.addAction("Dışa Aktar...", self.action_export)
+        file_menu.addAction("PDF'i Optimize Et...", self.action_optimize)
+        file_menu.addSeparator()
+        file_menu.addAction("Toplu Eylem Sihirbazı...", self.action_batch_wizard)
+        
+        edit_menu = menubar.addMenu("Düzenle")
+        edit_menu.addAction("Üstbilgi & Altbilgi Ekle...", self.action_header_footer)
+        edit_menu.addAction("Filigran Ekle...", self.action_watermark)
+        edit_menu.addAction("Sayfaları Kırp...", self.action_crop)
+        edit_menu.addSeparator()
+        edit_menu.addAction("Arama ve Kalıcı Redaksiyon...", self.action_search_redact)
+        edit_menu.addAction("Belgeyi Temizle (Gizli Bilgileri Kaldır)...", self.action_sanitize)
+
+        form_menu = menubar.addMenu("Form")
+        form_menu.addAction("Form Tasarımcısı & Alan Ekle...", self.action_form_designer)
+        form_menu.addAction("Form Verilerini Dışa Aktar...", self.action_export_form_data)
+        form_menu.addAction("Form Verilerini İçe Aktar...", self.action_import_form_data)
+        form_menu.addSeparator()
+        form_menu.addAction("Tüm Form Alanlarını Temizle", self.action_clear_form)
+
+        tools_menu = menubar.addMenu("Araçlar")
+        tools_menu.addAction("Ölçüm Ölçeği & Birim Ayarları...", self.action_measurement_scale)
+        tools_menu.addAction("Erişilebilirlik Tam Denetimi (PDF/UA)...", self.action_accessibility_audit)
+        tools_menu.addAction("OCR Şüpheli Kelime Düzeltici...", self.action_ocr_correction)
+        tools_menu.addAction("Ekli Dosyaları Yönet...", self.action_manage_attachments)
+        
+    def action_form_designer(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        viewer = self.get_current_viewer()
+        cur_page = viewer.current_page_idx if viewer else 0
+        dlg = FormDesignerDialog(doc, current_page=cur_page, parent=self)
+        dlg.exec()
+        if viewer:
+            viewer.refresh_all_pages()
+
+    def action_export_form_data(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        dlg = FormDataDialog(doc, mode="export", parent=self)
+        dlg.exec()
+
+    def action_import_form_data(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        dlg = FormDataDialog(doc, mode="import", parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            viewer = self.get_current_viewer()
+            if viewer:
+                viewer.refresh_all_pages()
+
+    def action_clear_form(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        from nengi.core.form_designer import FormDesigner
+        count = FormDesigner.clear_all_fields(doc)
+        QMessageBox.information(self, "Tamamlandı", f"{count} form alanı temizlendi.")
+        viewer = self.get_current_viewer()
+        if viewer:
+            viewer.refresh_all_pages()
+
+    def action_batch_wizard(self):
+        dlg = ActionWizardDialog(self)
+        dlg.exec()
+
+    def action_search_redact(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        dlg = SearchAndRedactDialog(doc, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            viewer = self.get_current_viewer()
+            if viewer:
+                viewer.refresh_all_pages()
+
+    def action_sanitize(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        dlg = SanitizeDocumentDialog(doc, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            viewer = self.get_current_viewer()
+            if viewer:
+                viewer.refresh_all_pages()
+
+    def action_measurement_scale(self):
+        viewer = self.get_current_viewer()
+        cur_scale = getattr(viewer, "scale_ratio", None) if viewer else None
+        dlg = MeasurementScaleDialog(cur_scale, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            if viewer:
+                viewer.scale_ratio = dlg.scale
+                self.show_status_message(f"Ölçüm ölçeği ayarlandı: 1 {dlg.scale.page_unit} = {dlg.scale.real_value} {dlg.scale.real_unit}")
+
+    def action_accessibility_audit(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        dlg = AccessibilityDialog(doc, self)
+        dlg.exec()
+
+    def action_ocr_correction(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        viewer = self.get_current_viewer()
+        cur_p = viewer.current_page_idx if viewer else 0
+        dlg = OCRCorrectionDialog(doc, current_page=cur_p, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            if viewer:
+                viewer.refresh_all_pages()
+
+    def action_manage_attachments(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("📎 Ekli Dosyalar - NeNgi PDF")
+        dlg.resize(450, 360)
+        lay = QVBoxLayout(dlg)
+        panel = AttachmentsPanel(dlg, is_dark=self.is_dark_mode)
+        panel.load_document(doc)
+        lay.addWidget(panel)
+        dlg.exec()
+
+    def action_header_footer(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        dlg = HeaderFooterDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            if doc.add_header_footer(dlg.get_config()):
+                self.show_status_message("Üstbilgi/Altbilgi eklendi.")
+                self.get_current_viewer().refresh_view()
+                
+    def action_watermark(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        dlg = WatermarkDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            if doc.add_watermark(dlg.get_config()):
+                self.show_status_message("Filigran eklendi.")
+                self.get_current_viewer().refresh_view()
+                
+    def action_crop(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        viewer = self.get_current_viewer()
+        curr_page = viewer.current_page_idx
+        rect = doc.get_page(curr_page).rect
+        dlg = CropPagesDialog(rect, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            cfg = dlg.get_config()
+            if cfg['page_range'] == 'all':
+                for i in range(doc.page_count):
+                    doc.crop_page(i, cfg['rect'], cfg['box_type'])
+            else:
+                doc.crop_page(curr_page, cfg['rect'], cfg['box_type'])
+            self.show_status_message("Kırpma uygulandı.")
+            viewer.refresh_view()
+            
+    def action_split_document(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        dlg = SplitDocumentDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            cfg = dlg.get_config()
+            if PageManager.split_document(doc, cfg['mode'], cfg['value'], cfg['output_dir'], cfg['prefix']):
+                self.show_status_message("Belge başarıyla bölündü.")
+                QMessageBox.information(self, "Başarılı", f"Bölünmüş dosyalar {cfg['output_dir']} klasörüne kaydedildi.")
+                
+    def action_export(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        dlg = ExportDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            cfg = dlg.get_config()
+            try:
+                if cfg['format'] == 'docx': ExportEngine.pdf_to_docx(doc, cfg['output_path'])
+                elif cfg['format'] == 'xlsx': ExportEngine.pdf_to_xlsx(doc, cfg['output_path'])
+                elif cfg['format'] == 'pptx': ExportEngine.pdf_to_pptx(doc, cfg['output_path'])
+                elif cfg['format'] == 'html': ExportEngine.pdf_to_html(doc, cfg['output_path'])
+                self.show_status_message("Dışa aktarma tamamlandı.")
+            except ImportError as e:
+                QMessageBox.critical(self, "Eksik Paket", str(e))
+                
+    def action_optimize(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        usage = PDFOptimizer.get_space_usage(doc)
+        dlg = OptimizerDialog(usage, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            if PDFOptimizer.optimize(doc, dlg.get_config()):
+                self.show_status_message("Optimizasyon tamamlandı.")
+                self.get_current_viewer().refresh_view()
+                QMessageBox.information(self, "Başarılı", "Belge optimize edildi ve kaydedildi.")
+
 
     def _create_header(self) -> QFrame:
         """Creates top search & quick action header bar."""
@@ -259,6 +553,14 @@ class MainWindow(QMainWindow):
         self.btn_toggle_copilot.clicked.connect(self._toggle_copilot_panel)
         h_layout.addWidget(self.btn_toggle_copilot)
 
+        self.btn_toggle_comments = QPushButton("  Yorumlar")
+        self.btn_toggle_comments.setIcon(get_svg_icon("comments", "#D0D4DC", 16))
+        self.btn_toggle_comments.setIconSize(QSize(16, 16))
+        self.btn_toggle_comments.setCheckable(True)
+        self.btn_toggle_comments.setStyleSheet("font-weight: 600; padding: 6px 14px;")
+        self.btn_toggle_comments.clicked.connect(self._toggle_comments_panel)
+        h_layout.addWidget(self.btn_toggle_comments)
+
         # User Badge
         badge_user = QLabel("Standart Plan")
         badge_user.setStyleSheet(
@@ -286,6 +588,12 @@ class MainWindow(QMainWindow):
         self.thumbnail_bar.pages_modified.connect(self._on_pages_modified)
         self.doc_splitter.addWidget(self.thumbnail_bar)
 
+        # Bookmarks Panel (Collapsible / hidden by default)
+        self.bookmarks_panel = BookmarksPanel()
+        self.bookmarks_panel.setVisible(False)
+        self.bookmarks_panel.page_requested.connect(self._on_thumbnail_page_selected)
+        self.doc_splitter.addWidget(self.bookmarks_panel)
+
         # Tabs
         self.tabs = QTabWidget()
         self.tabs.setTabsClosable(True)
@@ -304,8 +612,10 @@ class MainWindow(QMainWindow):
         pill_container.setContentsMargins(0, 0, 0, 2)
         pill_container.addStretch()
 
-        self.floating_toolbar = FloatingPillToolbar()
-        self.floating_toolbar.tool_changed.connect(self._on_floating_tool_changed)
+        self.floating_toolbar = AnnotationToolbar(is_dark=self.settings.value("theme", "light") == "dark")
+        self.floating_toolbar.tool_selected.connect(self._on_floating_tool_changed)
+        self.floating_toolbar.color_changed.connect(self._on_color_changed)
+        self.floating_toolbar.property_changed.connect(self._on_property_changed)
         pill_container.addWidget(self.floating_toolbar)
 
         pill_container.addStretch()
@@ -349,6 +659,20 @@ class MainWindow(QMainWindow):
         f_layout.addWidget(self.lbl_footer_status, 1)
 
         # Right: Zoom & View controls with SVG icons
+        
+        self.cb_layout = QComboBox()
+        self.cb_layout.addItems(["Sürekli", "Tek Sayfa", "Çift Sayfa", "Sürekli Çift Sayfa"])
+        self.cb_layout.currentIndexChanged.connect(self._change_layout_mode)
+        f_layout.addWidget(self.cb_layout)
+
+        self.btn_fit_width = QPushButton("Genişliğe Sığdır")
+        self.btn_fit_width.clicked.connect(lambda: self.get_current_viewer().zoom_fit_width() if self.get_current_viewer() else None)
+        f_layout.addWidget(self.btn_fit_width)
+
+        self.btn_fit_page = QPushButton("Sayfaya Sığdır")
+        self.btn_fit_page.clicked.connect(lambda: self.get_current_viewer().zoom_fit_page() if self.get_current_viewer() else None)
+        f_layout.addWidget(self.btn_fit_page)
+
         self.btn_zoom_out = QPushButton()
         self.btn_zoom_out.setIcon(get_svg_icon("zoom_out", "#D0D4DC", 14))
         self.btn_zoom_out.setIconSize(QSize(14, 14))
@@ -411,11 +735,88 @@ class MainWindow(QMainWindow):
         act_redo.setShortcut(QKeySequence("Ctrl+Y"))
         act_redo.triggered.connect(self.redo_current)
         self.addAction(act_redo)
+        
+        # Reading Mode
+        act_reading = QAction(self)
+        act_reading.setShortcut(QKeySequence("Ctrl+H"))
+        act_reading.triggered.connect(self.toggle_reading_mode)
+        self.addAction(act_reading)
+        
+        # View History
+        act_back = QAction(self)
+        act_back.setShortcut(QKeySequence("Alt+Left"))
+        act_back.triggered.connect(lambda: self.get_current_viewer().go_back() if self.get_current_viewer() else None)
+        self.addAction(act_back)
+        
+        act_forward = QAction(self)
+        act_forward.setShortcut(QKeySequence("Alt+Right"))
+        act_forward.triggered.connect(lambda: self.get_current_viewer().go_forward() if self.get_current_viewer() else None)
+        self.addAction(act_forward)
+        
+        # Zoom Presets
+        act_fit_page = QAction(self)
+        act_fit_page.setShortcut(QKeySequence("Ctrl+0"))
+        act_fit_page.triggered.connect(lambda: self.get_current_viewer().zoom_fit_page() if self.get_current_viewer() else None)
+        self.addAction(act_fit_page)
+        
+        act_fit_width = QAction(self)
+        act_fit_width.setShortcut(QKeySequence("Ctrl+1"))
+        act_fit_width.triggered.connect(lambda: self.get_current_viewer().zoom_fit_width() if self.get_current_viewer() else None)
+        self.addAction(act_fit_width)
+        
+        act_actual_size = QAction(self)
+        act_actual_size.setShortcut(QKeySequence("Ctrl+2"))
+        act_actual_size.triggered.connect(lambda: self.get_current_viewer().zoom_actual_size() if self.get_current_viewer() else None)
+        self.addAction(act_actual_size)
 
     # ==========================================
     # Navigation & Interaction Handlers
     # ==========================================
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, 'reading_hud'):
+            self.reading_hud.move(self.width() // 2 - self.reading_hud.width() // 2, self.height() - 60)
+
+    def mouseMoveEvent(self, event):
+        super().mouseMoveEvent(event)
+        if getattr(self, 'is_reading_mode', False):
+            if event.position().y() > self.height() - 150:
+                self.reading_hud.setVisible(True)
+                viewer = self.get_current_viewer()
+                if viewer:
+                    self.lbl_hud_page.setText(f"Sayfa {viewer.current_page_idx + 1} | %{int(viewer.zoom * 100)}")
+            else:
+                self.reading_hud.setVisible(False)
+
+    def toggle_reading_mode(self):
+        if not hasattr(self, 'is_reading_mode'):
+            self.is_reading_mode = False
+        self.is_reading_mode = not self.is_reading_mode
+        
+        is_vis = not self.is_reading_mode
+        self.header.setVisible(is_vis)
+        self.nav_rail.setVisible(is_vis)
+        self.footer.setVisible(is_vis)
+        
+        if self.is_reading_mode:
+            self._prev_copilot_vis = self.copilot_panel.isVisible()
+            self._prev_thumbs_vis = self.thumbnail_bar.isVisible()
+            self._prev_bookmarks_vis = self.bookmarks_panel.isVisible()
+            self.copilot_panel.setVisible(False)
+            self.thumbnail_bar.setVisible(False)
+            self.bookmarks_panel.setVisible(False)
+            self.doc_splitter.setSizes([0, 0, 800])
+            self.main_splitter.setSizes([0, 800, 0])
+            self.reading_hud.setVisible(True)
+        else:
+            self.copilot_panel.setVisible(getattr(self, '_prev_copilot_vis', False))
+            self.thumbnail_bar.setVisible(getattr(self, '_prev_thumbs_vis', False))
+            self.bookmarks_panel.setVisible(getattr(self, '_prev_bookmarks_vis', False))
+            self.doc_splitter.setSizes([160 if self.thumbnail_bar.isVisible() or self.bookmarks_panel.isVisible() else 0, 0, 800])
+            self.main_splitter.setSizes([220, 820, 300 if self.copilot_panel.isVisible() else 0])
+            self.reading_hud.setVisible(False)
+        
     def _on_nav_rail_action(self, key: str):
         if key == "home" or key == "documents":
             self.open_file_dialog()
@@ -426,6 +827,14 @@ class MainWindow(QMainWindow):
                 self.compare_open_tabs()
             else:
                 self.open_diff_dialog()
+        elif key == "bookmarks":
+            is_vis = not self.bookmarks_panel.isVisible()
+            self.bookmarks_panel.setVisible(is_vis)
+            self.doc_splitter.setSizes([160 if is_vis else 0, 0, 800])
+            if is_vis:
+                doc = self.get_current_doc()
+                if doc:
+                    self.bookmarks_panel.load_document(doc)
         elif key == "tools":
             self._toggle_copilot_panel()
         elif key == "settings":
@@ -447,10 +856,45 @@ class MainWindow(QMainWindow):
         elif tool_id == "redo":
             self.redo_current()
 
-    def _toggle_copilot_panel(self):
-        is_vis = not self.copilot_panel.isVisible()
+    def _toggle_copilot_panel(self, checked: Optional[bool] = None):
+        if checked is None:
+            is_vis = not self.copilot_panel.isVisible()
+        else:
+            is_vis = bool(checked)
         self.copilot_panel.setVisible(is_vis)
-        self.btn_toggle_copilot.setChecked(is_vis)
+        if hasattr(self, "btn_toggle_copilot"):
+            self.btn_toggle_copilot.setChecked(is_vis)
+
+    def _toggle_comments_panel(self, checked: Optional[bool] = None):
+        if checked is None:
+            is_vis = not self.comments_panel.isVisible()
+        else:
+            is_vis = bool(checked)
+        if is_vis:
+            # Load annotations before showing
+            doc = self.get_current_doc()
+            if doc and doc.is_open:
+                annots = []
+                for i in range(doc.page_count):
+                    page = doc.get_page(i)
+                    for annot in page.annots():
+                        info = annot.info
+                        annots.append({
+                            "page": i,
+                            "type": annot.type[1],
+                            "info": info
+                        })
+                self.comments_panel.load_annotations(annots)
+            self.comments_panel.show()
+        else:
+            self.comments_panel.hide()
+        if hasattr(self, "btn_toggle_comments"):
+            self.btn_toggle_comments.setChecked(is_vis)
+
+    def _on_comment_clicked(self, page_idx: int, annot_info: dict):
+        viewer = self.get_current_viewer()
+        if viewer:
+            viewer.go_to_page(page_idx)
 
     def _toggle_thumbnails(self):
         is_vis = not self.thumbnail_bar.isVisible()
@@ -499,6 +943,25 @@ class MainWindow(QMainWindow):
             self._run_ocr_trigger()
         elif action_key == "protect":
             self._encrypt_current_doc()
+        elif action_key == "header_footer":
+            self.action_header_footer()
+        elif action_key == "watermark":
+            self.action_watermark()
+        elif action_key == "crop":
+            self.action_crop()
+        elif action_key == "split":
+            self.action_split_document()
+        elif action_key == "export":
+            self.action_export()
+        elif action_key == "optimize":
+            self.action_optimize()
+        elif action_key == "form_designer":
+            self.action_form_designer()
+        elif action_key == "form_export":
+            self.action_export_form_data()
+        elif action_key == "form_import":
+            self.action_import_form_data()
+
 
     def _on_copilot_query(self, query: str):
         doc = self.get_current_doc()
@@ -719,6 +1182,7 @@ class MainWindow(QMainWindow):
             pass
 
     def open_pdf(self, file_path: str):
+        self._add_to_recent_files(file_path)
         # Check if already open
         for i in range(self.tabs.count()):
             w = self.tabs.widget(i)
@@ -818,8 +1282,11 @@ class MainWindow(QMainWindow):
         doc = self.get_current_doc()
         if doc and doc.is_open:
             self.thumbnail_bar.load_document(doc)
+            if self.bookmarks_panel.isVisible():
+                self.bookmarks_panel.load_document(doc)
         else:
             self.thumbnail_bar.clear()
+            self.bookmarks_panel.tree.clear()
         self._update_footer_page_info()
 
     def _update_footer_page_info(self):
@@ -845,6 +1312,13 @@ class MainWindow(QMainWindow):
         doc = self.get_current_doc()
         if viewer and doc and viewer.current_page_idx < doc.page_count - 1:
             viewer.go_to_page(viewer.current_page_idx + 1)
+
+    def _change_layout_mode(self, index: int):
+        viewer = self.get_current_viewer()
+        if not viewer: return
+        modes = ['continuous', 'single', 'two_page', 'two_page_continuous']
+        if 0 <= index < len(modes):
+            viewer.set_page_layout(modes[index])
 
     def _zoom_in(self):
         viewer = self.get_current_viewer()
@@ -947,7 +1421,7 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.DialogCode.Accepted and dlg.password:
             out_path, _ = QFileDialog.getSaveFileName(self, "Şifrelenmiş PDF'i Kaydet", "Sifreli_Belge.pdf", "PDF Dosyaları (*.pdf)")
             if out_path:
-                SecurityManager.encrypt_pdf(doc, dlg.password, out_path)
+                SecurityManager.encrypt_document(doc, dlg.password, out_path)
                 self.show_status_message(f"Belge parola ile şifrelendi: {os.path.basename(out_path)}")
 
     def _show_tab_context_menu(self, pos: QPoint):

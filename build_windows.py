@@ -30,6 +30,9 @@ def build():
         "--hidden-import", "PyQt6.QtGui",
         "--hidden-import", "PyQt6.QtWidgets",
         "--hidden-import", "PIL",
+        "--hidden-import", "docx",
+        "--hidden-import", "openpyxl",
+        "--hidden-import", "pptx",
         f"--add-data={os.path.join(base_dir, 'resources')}{os.pathsep}resources",
         entry_point
     ]

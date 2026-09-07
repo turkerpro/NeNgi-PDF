@@ -700,6 +700,197 @@ class PDFDocument:
             print(f"Error saving PDF: {e}")
             return False
 
+    def add_header_footer(self, config: dict) -> bool:
+        """Adds header/footer text to specified pages.
+        config = {
+            'slots': {'left_header': 'text', 'center_footer': 'Sayfa {page} / {total}', ...},
+            'font': 'Helvetica', 'font_size': 10, 'color': (0,0,0),
+            'margins': {'top': 30, 'bottom': 30, 'left': 50, 'right': 50},
+            'page_range': 'all' | 'odd' | 'even' | (start, end),
+            'shrink_content': True
+        }
+        """
+        if not self.is_open:
+            return False
+        
+        try:
+            self.save_state_for_undo()
+            pages_to_process = []
+            
+            pr = config.get('page_range', 'all')
+            if pr == 'all':
+                pages_to_process = list(range(self.page_count))
+            elif pr == 'odd':
+                pages_to_process = [i for i in range(self.page_count) if i % 2 == 0]
+            elif pr == 'even':
+                pages_to_process = [i for i in range(self.page_count) if i % 2 == 1]
+            elif isinstance(pr, tuple):
+                pages_to_process = list(range(max(0, pr[0]), min(self.page_count, pr[1] + 1)))
+
+            margins = config.get('margins', {'top': 30, 'bottom': 30, 'left': 50, 'right': 50})
+            slots = config.get('slots', {})
+            font = config.get('font', 'helv')
+            font_size = config.get('font_size', 10)
+            color = config.get('color', (0,0,0))
+            shrink = config.get('shrink_content', False)
+
+            for i in pages_to_process:
+                page = self.get_page(i)
+                rect = page.rect
+                
+                if shrink:
+                    # Very basic shrink by modifying mediabox or scaling content, 
+                    # but PyMuPDF doesn't natively "shrink content" easily without modifying matrix.
+                    # We will simply leave it as is for this basic implementation or adjust cropbox.
+                    pass
+
+                page_num_str = str(i + 1)
+                total_str = str(self.page_count)
+
+                def resolve_text(txt):
+                    if not txt: return ""
+                    return txt.replace('{page}', page_num_str).replace('{total}', total_str)
+
+                # Positions
+                y_header = margins['top']
+                y_footer = rect.height - margins['bottom']
+
+                for slot, text in slots.items():
+                    if not text:
+                        continue
+                    
+                    text_to_draw = resolve_text(text)
+                    tw = fitz.get_text_length(text_to_draw, fontname=font, fontsize=font_size)
+                    
+                    x = 0
+                    y = y_header if 'header' in slot else y_footer
+                    
+                    if 'left' in slot:
+                        x = margins['left']
+                    elif 'center' in slot:
+                        x = (rect.width - tw) / 2
+                    elif 'right' in slot:
+                        x = rect.width - margins['right'] - tw
+                        
+                    page.insert_text((x, y), text_to_draw, fontname=font, fontsize=font_size, color=color)
+
+            self.is_modified = True
+            return True
+        except Exception as e:
+            print(f"Error adding header/footer: {e}")
+            return False
+
+    def add_watermark(self, config: dict) -> bool:
+        """Adds text or image watermark to pages.
+        config = {
+            'type': 'text' | 'image',
+            'text': 'Confidential',
+            'image_path': '/path/to/img',
+            'font': 'Helvetica', 'font_size': 48, 'color': (0.5,0.5,0.5),
+            'rotation': 45, 'opacity': 0.5, 'scale': 1.0,
+            'position': 'center', # or offset tuple
+            'overlay': True,
+            'page_range': 'all'
+        }
+        """
+        if not self.is_open:
+            return False
+            
+        try:
+            self.save_state_for_undo()
+            
+            pages_to_process = []
+            pr = config.get('page_range', 'all')
+            if pr == 'all':
+                pages_to_process = list(range(self.page_count))
+            elif isinstance(pr, tuple):
+                pages_to_process = list(range(max(0, pr[0]), min(self.page_count, pr[1] + 1)))
+
+            wm_type = config.get('type', 'text')
+            overlay = config.get('overlay', True)
+            opacity = config.get('opacity', 0.5)
+            rotation = config.get('rotation', 45)
+            
+            for i in pages_to_process:
+                page = self.get_page(i)
+                rect = page.rect
+                
+                if wm_type == 'text':
+                    text = config.get('text', '')
+                    font = config.get('font', 'helv')
+                    fontsize = config.get('font_size', 48)
+                    color = config.get('color', (0.5,0.5,0.5))
+                    
+                    # Calculate position
+                    tw = fitz.get_text_length(text, fontname=font, fontsize=fontsize)
+                    th = fontsize
+                    
+                    pos = config.get('position', 'center')
+                    if pos == 'center':
+                        p = fitz.Point((rect.width - tw)/2, (rect.height + th)/2)
+                    else:
+                        p = fitz.Point(pos[0], pos[1])
+                        
+                    page.insert_text(p, text, fontname=font, fontsize=fontsize, 
+                                     color=color, fill_opacity=opacity, rotate=rotation, overlay=overlay)
+                                     
+                elif wm_type == 'image':
+                    img_path = config.get('image_path')
+                    scale = config.get('scale', 1.0)
+                    if img_path and os.path.exists(img_path):
+                        # Calculate dimensions (approx, without reading img dims)
+                        # Normally would read img dims and scale
+                        # Just placing in a 200x200 centered rect for now, scaled
+                        w, h = 200 * scale, 200 * scale
+                        pos = config.get('position', 'center')
+                        if pos == 'center':
+                            r = fitz.Rect((rect.width - w)/2, (rect.height - h)/2, 
+                                          (rect.width + w)/2, (rect.height + h)/2)
+                        else:
+                            r = fitz.Rect(pos[0], pos[1], pos[0]+w, pos[1]+h)
+                            
+                        page.insert_image(r, filename=img_path, rotate=rotation, overlay=overlay, alpha=opacity)
+            
+            self.is_modified = True
+            return True
+        except Exception as e:
+            print(f"Error adding watermark: {e}")
+            return False
+
+    def crop_page(self, page_num: int, rect: fitz.Rect, box_type: str = 'CropBox') -> bool:
+        """Crops page to specified rectangle."""
+        if not self.is_open:
+            return False
+        try:
+            self.save_state_for_undo()
+            page = self.get_page(page_num)
+            
+            if box_type == 'CropBox':
+                page.set_cropbox(rect)
+            elif box_type == 'TrimBox':
+                page.set_trimbox(rect)
+            elif box_type == 'BleedBox':
+                page.set_bleedbox(rect)
+            elif box_type == 'ArtBox':
+                page.set_artbox(rect)
+            else:
+                page.set_cropbox(rect)
+                
+            self.is_modified = True
+            return True
+        except Exception as e:
+            print(f"Error cropping page: {e}")
+            return False
+
+    def get_toc(self) -> list:
+        """Returns the document table of contents / outline as [[lvl, title, page], ...]."""
+        if not self.is_open or not self.doc:
+            return []
+        try:
+            return self.doc.get_toc()
+        except Exception:
+            return []
+
     def close(self):
         """Closes the document."""
         if self.is_open:
