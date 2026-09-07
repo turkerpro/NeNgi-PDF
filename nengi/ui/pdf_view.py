@@ -57,6 +57,7 @@ class PageRenderWidget(QWidget):
         self.words: List[Tuple[float, float, float, float, str, int, int, int]] = []
         self.blocks: List[Tuple[float, float, float, float, str, int, int]] = []
         self.selected_words: List[Tuple[float, float, float, float, str, int, int, int]] = []
+        self.selected_blocks: List[Tuple[float, float, float, float, str, int, int]] = []
         self.hovered_block: Optional[Tuple[float, float, float, float, str, int, int]] = None
         self.active_text_widgets: List = []
         self.active_stamp_widgets: List = []
