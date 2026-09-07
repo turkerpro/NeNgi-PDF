@@ -6,6 +6,7 @@ Completely vector SVG powered with no AI/Copilot branding.
 """
 
 from __future__ import annotations
+from typing import List, Tuple
 from typing import Optional
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtWidgets import (

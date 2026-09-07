@@ -1,3 +1,4 @@
+
 """
 NeNgi PDF - High-Resolution Printing & PDF Printer Engine
 Provides vector/raster printing to physical printers and virtual PDF printers
@@ -5,6 +6,7 @@ with page range selection, copy count, and orientation auto-detection.
 """
 
 from __future__ import annotations
+import os
 from typing import Optional
 from PyQt6.QtCore import Qt, QRectF
 from PyQt6.QtGui import QPainter, QImage

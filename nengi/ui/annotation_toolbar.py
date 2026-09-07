@@ -125,7 +125,7 @@ class AnnotationToolbar(QFrame):
         btn.setProperty("tool_name", name)
         btn.setFixedSize(32, 32)
         
-        color = DARK_THEME["text"] if self.is_dark else LIGHT_THEME["text"]
+        color = "#EDEDED" if self.is_dark else "#1F2328"
         btn.setIcon(get_svg_icon(name, color=color))
         
         self.tool_group.addButton(btn)
@@ -137,7 +137,7 @@ class AnnotationToolbar(QFrame):
         btn = QPushButton()
         btn.setToolTip("Damga Ekle")
         btn.setFixedSize(32, 32)
-        color = DARK_THEME["text"] if self.is_dark else LIGHT_THEME["text"]
+        color = "#EDEDED" if self.is_dark else "#1F2328"
         btn.setIcon(get_svg_icon("stamp", color=color))
         
         menu = QMenu(self)

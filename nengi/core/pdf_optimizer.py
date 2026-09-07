@@ -77,14 +77,14 @@ class PDFOptimizer:
             
             if doc.file_path and os.path.exists(doc.file_path):
                 fp = doc.file_path
-                opt_bytes = doc.doc.tobytes(garbage=garbage_level, deflate=deflate, clean=clean, linear=linear)
+                opt_bytes = doc.doc.tobytes(garbage=garbage_level, deflate=deflate, clean=clean, linear=False)
                 doc.close()
                 with open(fp, "wb") as f:
                     f.write(opt_bytes)
                 doc.open(fp)
             else:
                 save_path = "optimized.pdf"
-                doc.doc.save(save_path, garbage=garbage_level, deflate=deflate, clean=clean, linear=linear)
+                doc.doc.save(save_path, garbage=garbage_level, deflate=deflate, clean=clean, linear=False)
             
             return True
         except Exception as e:

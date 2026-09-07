@@ -5,6 +5,7 @@ vector SVG icons, and bottom-pinned settings.
 """
 
 from __future__ import annotations
+from typing import Dict
 import os
 import sys
 from typing import Optional

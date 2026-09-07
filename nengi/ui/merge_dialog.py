@@ -4,6 +4,7 @@ Merges multiple PDF and image files into a single consolidated PDF document.
 """
 
 from __future__ import annotations
+from PyQt6.QtWidgets import QWidget
 import os
 from typing import List, Optional
 from PyQt6.QtCore import Qt
