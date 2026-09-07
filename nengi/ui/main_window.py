@@ -849,11 +849,8 @@ class MainWindow(QMainWindow):
 
     def _on_property_changed(self, prop: str, value):
         view = self.get_current_viewer()
-        if view:
-            if prop == 'width' and hasattr(view, 'current_width'):
-                view.current_width = value
-            elif prop == 'opacity' and hasattr(view, 'current_opacity'):
-                view.current_opacity = value
+        if view and hasattr(view, 'set_current_property'):
+            view.set_current_property(prop, value)
 
     def _on_floating_tool_changed(self, tool_id: str):
         if tool_id in ["view", "text", "whiteout"]:

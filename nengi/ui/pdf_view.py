@@ -833,8 +833,19 @@ class PDFViewer(QScrollArea):
 
     def set_current_color(self, color: tuple):
         self.current_color = color
-        for page in self.pages:
-            page.current_color = color
+        for page in self.page_widgets:
+            if hasattr(page, 'set_current_color'):
+                page.set_current_color(color)
+            else:
+                page.current_color = color
+
+    def set_current_property(self, prop: str, value):
+        if prop == 'width':
+            for page in self.page_widgets:
+                page.current_width = value
+        elif prop == 'opacity':
+            for page in self.page_widgets:
+                page.current_opacity = value
 
     def set_tool(self, tool_name: str):
         """Sets current active tool ('view', 'text', 'whiteout')."""
