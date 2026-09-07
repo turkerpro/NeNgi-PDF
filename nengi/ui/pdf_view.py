@@ -241,7 +241,7 @@ class PageRenderWidget(QWidget):
 
         for w in page.widgets():
             if w.rect.contains(click_pt):
-                if w.field_type == fitz.PDF_WIDGET_TYPE_TEXT:
+                if w.field_type == getattr(fitz, "PDF_WIDGET_TYPE_TEXT", getattr(fitz, "WIDGET_TYPE_TEXT", 0)):
                     val, ok = QInputDialog.getText(
                         self, f"Form Alanı: {w.field_name}",
                         f"{getattr(w, 'field_label', '') or w.field_name}:",
@@ -257,7 +257,7 @@ class PageRenderWidget(QWidget):
                         self.page_modified.emit()
                     return True
 
-                elif w.field_type == fitz.PDF_WIDGET_TYPE_CHECKBOX:
+                elif w.field_type == getattr(fitz, "PDF_WIDGET_TYPE_CHECKBOX", getattr(fitz, "WIDGET_TYPE_CHECKBOX", 1)):
                     self.doc.save_state_for_undo()
                     w.field_value = "Off" if w.field_value in ("Yes", "On", "true", "True") else "Yes"
                     w.update()
@@ -267,7 +267,7 @@ class PageRenderWidget(QWidget):
                     self.page_modified.emit()
                     return True
 
-                elif w.field_type == fitz.PDF_WIDGET_TYPE_RADIOBUTTON:
+                elif w.field_type == getattr(fitz, "PDF_WIDGET_TYPE_RADIOBUTTON", getattr(fitz, "WIDGET_TYPE_RADIOBUTTON", 2)):
                     self.doc.save_state_for_undo()
                     w.field_value = "Yes"
                     w.update()
@@ -277,7 +277,7 @@ class PageRenderWidget(QWidget):
                     self.page_modified.emit()
                     return True
 
-                elif w.field_type in (fitz.PDF_WIDGET_TYPE_COMBOBOX, fitz.PDF_WIDGET_TYPE_LISTBOX):
+                elif w.field_type in (getattr(fitz, "PDF_WIDGET_TYPE_COMBOBOX", getattr(fitz, "WIDGET_TYPE_COMBOBOX", 3)), getattr(fitz, "PDF_WIDGET_TYPE_LISTBOX", getattr(fitz, "WIDGET_TYPE_LISTBOX", 4))):
                     choices = getattr(w, "choice_values", [])
                     if choices:
                         menu = QMenu(self)
