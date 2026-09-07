@@ -83,6 +83,12 @@ class PDFDocument:
             if len(self._undo_stack) > self._max_history:
                 self._undo_stack.pop(0)
             self._redo_stack.clear()
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Could not save undo state: {e}")
 
@@ -107,6 +113,12 @@ class PDFDocument:
             self.file_path = file_path
             self.is_modified = True
             return True
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error during undo: {e}")
             return False
@@ -126,6 +138,12 @@ class PDFDocument:
             self.file_path = file_path
             self.is_modified = True
             return True
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error during redo: {e}")
             return False
@@ -148,6 +166,12 @@ class PDFDocument:
             else:
                 self.is_authenticated = True
             return self.is_authenticated
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Failed to open PDF file {file_path}: {e}")
             self.doc = None
@@ -261,6 +285,12 @@ class PDFDocument:
             self.doc.update_stream(xref, new_image_bytes)
             self.is_modified = True
             return True
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error replacing image xref {xref}: {e}")
             return False
@@ -283,6 +313,12 @@ class PDFDocument:
                 page.insert_image(rect, filename=image_path, overlay=True)
                 self.is_modified = True
                 return True
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error replacing page with image: {e}")
             return False
@@ -303,6 +339,12 @@ class PDFDocument:
             page.apply_redactions()
             self.is_modified = True
             return True
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error whiting out area: {e}")
             return False
@@ -427,6 +469,12 @@ class PDFDocument:
                 "raw_font": raw_font,
                 "fitz_font": fitz_font
             }
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error detecting text style: {e}")
             return default_style
@@ -465,6 +513,12 @@ class PDFDocument:
             page.insert_text(insert_point, new_text, fontsize=fontsize, fontname=target_font, color=color)
             self.is_modified = True
             return True
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error editing text at rect: {e}")
             return False
@@ -507,6 +561,12 @@ class PDFDocument:
 
             self.is_modified = True
             return True
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error replacing text block: {e}")
             return False
@@ -547,6 +607,12 @@ class PDFDocument:
 
             self.is_modified = True
             return True
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error inserting new text: {e}")
             return False
@@ -592,6 +658,12 @@ class PDFDocument:
                 return recognized_items
             except ImportError:
                 return []
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error running OCR: {e}")
             return []
@@ -611,6 +683,12 @@ class PDFDocument:
                 page.insert_image(rect, filename=image_path, keep_proportion=True)
             self.is_modified = True
             return True
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error adding image stamp: {e}")
             return False
@@ -658,6 +736,12 @@ class PDFDocument:
             other_doc.close()
             self.is_modified = True
             return True
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error inserting external PDF: {e}")
             return False
@@ -696,6 +780,12 @@ class PDFDocument:
 
             self.is_modified = False
             return True
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error saving PDF: {e}")
             return False
@@ -782,6 +872,12 @@ class PDFDocument:
 
             self.is_modified = True
             return True
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error adding header/footer: {e}")
             return False
@@ -865,6 +961,12 @@ class PDFDocument:
             
             self.is_modified = True
             return True
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error adding watermark: {e}")
             return False
@@ -890,6 +992,12 @@ class PDFDocument:
                 
             self.is_modified = True
             return True
+        except fitz.FileDataError as e:
+            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            self.doc = None
+            self.is_encrypted = False
+            self.is_authenticated = False
+            return False
         except Exception as e:
             print(f"Error cropping page: {e}")
             return False

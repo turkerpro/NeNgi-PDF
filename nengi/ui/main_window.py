@@ -843,12 +843,12 @@ class MainWindow(QMainWindow):
             self._open_settings_dialog()
 
     def _on_color_changed(self, color: tuple):
-        view = self._get_current_view()
+        view = self.get_current_viewer()
         if view and hasattr(view, 'set_current_color'):
             view.set_current_color(color)
 
     def _on_property_changed(self, prop: str, value):
-        view = self._get_current_view()
+        view = self.get_current_viewer()
         if view:
             if prop == 'width' and hasattr(view, 'current_width'):
                 view.current_width = value

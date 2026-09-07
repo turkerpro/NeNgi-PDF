@@ -846,6 +846,11 @@ class PDFViewer(QScrollArea):
             pw.mode = mode
             pw.stamp_image_path = stamp_path
 
+    def set_current_color(self, color: tuple):
+        self.current_color = color
+        for page in self.pages:
+            page.current_color = color
+
     def set_tool(self, tool_name: str):
         """Sets current active tool ('view', 'text', 'whiteout')."""
         self.set_tool_mode(tool_name)
