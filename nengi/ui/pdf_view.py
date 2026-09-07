@@ -362,21 +362,6 @@ class PageRenderWidget(QWidget):
                     if fitz.Rect(w[0], w[1], w[2], w[3]).intersects(pdf_sel)
                 ]
                 self.update()
-            elif self.mode == "view":
-                
-                self._drag_current = event.pos()
-                sel_rect = QRect(self._drag_start, self._drag_current).normalized()
-                pdf_sel = fitz.Rect(
-                    sel_rect.left() / self.zoom,
-                    sel_rect.top() / self.zoom,
-                    sel_rect.right() / self.zoom,
-                    sel_rect.bottom() / self.zoom
-                )
-                self.selected_words = [
-                    w for w in self.words 
-                    if fitz.Rect(w[0], w[1], w[2], w[3]).intersects(pdf_sel)
-                ]
-                self.update()
             else:
                 pdf_x = event.pos().x() / self.zoom
                 pdf_y = event.pos().y() / self.zoom
