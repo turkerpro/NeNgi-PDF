@@ -389,7 +389,9 @@ class PDFDocument:
             "is_italic": False,
             "color_rgb": (0.0, 0.0, 0.0),
             "raw_font": "Helvetica",
-            "fitz_font": "helv"
+            "fitz_font": "helv",
+            "baseline_y": None,
+            "origin_x": None
         }
         if not self.is_open:
             return default_style
@@ -525,7 +527,8 @@ class PDFDocument:
 
     def replace_text_block(
         self, page_number: int, rect: fitz.Rect, new_text: str,
-        fontname: str = "helv", fontsize: float = 11.0, color: Tuple[float, float, float] = (0, 0, 0)
+        fontname: str = "helv", fontsize: float = 11.0, color: Tuple[float, float, float] = (0, 0, 0),
+        baseline_y: float = None, origin_x: float = None
     ) -> bool:
         """
         Replaces a paragraph or multi-line text block:
@@ -551,13 +554,16 @@ class PDFDocument:
                     pass
 
             lines = new_text.splitlines()
-            line_height = fontsize * 1.25
-            y_pos = rect.y0 + fontsize
-            for line in lines:
-                if y_pos > page.rect.height - 10:
-                    break
-                page.insert_text((rect.x0, y_pos), line, fontsize=fontsize, fontname=target_font, color=color)
-                y_pos += line_height
+            if len(lines) == 1:
+                # Single line: use exact baseline if provided, else use textbox for perfect bounds
+                if baseline_y is not None:
+                    x_pos = origin_x if origin_x is not None else rect.x0
+                    page.insert_text((x_pos, baseline_y), lines[0], fontsize=fontsize, fontname=target_font, color=color)
+                else:
+                    page.insert_textbox(rect, lines[0], fontsize=fontsize, fontname=target_font, color=color, align=0)
+            else:
+                # Multi-line: use insert_textbox for automatic wrapping and line-heights
+                page.insert_textbox(rect, new_text, fontsize=fontsize, fontname=target_font, color=color, align=0)
 
             self.is_modified = True
             return True

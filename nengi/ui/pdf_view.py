@@ -517,7 +517,8 @@ class PageRenderWidget(QWidget):
                 if dlg.exec() == QDialog.DialogCode.Accepted and dlg.result_text != target_block[4]:
                     self.doc.replace_text_block(
                         self.page_idx, block_rect, dlg.result_text,
-                        fontname=dlg.result_fitz_font, fontsize=dlg.result_fontsize, color=dlg.result_color_rgb
+                        fontname=dlg.result_fitz_font, fontsize=dlg.result_fontsize, color=dlg.result_color_rgb,
+                        baseline_y=style.get("baseline_y"), origin_x=style.get("origin_x")
                     )
                     self.render_cache()
                     self.update()
@@ -561,7 +562,8 @@ class PageRenderWidget(QWidget):
                 if dlg.exec() == QDialog.DialogCode.Accepted:
                     self.doc.replace_text_block(
                         self.page_idx, block_rect, dlg.result_text,
-                        fontname=dlg.result_fitz_font, fontsize=dlg.result_fontsize, color=dlg.result_color_rgb
+                        fontname=dlg.result_fitz_font, fontsize=dlg.result_fontsize, color=dlg.result_color_rgb,
+                        baseline_y=style.get("baseline_y"), origin_x=style.get("origin_x")
                     )
                     self.render_cache()
                     self.update()
