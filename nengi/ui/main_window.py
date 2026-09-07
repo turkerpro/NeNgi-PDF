@@ -537,6 +537,13 @@ class MainWindow(QMainWindow):
         self.btn_save.clicked.connect(self.save_current_file)
         h_layout.addWidget(self.btn_save)
 
+        self.btn_save_as = QPushButton("  Farklı Kaydet")
+        self.btn_save_as.setIcon(get_svg_icon("save", "#D0D4DC", 16))
+        self.btn_save_as.setIconSize(QSize(16, 16))
+        self.btn_save_as.setToolTip("Farklı Kaydet (Ctrl+Shift+S)")
+        self.btn_save_as.clicked.connect(self.save_current_file_as)
+        h_layout.addWidget(self.btn_save_as)
+
         self.btn_theme = QPushButton()
         self.btn_theme.setIcon(get_svg_icon("theme", "#D0D4DC", 18))
         self.btn_theme.setIconSize(QSize(18, 18))
@@ -719,6 +726,12 @@ class MainWindow(QMainWindow):
         act_save.setShortcut(QKeySequence("Ctrl+S"))
         act_save.triggered.connect(self.save_current_file)
         self.addAction(act_save)
+
+        # Save As
+        act_save_as = QAction(self)
+        act_save_as.setShortcut(QKeySequence("Ctrl+Shift+S"))
+        act_save_as.triggered.connect(self.save_current_file_as)
+        self.addAction(act_save_as)
 
         # Print
         act_print = QAction(self)
@@ -1247,9 +1260,19 @@ class MainWindow(QMainWindow):
         doc = self.get_current_doc()
         if not doc or not doc.is_open:
             return
-        if not doc.file_path:
+            
+        # Eğer dosya geçici bir klasördeyse (Outlook eklentisi, Temp vs.) doğrudan farklı kaydet'e yönlendir
+        is_temp = False
+        if doc.file_path:
+            fp_lower = doc.file_path.lower()
+            temp_indicators = ["\\appdata\\local\\temp\\", "\\inetcache\\", "/tmp/", "/var/tmp/", "\\temp\\"]
+            if any(ind in fp_lower for ind in temp_indicators):
+                is_temp = True
+                
+        if not doc.file_path or is_temp:
             self.save_current_file_as()
             return
+            
         if doc.save():
             self.show_status_message(f"Kaydedildi: {os.path.basename(doc.file_path)}")
         else:
