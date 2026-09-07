@@ -120,3 +120,8 @@ PYTHONPATH=. pytest tests/
 
 ## 📄 Lisans
 Bu proje MIT Lisansı kapsamında açık kaynaklı olarak paylaşılmaktadır.
+
+---
+
+## 🤖 Yapay Zeka Hakkında
+Bu proje, kodlama sürecinden yeni özelliklerin tasarımına kadar pek çok aşamada **Yapay Zeka (YZ) desteğiyle** sıfırdan geliştirilmiştir. Açık kaynak kod dünyasına ve üretken yapay zekanın gücüne bir teşekkür olarak sunulur.
