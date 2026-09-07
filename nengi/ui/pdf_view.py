@@ -10,7 +10,8 @@ from typing import Optional, Tuple, List, Callable
 from PyQt6.QtCore import Qt, QPoint, QRect, QRectF, pyqtSignal, QSize, QEvent
 from PyQt6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QHBoxLayout, QLabel, 
-    QMenu, QInputDialog, QMessageBox, QFileDialog, QGraphicsDropShadowEffect, QDialog
+    QMenu, QInputDialog, QMessageBox, QFileDialog, QGraphicsDropShadowEffect, QDialog,
+    QLineEdit
 )
 from PyQt6.QtGui import (
     QPainter, QColor, QPen, QBrush, QPixmap, QMouseEvent, 
@@ -901,6 +902,10 @@ class PDFViewer(QScrollArea):
         """Refreshes all pages (e.g. after deletion or rotation)."""
         if self.doc:
             self.load_document(self.doc)
+
+    def refresh_view(self):
+        """Refreshes all pages in the current document view."""
+        self.refresh_all_pages()
 
     def _on_external_image_updated(self, page_num: int, xref: int):
         """Callback when external editor (Paint) saves image."""

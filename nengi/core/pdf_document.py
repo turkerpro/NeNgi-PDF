@@ -729,7 +729,13 @@ class PDFDocument:
 
             margins = config.get('margins', {'top': 30, 'bottom': 30, 'left': 50, 'right': 50})
             slots = config.get('slots', {})
-            font = config.get('font', 'helv')
+            font_map = {
+                "helvetica": "helv", "arial": "helv",
+                "times-roman": "times", "times": "times",
+                "courier": "couri", "courier new": "couri"
+            }
+            raw_font = str(config.get('font', 'helv')).lower()
+            font = font_map.get(raw_font, "helv")
             font_size = config.get('font_size', 10)
             color = config.get('color', (0,0,0))
             shrink = config.get('shrink_content', False)
@@ -817,7 +823,13 @@ class PDFDocument:
                 
                 if wm_type == 'text':
                     text = config.get('text', '')
-                    font = config.get('font', 'helv')
+                    font_map = {
+                        "helvetica": "helv", "arial": "helv",
+                        "times-roman": "times", "times": "times",
+                        "courier": "couri", "courier new": "couri"
+                    }
+                    raw_font = str(config.get('font', 'helv')).lower()
+                    font = font_map.get(raw_font, "helv")
                     fontsize = config.get('font_size', 48)
                     color = config.get('color', (0.5,0.5,0.5))
                     

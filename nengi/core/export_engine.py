@@ -79,12 +79,13 @@ class ExportEngine:
             
             # Render page as image and place on slide
             pix = page.get_pixmap(dpi=150)
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            img_path = output_path + f"_tmp_{i}.png"
-            img.save(img_path)
+            img_mode = "RGBA" if pix.alpha else "RGB"
+            img = Image.frombytes(img_mode, [pix.width, pix.height], pix.samples)
+            buf = io.BytesIO()
+            img.convert("RGB").save(buf, format="PNG")
+            buf.seek(0)
             
-            slide.shapes.add_picture(img_path, 0, 0, prs.slide_width, prs.slide_height)
-            os.remove(img_path)
+            slide.shapes.add_picture(buf, 0, 0, prs.slide_width, prs.slide_height)
             
         prs.save(output_path)
         return True

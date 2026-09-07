@@ -75,20 +75,16 @@ class PDFOptimizer:
             # Note: PyMuPDF doesn't natively recompress images with a quality slider in .save()
             # but setting garbage=4 and deflate=True does optimal compression of streams.
             
-            save_path = doc.file_path + ".optimized.pdf" if doc.file_path else "optimized.pdf"
-            
-            doc.doc.save(
-                save_path, 
-                garbage=garbage_level, 
-                deflate=deflate, 
-                clean=clean, 
-                linear=linear
-            )
-            
-            # Load the optimized file back
-            if doc.file_path:
-                os.replace(save_path, doc.file_path)
-                doc.open(doc.file_path)
+            if doc.file_path and os.path.exists(doc.file_path):
+                fp = doc.file_path
+                opt_bytes = doc.doc.tobytes(garbage=garbage_level, deflate=deflate, clean=clean, linear=linear)
+                doc.close()
+                with open(fp, "wb") as f:
+                    f.write(opt_bytes)
+                doc.open(fp)
+            else:
+                save_path = "optimized.pdf"
+                doc.doc.save(save_path, garbage=garbage_level, deflate=deflate, clean=clean, linear=linear)
             
             return True
         except Exception as e:

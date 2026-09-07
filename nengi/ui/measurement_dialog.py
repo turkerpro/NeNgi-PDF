@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QDoubleSpinBox, QComboBox, QPushButton, QGroupBox, QWidget
 )
+from PyQt6.QtCore import Qt
 from nengi.core.measurement import ScaleRatio
 
 

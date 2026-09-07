@@ -57,14 +57,7 @@ class ActionWizard:
             try:
                 # Execute each step in sequence
                 for step in steps:
-                    if step.action_id == "compress":
-                        opt_data = PDFOptimizer.optimize(doc, step.params)
-                        if opt_data:
-                            # Reopen optimized data
-                            doc.close()
-                            doc.open_from_bytes(opt_data, in_path)
-
-                    elif step.action_id == "watermark":
+                    if step.action_id == "watermark":
                         doc.add_watermark(step.params)
 
                     elif step.action_id == "header_footer":
@@ -80,7 +73,11 @@ class ActionWizard:
                 out_path = os.path.join(output_dir, base_name)
                 # If not already encrypted to out_path, save normal
                 if not any(s.action_id == "encrypt" for s in steps):
-                    doc.save(out_path)
+                    is_compress = any(s.action_id == "compress" for s in steps)
+                    if is_compress:
+                        doc.doc.save(out_path, garbage=4, deflate=True, clean=True)
+                    else:
+                        doc.save(out_path)
 
                 doc.close()
                 results.append({

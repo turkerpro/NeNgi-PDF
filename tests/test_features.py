@@ -215,9 +215,8 @@ class TestNeNgiAdvancedFeatures(unittest.TestCase):
         audit = PDFOptimizer.get_space_usage(doc)
         self.assertIn("total_size", audit)
 
-        opt_bytes = PDFOptimizer.optimize(doc, {"deflate": True, "garbage_collect": True})
-        self.assertIsInstance(opt_bytes, (bytes, bytearray))
-        self.assertGreater(len(opt_bytes), 0)
+        opt_success = PDFOptimizer.optimize(doc, {"deflate": True, "garbage_collect": True})
+        self.assertTrue(opt_success)
 
         doc.close()
 
