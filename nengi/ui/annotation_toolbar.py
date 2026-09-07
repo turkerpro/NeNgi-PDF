@@ -1,9 +1,9 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QFrame, QButtonGroup, QColorDialog, QMenu, QSlider, QAction
+    QFrame, QButtonGroup, QColorDialog, QMenu, QSlider
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QAction
 
 from .icons import get_svg_icon
 from .styles import DARK_THEME, LIGHT_THEME
