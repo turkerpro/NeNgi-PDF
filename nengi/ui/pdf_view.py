@@ -138,7 +138,7 @@ class PageRenderWidget(QWidget):
         from PyQt6.QtGui import QColor, QBrush
         from PyQt6.QtCore import QRectF
         for w in self.active_text_widgets:
-            if type(w).__name__ == "DraggableBlockWidget":
+            if type(w).__name__ in ["DraggableBlockWidget", "InlineTextEditor"]:
                 for r in getattr(w, "source_rects", [w.pdf_rect]):
                     sx = r.x0 * self.zoom
                     sy = r.y0 * self.zoom
@@ -547,73 +547,59 @@ class PageRenderWidget(QWidget):
 
     def prompt_edit_selected_text(self):
         self._ensure_text_extracted()
-        if not self.selected_words:
-            # If no words are highlighted but a block is hovered, edit the whole block
-            if self.hovered_block:
-                b = self.hovered_block
-                block_rect = fitz.Rect(b[0], b[1], b[2], b[3])
-                style = self.doc.detect_text_style_at_rect(self.page_idx, block_rect)
-                dlg = TextEditorDialog(
-                    initial_text=b[4],
-                    detected_style=style,
-                    title="✏️ Paragrafı Düzenle",
-                    parent=self
-                )
-                if dlg.exec() == QDialog.DialogCode.Accepted:
-                    self.doc.replace_text_block(
-                        self.page_idx, block_rect, dlg.result_text,
-                        fontname=dlg.result_fitz_font, fontsize=dlg.result_fontsize, color=dlg.result_color_rgb,
-                        baseline_y=style.get("baseline_y"), origin_x=style.get("origin_x")
-                    )
-                    self.render_cache()
-                    self.update()
-                    self.page_modified.emit()
-            return
         
-        current_text = " ".join(w[4] for w in self.selected_words)
-        min_x0 = min(w[0] for w in self.selected_words)
-        min_y0 = min(w[1] for w in self.selected_words)
-        max_x1 = max(w[2] for w in self.selected_words)
-        max_y1 = max(w[3] for w in self.selected_words)
-        union_rect = fitz.Rect(min_x0, min_y0, max_x1, max_y1)
+        target_rect = None
+        target_text = ""
+        style = None
+        
+        if not self.selected_words and self.hovered_block:
+            b = self.hovered_block
+            target_rect = fitz.Rect(b[0], b[1], b[2], b[3])
+            target_text = b[4]
+            style = self.doc.detect_text_style_at_rect(self.page_idx, target_rect)
+        elif self.selected_words:
+            min_x = min(w[0] for w in self.selected_words)
+            min_y = min(w[1] for w in self.selected_words)
+            max_x = max(w[2] for w in self.selected_words)
+            max_y = max(w[3] for w in self.selected_words)
+            target_rect = fitz.Rect(min_x, min_y, max_x, max_y)
+            target_text = " ".join([w[4] for w in self.selected_words])
+            style = self.doc.detect_text_style_at_rect(self.page_idx, target_rect)
+            
+        if target_rect and style:
+            from nengi.ui.inline_editor import InlineTextEditor
+            editor = InlineTextEditor(target_text, style, target_rect, self.zoom, self)
+            
+            # Hide the block while editing
+            self.active_text_widgets.append(editor)
+            self.update() # triggers paintEvent to draw white box
+            
+            def on_commit(new_text, s, r):
+                if editor in self.active_text_widgets:
+                    self.active_text_widgets.remove(editor)
+                self.doc.replace_text_block(
+                    self.page_idx, r, new_text,
+                    fontname=s.get("fitz_font", "helv"), 
+                    fontsize=s.get("size", 11.0), 
+                    color=s.get("color_rgb", (0,0,0)),
+                    baseline_y=s.get("baseline_y"), 
+                    origin_x=s.get("origin_x")
+                )
+                self.selected_words = []
+                self.render_cache()
+                self.update()
+                
+            def on_cancel():
+                if editor in self.active_text_widgets:
+                    self.active_text_widgets.remove(editor)
+                self.update()
 
-        style = self.doc.detect_text_style_at_rect(self.page_idx, union_rect)
-        dlg = TextEditorDialog(
-            initial_text=current_text,
-            detected_style=style,
-            title="✏️ Seçili Metni Düzenle",
-            parent=self
-        )
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            self.doc.edit_text_at_rect(
-                self.page_idx, union_rect, dlg.result_text,
-                fontsize=dlg.result_fontsize, fontname=dlg.result_fitz_font, color=dlg.result_color_rgb
-            )
-            self.selected_words = []
-            self.render_cache()
-            self.update()
-            self.page_modified.emit()
-
-    def whiteout_selected_text(self):
-        if not self.selected_words:
-            return
-        min_x0 = min(w[0] for w in self.selected_words)
-        min_y0 = min(w[1] for w in self.selected_words)
-        max_x1 = max(w[2] for w in self.selected_words)
-        max_y1 = max(w[3] for w in self.selected_words)
-        union_rect = fitz.Rect(min_x0, min_y0, max_x1, max_y1)
-        self.doc.whiteout_area(self.page_idx, union_rect)
-        self.selected_words = []
-        self.render_cache()
-        self.update()
-        self.page_modified.emit()
-
-    def _on_block_committed(self, box):
-        if box in self.active_text_widgets:
-            self.active_text_widgets.remove(box)
-        self.render_cache()
-        self.update()
-        self.page_modified.emit()
+            editor.editing_finished.connect(on_commit)
+            editor.editing_cancelled.connect(on_cancel)
+            
+            editor.show()
+            editor.setFocus()
+            editor.selectAll()
 
     def convert_selected_to_draggable(self):
         self._ensure_text_extracted()
