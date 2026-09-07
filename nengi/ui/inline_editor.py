@@ -52,12 +52,16 @@ class InlineTextEditor(QTextEdit):
         self.commit()
 
     def keyPressEvent(self, event):
-        # Ctrl+Enter or Return (if we want single line enter to commit)
+        # Ctrl+Enter to commit
         if event.key() == Qt.Key.Key_Return and event.modifiers() == Qt.KeyboardModifier.ControlModifier:
             self.commit()
             return
         elif event.key() == Qt.Key.Key_Escape:
             self.cancel()
+            return
+        elif event.key() == Qt.Key.Key_Tab:
+            # Insert 4 spaces instead of 	 because PyMuPDF doesn't render 	 correctly
+            self.insertPlainText("    ")
             return
         super().keyPressEvent(event)
         

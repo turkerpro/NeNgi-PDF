@@ -599,7 +599,6 @@ class PageRenderWidget(QWidget):
             
             editor.show()
             editor.setFocus()
-            editor.selectAll()
 
     def convert_selected_to_draggable(self):
         self._ensure_text_extracted()
