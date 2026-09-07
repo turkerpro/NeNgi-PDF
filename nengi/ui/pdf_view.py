@@ -580,8 +580,8 @@ class PageRenderWidget(QWidget):
                 initial_pos=pos,
                 text=b[4],
                 fontsize=style["size"],
-                fontname=style["font"],
-                color_rgb=style["color"],
+                fontname=style["fitz_font"],
+                color_rgb=style["color_rgb"],
                 zoom=self.zoom
             )
             self.active_text_widgets.append(box)
@@ -619,8 +619,8 @@ class PageRenderWidget(QWidget):
                 initial_pos=pos,
                 text=current_text,
                 fontsize=style["size"],
-                fontname=style["font"],
-                color_rgb=style["color"],
+                fontname=style["fitz_font"],
+                color_rgb=style["color_rgb"],
                 zoom=self.zoom
             )
             self.active_text_widgets.append(box)
