@@ -132,7 +132,8 @@ class MeasurementEngine:
             annot.set_colors(stroke=color)
             annot.set_border(width=1.5)
             # Add tick line ends
-            annot.set_line_ends(fitz.PDF_ANNOT_LE_SLASH, fitz.PDF_ANNOT_LE_SLASH)
+            slash_end = getattr(fitz, "PDF_ANNOT_LE_SLASH", 8)
+            annot.set_line_ends(slash_end, slash_end)
             annot.set_info(title="Ölçüm", content=label)
             annot.update()
 

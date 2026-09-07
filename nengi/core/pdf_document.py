@@ -678,10 +678,10 @@ class PDFDocument:
             encrypt_kw = {}
             if password:
                 encrypt_kw = {
-                    "encryption": fitz.PDF_ENCRYPT_AES_256,
+                    "encryption": getattr(fitz, "PDF_ENCRYPT_AES_256", 4),
                     "owner_pw": password,
                     "user_pw": password,
-                    "permissions": fitz.PDF_PERM_PRINT | fitz.PDF_PERM_COPY | fitz.PDF_PERM_ANNOTATE
+                    "permissions": getattr(fitz, "PDF_PERM_PRINT", 4) | getattr(fitz, "PDF_PERM_COPY", 16) | getattr(fitz, "PDF_PERM_ANNOTATE", 32)
                 }
 
             if save_path == self.file_path:

@@ -437,7 +437,7 @@ class PageRenderWidget(QWidget):
                 elif self.mode == "line":
                     AnnotationManager.add_line(page, p1, p2, color=self.current_color, width=self.current_width)
                 elif self.mode == "arrow":
-                    AnnotationManager.add_line(page, p1, p2, color=self.current_color, width=self.current_width, end_style=fitz.PDF_ANNOT_LE_CLOSED_ARROW)
+                    AnnotationManager.add_line(page, p1, p2, color=self.current_color, width=self.current_width, end_style=getattr(fitz, "PDF_ANNOT_LE_CLOSED_ARROW", 5))
                 elif self.mode == "rect":
                     AnnotationManager.add_rect(page, rect, color=self.current_color, width=self.current_width)
                 elif self.mode == "oval":

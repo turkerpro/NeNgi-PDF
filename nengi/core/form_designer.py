@@ -10,14 +10,21 @@ import pymupdf as fitz
 from .pdf_document import PDFDocument
 
 
-# PyMuPDF widget type constants
-FIELD_TEXT = fitz.PDF_WIDGET_TYPE_TEXT
-FIELD_CHECKBOX = fitz.PDF_WIDGET_TYPE_CHECKBOX
-FIELD_RADIO = fitz.PDF_WIDGET_TYPE_RADIOBUTTON
-FIELD_COMBO = fitz.PDF_WIDGET_TYPE_COMBOBOX
-FIELD_LISTBOX = fitz.PDF_WIDGET_TYPE_LISTBOX
-FIELD_BUTTON = fitz.PDF_WIDGET_TYPE_PUSHBUTTON
-FIELD_SIGNATURE = fitz.PDF_WIDGET_TYPE_SIGNATURE
+# PyMuPDF widget type constants (safe fallbacks for all PyMuPDF versions)
+FIELD_TEXT = getattr(fitz, "PDF_WIDGET_TYPE_TEXT", 4)
+FIELD_CHECKBOX = getattr(fitz, "PDF_WIDGET_TYPE_CHECKBOX", 2)
+FIELD_RADIO = getattr(fitz, "PDF_WIDGET_TYPE_RADIOBUTTON", 3)
+FIELD_COMBO = getattr(fitz, "PDF_WIDGET_TYPE_COMBOBOX", 6)
+FIELD_LISTBOX = getattr(fitz, "PDF_WIDGET_TYPE_LISTBOX", 5)
+FIELD_BUTTON = getattr(fitz, "PDF_WIDGET_TYPE_BUTTON", getattr(fitz, "PDF_WIDGET_TYPE_PUSHBUTTON", 1))
+FIELD_SIGNATURE = getattr(fitz, "PDF_WIDGET_TYPE_SIGNATURE", 7)
+
+# Field flags
+PDF_FIELD_IS_READ_ONLY = getattr(fitz, "PDF_FIELD_IS_READ_ONLY", 1)
+PDF_FIELD_IS_REQUIRED = getattr(fitz, "PDF_FIELD_IS_REQUIRED", 2)
+PDF_TX_FIELD_IS_MULTILINE = getattr(fitz, "PDF_TX_FIELD_IS_MULTILINE", 1 << 12)
+PDF_TX_FIELD_IS_PASSWORD = getattr(fitz, "PDF_TX_FIELD_IS_PASSWORD", 1 << 13)
+PDF_TX_FIELD_IS_COMB = getattr(fitz, "PDF_TX_FIELD_IS_COMB", 1 << 24)
 
 # Turkish display names for field types
 FIELD_TYPE_LABELS = {
@@ -121,19 +128,19 @@ class FormDesigner:
 
         field_flags = 0
         if config.is_readonly:
-            field_flags |= fitz.PDF_FIELD_IS_READ_ONLY
+            field_flags |= PDF_FIELD_IS_READ_ONLY
         if config.is_required:
-            field_flags |= fitz.PDF_FIELD_IS_REQUIRED
+            field_flags |= PDF_FIELD_IS_REQUIRED
         widget.field_flags = field_flags
 
         if config.field_type == FIELD_TEXT:
             widget.text_maxlen = config.max_length if config.max_length > 0 else 0
             if config.is_multiline:
-                widget.field_flags |= fitz.PDF_TX_FIELD_IS_MULTILINE
+                widget.field_flags |= PDF_TX_FIELD_IS_MULTILINE
             if config.is_password:
-                widget.field_flags |= fitz.PDF_TX_FIELD_IS_PASSWORD
+                widget.field_flags |= PDF_TX_FIELD_IS_PASSWORD
             if config.comb_chars > 0:
-                widget.field_flags |= fitz.PDF_TX_FIELD_IS_COMB
+                widget.field_flags |= PDF_TX_FIELD_IS_COMB
                 widget.text_maxlen = config.comb_chars
             if config.value:
                 widget.field_value = config.value
@@ -221,8 +228,8 @@ class FormDesigner:
                 "value": widget.field_value,
                 "rect": widget.rect,
                 "page": page_num,
-                "readonly": bool(widget.field_flags & fitz.PDF_FIELD_IS_READ_ONLY),
-                "required": bool(widget.field_flags & fitz.PDF_FIELD_IS_REQUIRED),
+                "readonly": bool(widget.field_flags & PDF_FIELD_IS_READ_ONLY),
+                "required": bool(widget.field_flags & PDF_FIELD_IS_REQUIRED),
                 "tooltip": getattr(widget, "field_label", ""),
                 "font_size": widget.text_fontsize,
                 "text_color": widget.text_color,

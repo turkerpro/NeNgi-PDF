@@ -24,7 +24,7 @@ class SecurityManager:
             return False
         try:
             # Saving without encryption parameters strips the password
-            doc.doc.save(output_path, encryption=fitz.PDF_ENCRYPT_NONE, garbage=3, deflate=True)
+            doc.doc.save(output_path, encryption=getattr(fitz, "PDF_ENCRYPT_NONE", 0), garbage=3, deflate=True)
             return True
         except Exception as e:
             print(f"Error removing password: {e}")
