@@ -32,9 +32,14 @@ class DraggableBlockWidget(QWidget):
         self.setStyleSheet("""
             DraggableBlockWidget {
                 border: 2px dashed #0078D4;
-                background-color: rgba(255, 255, 255, 100);
+                background-color: rgba(255, 255, 255, 150);
             }
         """)
+        
+        from PyQt6.QtWidgets import QGraphicsOpacityEffect
+        op = QGraphicsOpacityEffect(self)
+        op.setOpacity(0.85)
+        self.setGraphicsEffect(op)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)

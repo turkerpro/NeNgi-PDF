@@ -133,6 +133,17 @@ class PageRenderWidget(QWidget):
         if self.cached_pixmap:
             painter.drawPixmap(0, 0, self.cached_pixmap)
 
+        # Hide original blocks of DraggableBlockWidgets being dragged
+        from PyQt6.QtGui import QColor, QBrush
+        from PyQt6.QtCore import QRectF
+        for w in self.active_text_widgets:
+            if type(w).__name__ == "DraggableBlockWidget":
+                sx = w.pdf_rect.x0 * self.zoom
+                sy = w.pdf_rect.y0 * self.zoom
+                sw = w.pdf_rect.width * self.zoom
+                sh = w.pdf_rect.height * self.zoom
+                painter.fillRect(QRectF(sx, sy, sw, sh), QBrush(QColor(255, 255, 255)))
+
         # Draw diff or search highlight overlays
         for rect, color in self.highlights:
             screen_x = rect.x0 * self.zoom
