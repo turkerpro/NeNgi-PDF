@@ -187,6 +187,12 @@ class AnnotationToolbar(QFrame):
         self.current_opacity = val / 100.0
         self.property_changed.emit("opacity", self.current_opacity)
         
+    def set_active_tool(self, tool_name: str):
+        for btn in self.tool_group.buttons():
+            if btn.property("tool_name") == tool_name:
+                btn.setChecked(True)
+                break
+
     def update_theme(self, is_dark: bool):
         self.is_dark = is_dark
         bg = "#1E2023" if is_dark else "#FFFFFF"
