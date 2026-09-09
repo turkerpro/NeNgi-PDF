@@ -4,8 +4,6 @@ on:
   push:
     branches: [ "main", "master" ]
     tags: [ 'v*' ]
-  pull_request:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
 permissions:
@@ -37,41 +35,132 @@ jobs:
 
       - name: Run Tests
         run: |
-          python -m unittest discover -v tests
+          python -m pytest tests/ -v
         continue-on-error: true
 
-      - name: Build Windows Executables
+      - name: Build Windows Setup Installer (onedir)
         run: |
-          # 1. Build uncompressed folder structure for Setup Installer (Instant 0.05s launch)
-          python -m PyInstaller --noconfirm --onedir --windowed --name "NeNgi_PDF" --icon "resources/app_icon.ico" --collect-all pymupdf --collect-all fitz --collect-all PyQt6 --hidden-import PyQt6 --hidden-import PIL --add-data "resources;resources" nengi/main.py
+          python -m PyInstaller `
+            --noconfirm `
+            --onedir `
+            --windowed `
+            --name "NeNgi_PDF" `
+            --icon "resources/app_icon.ico" `
+            --collect-all pymupdf `
+            --collect-all fitz `
+            --collect-all PyQt6 `
+            --hidden-import PyQt6 `
+            --hidden-import PyQt6.QtCore `
+            --hidden-import PyQt6.QtGui `
+            --hidden-import PyQt6.QtWidgets `
+            --hidden-import PyQt6.QtPrintSupport `
+            --hidden-import PIL `
+            --hidden-import docx `
+            --hidden-import openpyxl `
+            --hidden-import pptx `
+            --add-data "resources;resources" `
+            nengi/main.py
 
-          # 2. Build standalone single-file portable binary
-          python -m PyInstaller --noconfirm --onefile --windowed --name "NeNgi_PDF_Portable" --icon "resources/app_icon.ico" --collect-all pymupdf --collect-all fitz --collect-all PyQt6 --hidden-import PyQt6 --hidden-import PIL --add-data "resources;resources" nengi/main.py
-
-      - name: Build Windows Setup Installer (NSIS)
+      - name: Build Portable EXE (onefile)
         run: |
-          $TAG = "${{ github.ref_name }}"
-          if (-not $TAG -or $TAG -eq "main") { $TAG = "v1.8.1" }
-          Copy-Item "dist\NeNgi_PDF_Portable.exe" -Destination "dist\NeNgi_PDF_${TAG}_Portable.exe"
+          python -m PyInstaller `
+            --noconfirm `
+            --onefile `
+            --windowed `
+            --name "NeNgi_PDF_Portable" `
+            --icon "resources/app_icon.ico" `
+            --collect-all pymupdf `
+            --collect-all fitz `
+            --collect-all PyQt6 `
+            --hidden-import PyQt6 `
+            --hidden-import PyQt6.QtCore `
+            --hidden-import PyQt6.QtGui `
+            --hidden-import PyQt6.QtWidgets `
+            --hidden-import PyQt6.QtPrintSupport `
+            --hidden-import PIL `
+            --hidden-import docx `
+            --hidden-import openpyxl `
+            --hidden-import pptx `
+            --add-data "resources;resources" `
+            nengi/main.py
+
+      - name: Get Version
+        id: get_version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if (-not $tag -or $tag -eq "main" -or $tag -eq "master") {
+            $match = (Select-String -Path "nengi/ui/main_window.py" -Pattern 'v(\d+\.\d+\.\d+)' | Select-Object -First 1)
+            $ver = if ($match) { $match.Matches.Groups[1].Value } else { "1.8.1" }
+            $tag = "v$ver"
+          }
+          echo "VERSION=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Build NSIS Setup Installer
+        shell: pwsh
+        run: |
           & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
-          Copy-Item "dist\NeNgi_PDF_Setup.exe" -Destination "dist\NeNgi_PDF_${TAG}_Setup.exe"
+          if ($LASTEXITCODE -ne 0) { throw "NSIS build failed" }
 
-      - name: Upload Windows Executable Artifacts
+      - name: Rename Artifacts
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.get_version.outputs.VERSION }}"
+          Copy-Item "dist\NeNgi_PDF_Portable.exe" "dist\NeNgi_PDF_${ver}_Portable.exe"
+          Copy-Item "dist\NeNgi_PDF_Setup.exe" "dist\NeNgi_PDF_${ver}_Setup.exe"
+
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: NeNgi-PDF-Windows-x64
+          name: NeNgi-PDF-Windows-x64-${{ steps.get_version.outputs.VERSION }}
           path: |
-            dist/NeNgi_PDF_*.exe
+            dist/NeNgi_PDF_*_Setup.exe
+            dist/NeNgi_PDF_*_Portable.exe
           if-no-files-found: error
+          retention-days: 30
 
-      - name: Create Release and Attach Installers (On Tag)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Delete Old 'latest-build' Release
+        shell: pwsh
+        run: |
+          $headers = @{ Authorization = "Bearer ${{ secrets.GITHUB_TOKEN }}"; Accept = "application/vnd.github+json" }
+          $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases" -Headers $headers
+          $old = $releases | Where-Object { $_.tag_name -eq "latest-build" }
+          if ($old) {
+            Invoke-RestMethod -Method Delete -Uri "https://api.github.com/repos/${{ github.repository }}/releases/$($old.id)" -Headers $headers
+            Start-Sleep -Seconds 2
+            try { Invoke-RestMethod -Method Delete -Uri "https://api.github.com/repos/${{ github.repository }}/git/refs/tags/latest-build" -Headers $headers } catch {}
+          }
+        continue-on-error: true
+
+      - name: Create Rolling 'latest-build' Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: latest-build
+          name: "NeNgi PDF – Son Derleme (${{ steps.get_version.outputs.VERSION }})"
+          body: |
+            ## ⬇️ İndir
+
+            | Dosya | Açıklama |
+            |-------|----------|
+            | `NeNgi_PDF_*_Setup.exe` | **Önerilen** – Masaüstü kısayolu + .pdf ilişkilendirmesi kurar |
+            | `NeNgi_PDF_*_Portable.exe` | Kurulum gerektirmez, tek dosya |
+
+            > **Son otomatik derleme** – `main` dalına her yeni güncelleme geldiğinde bu sürüm yenilenir.
+            > Commit: `${{ github.sha }}`
+          prerelease: true
           files: |
-            dist/NeNgi_PDF_${{ github.ref_name }}_Setup.exe
-            dist/NeNgi_PDF_${{ github.ref_name }}_Portable.exe
-            dist/NeNgi_PDF_Setup.exe
-            dist/NeNgi_PDF_Portable.exe
+            dist/NeNgi_PDF_${{ steps.get_version.outputs.VERSION }}_Setup.exe
+            dist/NeNgi_PDF_${{ steps.get_version.outputs.VERSION }}_Portable.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Versioned Release (On Tag Push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "NeNgi PDF ${{ github.ref_name }}"
+          files: |
+            dist/NeNgi_PDF_${{ steps.get_version.outputs.VERSION }}_Setup.exe
+            dist/NeNgi_PDF_${{ steps.get_version.outputs.VERSION }}_Portable.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
