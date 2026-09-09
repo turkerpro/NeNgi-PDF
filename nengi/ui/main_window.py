@@ -152,6 +152,8 @@ class MainWindow(QMainWindow):
         self.doc = None
         self.current_page_idx = 0
         self.tray_agent = None
+        self._is_running_ocr = False
+        self.is_reading_mode = False
         self._pending_merge_files: List[str] = []
         
         self._merge_debounce_timer = QTimer(self)
@@ -228,6 +230,10 @@ class MainWindow(QMainWindow):
         self.comments_panel.hide()
 
         self.main_splitter.setSizes([220, 820, 300, 0])
+        self.main_splitter.setStretchFactor(0, 0)
+        self.main_splitter.setStretchFactor(1, 1)
+        self.main_splitter.setStretchFactor(2, 0)
+        self.main_splitter.setStretchFactor(3, 0)
         root_layout.addWidget(self.main_splitter, 1)
 
         # 3. Bottom Footer (Pagination & Zoom)
@@ -255,11 +261,23 @@ class MainWindow(QMainWindow):
         self.setMouseTracking(True)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
 
-        # Annotations shortcuts
+        # Annotations shortcuts (single-key: don't steal typing in search/line edits)
         from PyQt6.QtGui import QShortcut
-        QShortcut(QKeySequence("U"), self).activated.connect(lambda: self.floating_toolbar._tool_clicked("highlight"))
-        QShortcut(QKeySequence("S"), self).activated.connect(lambda: self.floating_toolbar._tool_clicked("sticky_note"))
-        QShortcut(QKeySequence("Shift+L"), self).activated.connect(lambda: self.floating_toolbar._tool_clicked("line"))
+        from PyQt6.QtWidgets import QApplication, QLineEdit, QTextEdit, QComboBox
+        def _tool_guard(tool_id: str):
+            fw = QApplication.focusWidget()
+            if isinstance(fw, (QLineEdit, QTextEdit, QComboBox)):
+                return
+            self.floating_toolbar._tool_clicked(tool_id)
+        sc_u = QShortcut(QKeySequence("U"), self)
+        sc_u.setContext(Qt.ShortcutContext.WidgetShortcut)
+        sc_u.activated.connect(lambda: _tool_guard("highlight"))
+        sc_s = QShortcut(QKeySequence("S"), self)
+        sc_s.setContext(Qt.ShortcutContext.WidgetShortcut)
+        sc_s.activated.connect(lambda: _tool_guard("sticky_note"))
+        sc_l = QShortcut(QKeySequence("Shift+L"), self)
+        sc_l.setContext(Qt.ShortcutContext.WidgetShortcut)
+        sc_l.activated.connect(lambda: _tool_guard("line"))
         
         self._init_menus()
 
@@ -434,7 +452,14 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
             return
         viewer = self.get_current_viewer()
+        if viewer is None:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        if not getattr(viewer, "page_widgets", None):
+            return
         curr_page = viewer.current_page_idx
+        if not 0 <= curr_page < doc.page_count:
+            return
         rect = doc.get_page(curr_page).rect
         dlg = CropPagesDialog(rect, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
@@ -615,7 +640,10 @@ class MainWindow(QMainWindow):
         self.tabs.tabBar().customContextMenuRequested.connect(self._show_tab_context_menu)
         self.doc_splitter.addWidget(self.tabs)
 
-        self.doc_splitter.setSizes([0, 820])
+        self.doc_splitter.setSizes([0, 0, 800])
+        self.doc_splitter.setStretchFactor(0, 0)
+        self.doc_splitter.setStretchFactor(1, 0)
+        self.doc_splitter.setStretchFactor(2, 1)
         layout.addWidget(self.doc_splitter, 1)
 
         # Floating Bottom Pill Toolbar (Centered capsule island)
@@ -624,7 +652,7 @@ class MainWindow(QMainWindow):
         pill_container.addStretch()
 
         _settings = getattr(self, 'settings', None)
-        _is_dark = (_settings.value("theme", "light") == "dark") if _settings else False
+        _is_dark = (_settings.value("theme", "dark") == "dark") if _settings else False
         self.floating_toolbar = AnnotationToolbar(is_dark=_is_dark)
         self.floating_toolbar.tool_selected.connect(self._on_floating_tool_changed)
         self.floating_toolbar.color_changed.connect(self._on_color_changed)
@@ -826,14 +854,14 @@ class MainWindow(QMainWindow):
             self.thumbnail_bar.setVisible(False)
             self.bookmarks_panel.setVisible(False)
             self.doc_splitter.setSizes([0, 0, 800])
-            self.main_splitter.setSizes([0, 800, 0])
+            self.main_splitter.setSizes([0, 800, 0, 0])
             self.reading_hud.setVisible(True)
         else:
             self.copilot_panel.setVisible(getattr(self, '_prev_copilot_vis', False))
             self.thumbnail_bar.setVisible(getattr(self, '_prev_thumbs_vis', False))
             self.bookmarks_panel.setVisible(getattr(self, '_prev_bookmarks_vis', False))
             self.doc_splitter.setSizes([160 if self.thumbnail_bar.isVisible() or self.bookmarks_panel.isVisible() else 0, 0, 800])
-            self.main_splitter.setSizes([220, 820, 300 if self.copilot_panel.isVisible() else 0])
+            self.main_splitter.setSizes([220, 820, 300 if self.copilot_panel.isVisible() else 0, 0])
             self.reading_hud.setVisible(False)
         
     def _on_nav_rail_action(self, key: str):
@@ -929,7 +957,7 @@ class MainWindow(QMainWindow):
     def _toggle_thumbnails(self):
         is_vis = not self.thumbnail_bar.isVisible()
         self.thumbnail_bar.setVisible(is_vis)
-        self.doc_splitter.setSizes([160 if is_vis else 0, 800])
+        self.doc_splitter.setSizes([160 if is_vis else 0, 0, 800])
 
     def _show_recent_files_menu(self):
         if not self.recent_files:
@@ -1313,6 +1341,17 @@ class MainWindow(QMainWindow):
         if isinstance(widget, PDFViewer) and widget.doc:
             widget.doc.close()
 
+        if isinstance(widget, PDFViewer):
+            for sig, slot in (
+                (widget.page_changed, self._on_page_changed),
+                (widget.document_modified, self._on_document_modified),
+                (widget.status_message, self.show_status_message),
+            ):
+                try:
+                    sig.disconnect(slot)
+                except (TypeError, RuntimeError):
+                    pass
+
         self.tabs.removeTab(index)
         if self.tabs.count() == 0:
             self.thumbnail_bar.clear()
@@ -1409,9 +1448,16 @@ class MainWindow(QMainWindow):
 
     def _edit_selected_text_trigger(self):
         viewer = self.get_current_viewer()
-        if viewer and viewer.page_widgets:
-            curr_pw = viewer.page_widgets[viewer.current_page_idx]
-            curr_pw.prompt_edit_selected_text()
+        if viewer is None:
+            return
+        page_widgets = getattr(viewer, "page_widgets", None)
+        if not page_widgets:
+            return
+        idx = getattr(viewer, "current_page_idx", 0)
+        if not 0 <= idx < len(page_widgets):
+            return
+        curr_pw = page_widgets[idx]
+        curr_pw.prompt_edit_selected_text()
 
     def _run_ocr_trigger(self):
         if self._is_running_ocr:

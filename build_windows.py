@@ -1,6 +1,6 @@
 """
 NeNgi PDF - PyInstaller Windows Executable Build Script
-Builds a standalone, single-file Windows executable (NeNgi_PDF.exe).
+Builds a standalone, onedir Windows executable (NeNgi_PDF.exe).
 """
 
 import os
@@ -23,12 +23,18 @@ def build():
         "--windowed",           # GUI app (no terminal window)
         "--name", "NeNgi_PDF",
         f"--paths={base_dir}",
+        "--icon", os.path.join(base_dir, "resources", "app_icon.ico"),
         "--collect-all", "pymupdf",
         "--collect-all", "fitz",
+        "--collect-all", "PyQt6",
+        "--collect-all", "rapidocr_onnxruntime",
+        "--collect-all", "onnxruntime",
         "--hidden-import", "PyQt6",
         "--hidden-import", "PyQt6.QtCore",
         "--hidden-import", "PyQt6.QtGui",
         "--hidden-import", "PyQt6.QtWidgets",
+        "--hidden-import", "PyQt6.QtPrintSupport",
+        "--hidden-import", "rapidocr_onnxruntime",
         "--hidden-import", "PIL",
         "--hidden-import", "docx",
         "--hidden-import", "openpyxl",

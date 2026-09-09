@@ -11,6 +11,8 @@ class ExportEngine:
     @staticmethod
     def pdf_to_docx(doc, output_path, options=None):
         """Convert PDF to Word (.docx) using python-docx."""
+        if doc is None or getattr(doc, "doc", None) is None or not getattr(doc, "is_open", False):
+            return False
         try:
             from docx import Document
             from docx.shared import Pt
@@ -32,6 +34,8 @@ class ExportEngine:
     @staticmethod
     def pdf_to_xlsx(doc, output_path, options=None):
         """Convert PDF to Excel (.xlsx) using openpyxl."""
+        if doc is None or getattr(doc, "doc", None) is None or not getattr(doc, "is_open", False):
+            return False
         try:
             from openpyxl import Workbook
         except ImportError:
@@ -64,6 +68,8 @@ class ExportEngine:
     @staticmethod
     def pdf_to_pptx(doc, output_path, options=None):
         """Convert PDF to PowerPoint (.pptx) using python-pptx."""
+        if doc is None or getattr(doc, "doc", None) is None or not getattr(doc, "is_open", False):
+            return False
         try:
             from pptx import Presentation
             from pptx.util import Inches
@@ -93,6 +99,8 @@ class ExportEngine:
     @staticmethod
     def pdf_to_html(doc, output_path, options=None):
         """Convert PDF to HTML."""
+        if doc is None or getattr(doc, "doc", None) is None or not getattr(doc, "is_open", False):
+            return False
         html_content = "<html><body>"
         for i in range(len(doc.doc)):
             page = doc.get_page(i)

@@ -196,7 +196,7 @@ class RedactionEngine:
                     results["links_removed"] += 1
 
             if remove_annotations:
-                for annot in page.annots():
+                for annot in (page.annots() or []):
                     page.delete_annot(annot)
                     results["annotations_removed"] += 1
 

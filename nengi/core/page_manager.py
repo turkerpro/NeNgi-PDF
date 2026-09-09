@@ -44,34 +44,42 @@ class PageManager:
     @staticmethod
     def merge_pdf_files(file_paths: List[str], output_path: str) -> bool:
         """Merges multiple PDF files into one output PDF."""
+        merged_doc = None
         try:
             merged_doc = fitz.open()
             for path in file_paths:
                 sub_doc = fitz.open(path)
-                merged_doc.insert_pdf(sub_doc)
-                sub_doc.close()
+                try:
+                    merged_doc.insert_pdf(sub_doc)
+                finally:
+                    sub_doc.close()
             merged_doc.save(output_path, garbage=3, deflate=True)
-            merged_doc.close()
             return True
         except Exception as e:
             print(f"Merge error: {e}")
             return False
+        finally:
+            if merged_doc is not None:
+                merged_doc.close()
 
     @staticmethod
     def extract_pages(doc: PDFDocument, page_indices: List[int], output_path: str) -> bool:
         """Extracts specified pages to a new standalone PDF."""
         if not doc.is_open or not page_indices:
             return False
+        new_doc = None
         try:
             new_doc = fitz.open()
             for idx in page_indices:
                 new_doc.insert_pdf(doc.doc, from_page=idx, to_page=idx)
             new_doc.save(output_path, garbage=3, deflate=True)
-            new_doc.close()
             return True
         except Exception as e:
             print(f"Extract error: {e}")
             return False
+        finally:
+            if new_doc is not None:
+                new_doc.close()
 
     @staticmethod
     def split_document(doc: PDFDocument, mode: str, value: Any, output_dir: str, prefix: str = 'split') -> bool:
@@ -97,10 +105,12 @@ class PageManager:
                 for start_page in range(0, total_pages, pages_per_file):
                     end_page = min(start_page + pages_per_file - 1, total_pages - 1)
                     new_doc = fitz.open()
-                    new_doc.insert_pdf(doc.doc, from_page=start_page, to_page=end_page)
-                    out_path = os.path.join(output_dir, f"{prefix}_{file_idx}.pdf")
-                    new_doc.save(out_path, garbage=3, deflate=True)
-                    new_doc.close()
+                    try:
+                        new_doc.insert_pdf(doc.doc, from_page=start_page, to_page=end_page)
+                        out_path = os.path.join(output_dir, f"{prefix}_{file_idx}.pdf")
+                        new_doc.save(out_path, garbage=3, deflate=True)
+                    finally:
+                        new_doc.close()
                     file_idx += 1
                 return True
                 
@@ -115,27 +125,31 @@ class PageManager:
                 
                 while start_page < total_pages:
                     new_doc = fitz.open()
-                    current_size = 0
-                    added = False
-                    for p in range(start_page, total_pages):
-                        # Approximate size: save memory doc and check len
-                        temp_doc = fitz.open()
-                        temp_doc.insert_pdf(doc.doc, from_page=p, to_page=p)
-                        bz = temp_doc.tobytes()
-                        page_size = len(bz)
-                        temp_doc.close()
-                        
-                        if current_size + page_size > max_bytes and added:
-                            break
-                        
-                        new_doc.insert_pdf(doc.doc, from_page=p, to_page=p)
-                        current_size += page_size
-                        start_page = p + 1
-                        added = True
-                    
-                    out_path = os.path.join(output_dir, f"{prefix}_{file_idx}.pdf")
-                    new_doc.save(out_path, garbage=3, deflate=True)
-                    new_doc.close()
+                    try:
+                        current_size = 0
+                        added = False
+                        for p in range(start_page, total_pages):
+                            # Approximate size: save memory doc and check len
+                            temp_doc = fitz.open()
+                            try:
+                                temp_doc.insert_pdf(doc.doc, from_page=p, to_page=p)
+                                bz = temp_doc.tobytes()
+                            finally:
+                                temp_doc.close()
+                            page_size = len(bz)
+
+                            if current_size + page_size > max_bytes and added:
+                                break
+
+                            new_doc.insert_pdf(doc.doc, from_page=p, to_page=p)
+                            current_size += page_size
+                            start_page = p + 1
+                            added = True
+
+                        out_path = os.path.join(output_dir, f"{prefix}_{file_idx}.pdf")
+                        new_doc.save(out_path, garbage=3, deflate=True)
+                    finally:
+                        new_doc.close()
                     file_idx += 1
                 
                 return True
@@ -156,12 +170,14 @@ class PageManager:
                     end_page = bookmarks[i+1][2] - 2 if i + 1 < len(bookmarks) else total_pages - 1
                     if start_page > end_page or start_page < 0:
                         continue
-                        
+
                     new_doc = fitz.open()
-                    new_doc.insert_pdf(doc.doc, from_page=start_page, to_page=end_page)
-                    out_path = os.path.join(output_dir, f"{prefix}_{file_idx}.pdf")
-                    new_doc.save(out_path, garbage=3, deflate=True)
-                    new_doc.close()
+                    try:
+                        new_doc.insert_pdf(doc.doc, from_page=start_page, to_page=end_page)
+                        out_path = os.path.join(output_dir, f"{prefix}_{file_idx}.pdf")
+                        new_doc.save(out_path, garbage=3, deflate=True)
+                    finally:
+                        new_doc.close()
                     file_idx += 1
                 
                 return True

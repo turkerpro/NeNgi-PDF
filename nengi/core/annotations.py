@@ -108,7 +108,7 @@ class AnnotationManager:
     
     @staticmethod
     def get_all_annotations(page):
-        return list(page.annots())
+        return list(page.annots() or [])
     
     @staticmethod
     def delete_annotation(page, annot):

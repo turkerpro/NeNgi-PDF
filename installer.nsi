@@ -146,6 +146,9 @@ Section Uninstall
   DeleteRegKey HKLM "${PRODUCT_DIR_REGKEY}"
   DeleteRegKey HKLM "Software\NeNgiPDF"
   DeleteRegValue HKLM "Software\RegisteredApplications" "NeNgi PDF"
+  ; Kurulumda yazılan HKCU dosya ilişkilendirme anahtarları
+  DeleteRegKey HKCU "Software\Classes\NeNgiPDF.Document"
+  DeleteRegKey HKCU "Software\Classes\.pdf"
 
   ; Windows Explorer refresh
   System::Call 'shell32.dll::SHChangeNotify(i, i, i, i) v (0x08000000, 0, 0, 0)'

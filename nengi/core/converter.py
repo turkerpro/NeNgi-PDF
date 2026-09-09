@@ -53,22 +53,29 @@ class FormatConverter:
         """Converts a list of images into a single PDF."""
         if not image_paths:
             return False
+        pdf_doc = None
         try:
             pdf_doc = fitz.open()
             for img_path in image_paths:
                 img = fitz.open(img_path)
-                rect = img[0].rect
-                pdfbytes = img.convert_to_pdf()
-                img.close()
-                
+                try:
+                    rect = img[0].rect
+                    pdfbytes = img.convert_to_pdf()
+                finally:
+                    img.close()
+
                 img_pdf = fitz.open("pdf", pdfbytes)
-                page = pdf_doc.new_page(width=rect.width, height=rect.height)
-                page.show_pdf_page(rect, img_pdf, 0)
-                img_pdf.close()
+                try:
+                    page = pdf_doc.new_page(width=rect.width, height=rect.height)
+                    page.show_pdf_page(rect, img_pdf, 0)
+                finally:
+                    img_pdf.close()
 
             pdf_doc.save(output_pdf_path, garbage=3, deflate=True)
-            pdf_doc.close()
             return True
         except Exception as e:
             print(f"Images to PDF conversion error: {e}")
             return False
+        finally:
+            if pdf_doc is not None:
+                pdf_doc.close()

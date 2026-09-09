@@ -5,6 +5,7 @@ and annotations using PyMuPDF (fitz).
 """
 
 from __future__ import annotations
+import logging
 import os
 import io
 from typing import List, Tuple, Dict, Any, Optional
@@ -12,6 +13,8 @@ import fitz
 from PIL import Image
 from PyQt6.QtGui import QImage, QPixmap
 import sys
+
+logger = logging.getLogger(__name__)
 
 _cached_font_buffer: Optional[bytes] = None
 
@@ -84,7 +87,7 @@ class PDFDocument:
                 self._undo_stack.pop(0)
             self._redo_stack.clear()
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -102,19 +105,22 @@ class PDFDocument:
         """Restores previous document state."""
         if not self.can_undo():
             return False
+        if not self.is_open or self.doc is None:
+            return False
         try:
             current_data = self.doc.tobytes(garbage=3, deflate=True)
             self._redo_stack.append(current_data)
             prev_data = self._undo_stack.pop()
-            
+
             file_path = self.file_path
-            self.doc.close()
+            if self.doc is not None and not self.doc.is_closed:
+                self.doc.close()
             self.doc = fitz.open("pdf", prev_data)
             self.file_path = file_path
             self.is_modified = True
             return True
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -127,19 +133,22 @@ class PDFDocument:
         """Restores next document state."""
         if not self.can_redo():
             return False
+        if not self.is_open or self.doc is None:
+            return False
         try:
             current_data = self.doc.tobytes(garbage=3, deflate=True)
             self._undo_stack.append(current_data)
             next_data = self._redo_stack.pop()
-            
+
             file_path = self.file_path
-            self.doc.close()
+            if self.doc is not None and not self.doc.is_closed:
+                self.doc.close()
             self.doc = fitz.open("pdf", next_data)
             self.file_path = file_path
             self.is_modified = True
             return True
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -167,13 +176,13 @@ class PDFDocument:
                 self.is_authenticated = True
             return self.is_authenticated
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
             return False
         except Exception as e:
-            print(f"Failed to open PDF file {file_path}: {e}")
+            print(f"Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -286,7 +295,7 @@ class PDFDocument:
             self.is_modified = True
             return True
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -314,7 +323,7 @@ class PDFDocument:
                 self.is_modified = True
                 return True
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -340,7 +349,7 @@ class PDFDocument:
             self.is_modified = True
             return True
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -359,7 +368,8 @@ class PDFDocument:
         try:
             page = self.get_page(page_number)
             return page.get_text("words")
-        except Exception:
+        except Exception as e:
+            logger.warning("get_page_text_words failed for page %s: %s", page_number, e)
             return []
 
     def get_page_blocks(self, page_number: int) -> List[Tuple[float, float, float, float, str, int, int]]:
@@ -374,7 +384,8 @@ class PDFDocument:
             page = self.get_page(page_number)
             blocks = page.get_text("blocks")
             return [b for b in blocks if b[6] == 0 and b[4].strip()]
-        except Exception:
+        except Exception as e:
+            logger.warning("get_page_blocks failed for page %s: %s", page_number, e)
             return []
 
     def detect_text_style_at_rect(self, page_number: int, rect: fitz.Rect) -> dict:
@@ -472,7 +483,7 @@ class PDFDocument:
                 "fitz_font": fitz_font
             }
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -516,7 +527,7 @@ class PDFDocument:
             self.is_modified = True
             return True
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -568,7 +579,7 @@ class PDFDocument:
             self.is_modified = True
             return True
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -614,7 +625,7 @@ class PDFDocument:
             self.is_modified = True
             return True
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -662,14 +673,15 @@ class PDFDocument:
 
                 self.is_modified = True
                 return recognized_items
-            except ImportError:
+            except ImportError as e:
+                logger.warning("RapidOCR not available, ocr_page returns empty list: %s", e)
                 return []
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
-            return False
+            return []
         except Exception as e:
             print(f"Error running OCR: {e}")
             return []
@@ -690,7 +702,7 @@ class PDFDocument:
             self.is_modified = True
             return True
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -787,7 +799,7 @@ class PDFDocument:
             self.is_modified = False
             return True
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -879,7 +891,7 @@ class PDFDocument:
             self.is_modified = True
             return True
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -968,7 +980,7 @@ class PDFDocument:
             self.is_modified = True
             return True
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
@@ -999,7 +1011,7 @@ class PDFDocument:
             self.is_modified = True
             return True
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
+            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False

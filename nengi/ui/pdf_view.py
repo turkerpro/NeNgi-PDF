@@ -545,6 +545,32 @@ class PageRenderWidget(QWidget):
             text = " ".join(w[4] for w in self.selected_words)
             QApplication.clipboard().setText(text)
 
+    def whiteout_selected_text(self):
+        """Fills selected text rects with white (whiteout)."""
+        self._ensure_text_extracted()
+        rects: list = []
+        if self.selected_words:
+            rects = [fitz.Rect(w[0], w[1], w[2], w[3]) for w in self.selected_words]
+        elif self.selected_blocks:
+            rects = [fitz.Rect(b[0], b[1], b[2], b[3]) for b in self.selected_blocks]
+        elif self.hovered_block:
+            b = self.hovered_block
+            rects = [fitz.Rect(b[0], b[1], b[2], b[3])]
+        if not rects:
+            return
+        if not self.doc or not self.doc.is_open:
+            return
+        for r in rects:
+            try:
+                self.doc.whiteout_area(self.page_idx, r)
+            except Exception:
+                continue
+        self.selected_words = []
+        self.selected_blocks = []
+        self.render_cache()
+        self.update()
+        self.page_modified.emit()
+
     def prompt_edit_selected_text(self):
         self._ensure_text_extracted()
         
@@ -837,6 +863,10 @@ class PDFViewer(QScrollArea):
                     if sub.widget(): sub.widget().hide()
 
         if self.page_layout_mode == 'single':
+            if not 0 <= self.current_page_idx < len(self.page_widgets):
+                self.current_page_idx = 0
+                if not self.page_widgets:
+                    return
             pw = self.page_widgets[self.current_page_idx]
             pw.show()
             self.layout_pages.addWidget(pw)
@@ -895,17 +925,29 @@ class PDFViewer(QScrollArea):
         self.set_zoom(1.0)
         
     def zoom_fit_page(self):
-        if not self.page_widgets or not self.doc: return
-        view_rect = self.viewport().rect()
-        page_rect = self.doc.get_page(self.current_page_idx).rect
+        if not self.page_widgets or not self.doc or not self.doc.is_open:
+            return
+        if not 0 <= self.current_page_idx < self.doc.page_count:
+            return
+        try:
+            view_rect = self.viewport().rect()
+            page_rect = self.doc.get_page(self.current_page_idx).rect
+        except Exception:
+            return
         zx = (view_rect.width() - 40) / page_rect.width
         zy = (view_rect.height() - 40) / page_rect.height
         self.set_zoom(min(zx, zy))
 
     def zoom_fit_width(self):
-        if not self.page_widgets or not self.doc: return
-        view_rect = self.viewport().rect()
-        page_rect = self.doc.get_page(self.current_page_idx).rect
+        if not self.page_widgets or not self.doc or not self.doc.is_open:
+            return
+        if not 0 <= self.current_page_idx < self.doc.page_count:
+            return
+        try:
+            view_rect = self.viewport().rect()
+            page_rect = self.doc.get_page(self.current_page_idx).rect
+        except Exception:
+            return
         zx = (view_rect.width() - 50) / page_rect.width
         self.set_zoom(zx)
 
@@ -989,7 +1031,14 @@ class PDFViewer(QScrollArea):
             self.go_to_page(self._history[self._history_idx], record_history=False)
 
     def go_to_page(self, page_idx: int, record_history: bool = True):
-        """Navigates to specific page."""
+        """Navigates to specific page (clamped)."""
+        if not self.page_widgets:
+            return
+        try:
+            page_idx = int(page_idx)
+        except (TypeError, ValueError):
+            return
+        page_idx = max(0, min(page_idx, len(self.page_widgets) - 1))
         self.current_page_idx = page_idx
         if self.page_layout_mode in ['single', 'two_page']:
             self._apply_page_layout()
