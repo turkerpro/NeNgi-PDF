@@ -141,6 +141,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         from PyQt6.QtCore import QSettings
         self.settings = QSettings('NeNgi', 'NeNgiPDF')
+        # Keep a reference safe for subcomponents that may access before full init
+        self._settings_initialized = True
 
         self.setWindowTitle("NeNgi PDF v1.8.1")
         self.resize(1340, 860)
@@ -621,7 +623,9 @@ class MainWindow(QMainWindow):
         pill_container.setContentsMargins(0, 0, 0, 2)
         pill_container.addStretch()
 
-        self.floating_toolbar = AnnotationToolbar(is_dark=self.settings.value("theme", "light") == "dark")
+        _settings = getattr(self, 'settings', None)
+        _is_dark = (_settings.value("theme", "light") == "dark") if _settings else False
+        self.floating_toolbar = AnnotationToolbar(is_dark=_is_dark)
         self.floating_toolbar.tool_selected.connect(self._on_floating_tool_changed)
         self.floating_toolbar.color_changed.connect(self._on_color_changed)
         self.floating_toolbar.property_changed.connect(self._on_property_changed)
