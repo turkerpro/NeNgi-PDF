@@ -93,7 +93,7 @@ jobs:
           $tag = "${{ github.ref_name }}"
           if (-not $tag -or $tag -eq "main" -or $tag -eq "master") {
             $match = (Select-String -Path "nengi/ui/main_window.py" -Pattern 'v(\d+\.\d+\.\d+(?:-beta)?)' | Select-Object -First 1)
-            $ver = if ($match) { $match.Matches.Groups[1].Value } else { "2.0.1-beta" }
+            $ver = if ($match) { $match.Matches.Groups[1].Value } else { "2.0.2-beta" }
             $tag = "v$ver"
           }
           echo "VERSION=$tag" >> $env:GITHUB_OUTPUT
@@ -250,7 +250,7 @@ jobs:
           $tag = "${{ github.ref_name }}"
           if (-not $tag -or $tag -eq "beta") {
             $match = (Select-String -Path "nengi/ui/main_window.py" -Pattern 'v(\d+\.\d+\.\d+(?:-beta)?)' | Select-Object -First 1)
-            $ver = if ($match) { $match.Matches.Groups[1].Value } else { "2.0.1-beta" }
+            $ver = if ($match) { $match.Matches.Groups[1].Value } else { "2.0.2-beta" }
             $tag = "v$ver"
           }
           echo "VERSION=$tag" >> $env:GITHUB_OUTPUT
