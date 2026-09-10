@@ -61,6 +61,7 @@ class FloatingPillToolbar(QFrame):
         layout.addWidget(self.divider)
 
         # 2. Action Tools
+        self.btn_edit_text = self._add_tool_btn("edit", "Seçili Metni Düzenle", "edit_text", checkable=False)
         self._add_tool_btn("rotate", "Sayfayı Döndür", "rotate", checkable=False)
         self._add_tool_btn("pages", "Sayfaları Yönet", "pages", checkable=False)
 

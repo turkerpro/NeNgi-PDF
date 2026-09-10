@@ -27,44 +27,210 @@ def _resolve_tr_font() -> Optional[str]:
     Not: insert_text(fontfile=...) bu PyMuPDF sürümünde Latin-1 dışı
     gliflerde bozuk ToUnicode üretir; bu yüzden insert_font(fontfile=...)
     + fontname kullanılır (V2'deki gibi).
-    Sıra: repo resources/fonts/LiberationSans-Regular.ttf (*.ttf) varsa o,
-    Windows'ta C:/Windows/Fonts/arial.ttf öncelikli sistem fontu,
-    sonra Linux DejaVu/Liberation fallback.
+    Sıra: repo resources/fonts/*.ttf (source + frozen exe sys._MEIPASS),
+    Windows'ta winreg Fonts eşleşmesi (Arial/Calibri/Tahoma/Segoe UI
+    öncelikli) + sistem dizini adayları, Linux'ta fc-match çıktısı,
+    sonra geniş statik fallback listesi.
     """
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-    # 1. Repo içi font (source + frozen exe)
+    # 1. Repo içi fontlar (source + frozen exe)
     repo_candidates = [
         os.path.join(base_dir, "resources", "fonts", "LiberationSans-Regular.ttf"),
     ]
-    if hasattr(sys, "_MEIPASS"):
-        repo_candidates.append(
-            os.path.join(sys._MEIPASS, "resources", "fonts", "LiberationSans-Regular.ttf")
-        )
-    for p in repo_candidates:
-        if p and os.path.exists(p):
-            return p
     try:
         import glob as _glob
         for p in sorted(_glob.glob(os.path.join(base_dir, "resources", "fonts", "*.ttf"))):
-            if os.path.isfile(p):
-                return p
+            if p not in repo_candidates:
+                repo_candidates.append(p)
     except Exception:
         pass
+    # Frozen exe (PyInstaller): sys._MEIPASS altındaki bundled resources
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        repo_candidates.append(
+            os.path.join(meipass, "resources", "fonts", "LiberationSans-Regular.ttf")
+        )
+        try:
+            import glob as _glob
+            for p in sorted(_glob.glob(os.path.join(meipass, "resources", "fonts", "*.ttf"))):
+                if p not in repo_candidates:
+                    repo_candidates.append(p)
+        except Exception:
+            pass
+    for p in repo_candidates:
+        if p and os.path.isfile(p):
+            return p
 
-    # 2. Windows sistem fontu (öncelikli: arial)
-    arial = "C:/Windows/Fonts/arial.ttf"
-    if os.path.exists(arial):
-        return arial
+    # 2. Windows: registry üzerinden gerçek TTF yolunu çöz
+    #    HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts
+    #    değerleri ("Arial (TrueType)" -> "arial.ttf" ya da tam yol) içerir.
+    if sys.platform.startswith("win"):
+        try:
+            import winreg as _winreg
+            _priority = ("arial", "calibri", "tahoma", "segoe ui", "verdana", "georgia", "dejavu")
+            try:
+                _key = _winreg.OpenKey(
+                    _winreg.HKEY_LOCAL_MACHINE,
+                    r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts",
+                )
+            except OSError:
+                _key = None
+            if _key is not None:
+                try:
+                    _entries = []
+                    i = 0
+                    while True:
+                        try:
+                            _entries.append(_winreg.EnumValue(_key, i))
+                        except OSError:
+                            break
+                        i += 1
+                    _sysroot = os.environ.get("SystemRoot", r"C:\Windows")
+                    _fonts_dir = os.path.join(_sysroot, "Fonts")
 
-    # 3. Linux fallback
+                    def _resolve_registry_file(_file: str) -> Optional[str]:
+                        _file = (_file or "").strip().strip('"')
+                        if not _file:
+                            return None
+                        if os.path.isabs(_file) and os.path.isfile(_file):
+                            return _file
+                        _joined = os.path.join(_fonts_dir, _file)
+                        if os.path.isfile(_joined):
+                            return _joined
+                        return None
+
+                    for _want in _priority:
+                        for _name, _file, _typ in _entries:
+                            if _want in (_name or "").lower():
+                                _resolved = _resolve_registry_file(_file)
+                                if _resolved:
+                                    return _resolved
+                    # Öncelikli eşleşme yoksa registry'deki ilk mevcut TTF'ye düş
+                    for _name, _file, _typ in _entries:
+                        _resolved = _resolve_registry_file(_file)
+                        if _resolved and _resolved.lower().endswith((".ttf", ".otf", ".ttc")):
+                            return _resolved
+                finally:
+                    try:
+                        _winreg.CloseKey(_key)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # 2b. Windows statik adaylar (registry okunamazsa)
+        _sysroot = os.environ.get("SystemRoot", r"C:\Windows")
+        for _name in (
+            "arial.ttf", "calibri.ttf", "tahoma.ttf", "segoeui.ttf",
+            "verdana.ttf", "georgia.ttf", "DejaVuSans.ttf",
+        ):
+            _p = os.path.join(_sysroot, "Fonts", _name)
+            if os.path.isfile(_p):
+                return _p
+        _legacy = "C:/Windows/Fonts/arial.ttf"
+        if os.path.exists(_legacy):
+            return _legacy
+
+    # 3. Linux: fc-match çıktısı (fontconfig varsa en doğru yol)
+    if not sys.platform.startswith("win"):
+        try:
+            import shutil as _shutil
+            import subprocess as _subp
+            if _shutil.which("fc-match"):
+                for _family in (
+                    "DejaVu Sans", "Liberation Sans", "Noto Sans",
+                    "Tahoma", "Verdana", "Georgia", "Arial",
+                    "sans-serif",
+                ):
+                    try:
+                        _out = _subp.run(
+                            ["fc-match", _family, "--format=%{file}\n"],
+                            capture_output=True, text=True, timeout=5,
+                        )
+                    except Exception:
+                        continue
+                    _line = (_out.stdout or "").strip().splitlines()
+                    _p = _line[0].strip() if _line else ""
+                    if _p and os.path.isfile(_p) and _p.lower().endswith((".ttf", ".otf", ".ttc")):
+                        return _p
+        except Exception:
+            pass
+
+    # 4. Geniş statik fallback (Linux + diğerleri)
     for p in (
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/tahoma.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Tahoma.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Verdana.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/verdana.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Georgia.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/georgia.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        os.path.expanduser("~/.fonts/arial.ttf"),
+        os.path.expanduser("~/.fonts/tahoma.ttf"),
     ):
-        if os.path.exists(p):
+        if p and os.path.isfile(p):
             return p
     return None
+
+
+# WinAnsi (helv) ile yazılamayan Türkçe karakterler. Bu karakterlerden
+# biri metinde varsa TTF gömülmeden yazmak sessiz veri kaybına yol açar.
+_TR_SPECIAL_CHARS = frozenset("ğĞşŞİıçÇöÖüÜ")
+
+
+def _text_needs_tr_font(text: str) -> bool:
+    """Metin gömülü TR fontu gerektiriyor mu?"""
+    if not text:
+        return False
+    return any(c in _TR_SPECIAL_CHARS for c in text)
+
+
+def font_supports_tr(text: str) -> bool:
+    """Verilen metin veri kaybı olmadan yazılabilir mi?
+
+    TR-özel karakter içermiyorsa True. İçeriyorsa, gömülebilir bir
+    TR fontu çözülebiliyorsa True, yoksa False.
+    """
+    if not _text_needs_tr_font(text):
+        return True
+    return bool(resolve_font_for_text(text, "helv").get("ok", False))
+
+
+def resolve_font_for_text(text: str, preferred: str = "helv") -> Dict[str, Any]:
+    """Metin için kullanılacak fontu çöz.
+
+    Döner: {"fontname": str, "fontfile": Optional[str],
+             "fontbuffer": Optional[bytes], "ok": bool}
+    Gömülebilir TR fontu varsa HER ZAMAN onu döner (tr-sans öncelikli,
+    sonra f_unicode) — ASCII metinlerde bile, çünkü gömülü fontun
+    metrikleri/ToUnicode davranışı orijinal yazma yoluyla birebir
+    uyumludur. Hiç gömülecek font yoksa preferred döner; metin TR-özel
+    karakter içeriyorsa ok=False olur — çağıran bu durumda redact
+    YAPMADAN vazgeçmelidir (orijinal korunur).
+    """
+    try:
+        p = _resolve_tr_font()
+    except Exception:
+        p = None
+    if p:
+        return {"fontname": "tr-sans", "fontfile": p, "fontbuffer": None, "ok": True}
+    try:
+        buf = get_unicode_font_buffer()
+    except Exception:
+        buf = None
+    if buf:
+        return {"fontname": "f_unicode", "fontfile": None, "fontbuffer": buf, "ok": True}
+    return {
+        "fontname": preferred,
+        "fontfile": None,
+        "fontbuffer": None,
+        "ok": not _text_needs_tr_font(text),
+    }
 
 
 def get_unicode_font_buffer() -> Optional[bytes]:
@@ -76,20 +242,55 @@ def get_unicode_font_buffer() -> Optional[bytes]:
     candidates = []
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     candidates.append(os.path.join(base_dir, "resources", "fonts", "LiberationSans-Regular.ttf"))
-    if hasattr(sys, "_MEIPASS"):
-        candidates.append(os.path.join(sys._MEIPASS, "resources", "fonts", "LiberationSans-Regular.ttf"))
+    try:
+        import glob as _glob
+        for p in sorted(_glob.glob(os.path.join(base_dir, "resources", "fonts", "*.ttf"))):
+            if p not in candidates:
+                candidates.append(p)
+    except Exception:
+        pass
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.append(os.path.join(meipass, "resources", "fonts", "LiberationSans-Regular.ttf"))
+        try:
+            import glob as _glob
+            for p in sorted(_glob.glob(os.path.join(meipass, "resources", "fonts", "*.ttf"))):
+                if p not in candidates:
+                    candidates.append(p)
+        except Exception:
+            pass
+    # _resolve_tr_font() ile bulunan yol en güncel adaydır (registry/fc-match dahil)
+    try:
+        _resolved = _resolve_tr_font()
+    except Exception:
+        _resolved = None
+    if _resolved and _resolved not in candidates:
+        candidates.insert(0, _resolved)
 
-    # Windows fonts
+    # Windows fonts (genişletilmiş)
+    _sysroot = os.environ.get("SystemRoot", r"C:\Windows") if sys.platform.startswith("win") else r"C:\Windows"
+    for _name in ("arial.ttf", "calibri.ttf", "tahoma.ttf", "segoeui.ttf",
+                  "verdana.ttf", "georgia.ttf", "DejaVuSans.ttf"):
+        candidates.append(os.path.join(_sysroot, "Fonts", _name))
     candidates.extend([
         "C:\\Windows\\Fonts\\arial.ttf",
         "C:\\Windows\\Fonts\\segoeui.ttf",
         "C:\\Windows\\Fonts\\calibri.ttf"
     ])
 
-    # Linux fonts
+    # Linux fonts (genişletilmiş)
     candidates.extend([
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/tahoma.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Tahoma.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Verdana.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/verdana.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Georgia.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/georgia.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
     ])
 
     for p in candidates:
@@ -99,7 +300,7 @@ def get_unicode_font_buffer() -> Optional[bytes]:
                     _cached_font_buffer = f.read()
                     return _cached_font_buffer
             except Exception:
-                pass
+                continue
     return None
 
 
@@ -552,6 +753,14 @@ class PDFDocument:
         """
         if not self.is_open:
             return False
+        # Sessiz veri kaybı guardı: TR-özel karakter + gömülecek font yoksa
+        # redact YAPMADAN False dön (orijinal korunur).
+        if not font_supports_tr(new_text):
+            logger.warning(
+                "TR font bulunamadı; edit_text_at_rect atlandı, orijinal korundu: %r",
+                (new_text or "")[:60],
+            )
+            return False
         try:
             self.save_state_for_undo()
             page = self.get_page(page_number)
@@ -563,22 +772,20 @@ class PDFDocument:
                 fontsize = max(7.0, min(36.0, h * 0.85))
 
             insert_point = fitz.Point(rect.x0, rect.y1 - 1.5)
-            tr_font = _resolve_tr_font()
+            res = resolve_font_for_text(new_text, fontname)
             target_font = fontname
-            if tr_font:
+            if res.get("fontfile"):
                 try:
-                    page.insert_font(fontname="tr-sans", fontfile=tr_font)
+                    page.insert_font(fontname="tr-sans", fontfile=res["fontfile"])
                     target_font = "tr-sans"
-                except Exception:
-                    pass
-            if target_font == fontname:
-                font_buf = get_unicode_font_buffer()
-                if font_buf:
-                    try:
-                        page.insert_font(fontname="f_unicode", fontbuffer=font_buf)
-                        target_font = "f_unicode"
-                    except Exception:
-                        pass
+                except Exception as e:
+                    logger.warning("insert_font(fontfile=...) başarısız, fallback deneniyor: %s", e)
+            if target_font == fontname and res.get("fontbuffer"):
+                try:
+                    page.insert_font(fontname="f_unicode", fontbuffer=res["fontbuffer"])
+                    target_font = "f_unicode"
+                except Exception as e:
+                    logger.warning("insert_font(fontbuffer=...) başarısız, fallback deneniyor: %s", e)
             page.insert_text(insert_point, new_text, fontsize=fontsize, fontname=target_font, color=color)
             self.is_modified = True
             return True
@@ -605,28 +812,34 @@ class PDFDocument:
         """
         if not self.is_open:
             return False
+        # Sessiz veri kaybı guardı: TR-özel karakter + gömülecek font yoksa
+        # redact YAPMADAN False dön (orijinal korunur).
+        if not font_supports_tr(new_text):
+            logger.warning(
+                "TR font bulunamadı; replace_text_block atlandı, orijinal korundu: %r",
+                (new_text or "")[:60],
+            )
+            return False
         try:
             self.save_state_for_undo()
             page = self.get_page(page_number)
             page.add_redact_annot(rect, fill=(1, 1, 1))
             page.apply_redactions()
 
-            tr_font = _resolve_tr_font()
+            res = resolve_font_for_text(new_text, fontname)
             target_font = fontname
-            if tr_font:
+            if res.get("fontfile"):
                 try:
-                    page.insert_font(fontname="tr-sans", fontfile=tr_font)
+                    page.insert_font(fontname="tr-sans", fontfile=res["fontfile"])
                     target_font = "tr-sans"
-                except Exception:
-                    pass
-            if target_font == fontname:
-                font_buf = get_unicode_font_buffer()
-                if font_buf:
-                    try:
-                        page.insert_font(fontname="f_unicode", fontbuffer=font_buf)
-                        target_font = "f_unicode"
-                    except Exception:
-                        pass
+                except Exception as e:
+                    logger.warning("insert_font(fontfile=...) başarısız, fallback deneniyor: %s", e)
+            if target_font == fontname and res.get("fontbuffer"):
+                try:
+                    page.insert_font(fontname="f_unicode", fontbuffer=res["fontbuffer"])
+                    target_font = "f_unicode"
+                except Exception as e:
+                    logger.warning("insert_font(fontbuffer=...) başarısız, fallback deneniyor: %s", e)
 
             lines = new_text.splitlines()
             if len(lines) == 1:
@@ -662,26 +875,32 @@ class PDFDocument:
         """
         if not self.is_open:
             return False
+        # Sessiz veri kaybı guardı: TR-özel karakter + gömülecek font yoksa
+        # yazmadan False dön (orijinal korunur).
+        if not font_supports_tr(text):
+            logger.warning(
+                "TR font bulunamadı; insert_new_text atlandı, orijinal korundu: %r",
+                (text or "")[:60],
+            )
+            return False
         try:
             self.save_state_for_undo()
             page = self.get_page(page_number)
 
-            tr_font = _resolve_tr_font()
+            res = resolve_font_for_text(text, fontname)
             target_font = fontname
-            if tr_font:
+            if res.get("fontfile"):
                 try:
-                    page.insert_font(fontname="tr-sans", fontfile=tr_font)
+                    page.insert_font(fontname="tr-sans", fontfile=res["fontfile"])
                     target_font = "tr-sans"
-                except Exception:
-                    pass
-            if target_font == fontname:
-                font_buf = get_unicode_font_buffer()
-                if font_buf:
-                    try:
-                        page.insert_font(fontname="f_unicode", fontbuffer=font_buf)
-                        target_font = "f_unicode"
-                    except Exception:
-                        pass
+                except Exception as e:
+                    logger.warning("insert_font(fontfile=...) başarısız, fallback deneniyor: %s", e)
+            if target_font == fontname and res.get("fontbuffer"):
+                try:
+                    page.insert_font(fontname="f_unicode", fontbuffer=res["fontbuffer"])
+                    target_font = "f_unicode"
+                except Exception as e:
+                    logger.warning("insert_font(fontbuffer=...) başarısız, fallback deneniyor: %s", e)
 
             rot = page.rotation
             lines = text.splitlines()

@@ -7,11 +7,13 @@ and multi-line editing for paragraphs or new text insertion.
 from __future__ import annotations
 from typing import Optional, Tuple, Dict, Any
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtGui import QColor, QFont, QFontDatabase
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QPlainTextEdit, QComboBox, QDoubleSpinBox, QColorDialog, QFrame
 )
+
+from nengi.core.pdf_document import _resolve_tr_font
 
 
 class TextEditorDialog(QDialog):
@@ -88,7 +90,10 @@ class TextEditorDialog(QDialog):
         tools_layout.addWidget(lbl_f)
 
         self.cb_family = QComboBox()
-        self.cb_family.addItems(["Arial", "Calibri", "Times New Roman", "Courier New", "Segoe UI", "Helvetica"])
+        families = sorted(QFontDatabase.families())
+        if not families:
+            families = ["Arial", "Calibri", "Times New Roman", "Courier New", "Segoe UI", "Helvetica"]
+        self.cb_family.addItems(families)
         # Select matching or fallback
         idx = self.cb_family.findText(self.current_family, Qt.MatchFlag.MatchContains)
         if idx >= 0:
@@ -182,15 +187,15 @@ class TextEditorDialog(QDialog):
         is_b = self.btn_bold.isChecked()
         is_i = self.btn_italic.isChecked()
 
-        # Map to PyMuPDF font name
+        # Map to PyMuPDF font name: standart aileler base14'e,
+        # diğerleri core'daki font çözümleyiciye düşer
+        # (replace_text_block zaten _resolve_tr_font ile tr-sans gömer).
         if "times" in fam.lower():
-            fitz_base = "times"
             fitz_font = "tibi" if is_b and is_i else ("tibo" if is_b else ("tiit" if is_i else "tiro"))
         elif "courier" in fam.lower():
-            fitz_base = "couri"
             fitz_font = "cobi" if is_b and is_i else ("cobo" if is_b else ("coit" if is_i else "couri"))
         else:
-            fitz_base = "helv"
+            _resolve_tr_font()
             fitz_font = "hebi" if is_b and is_i else ("hebo" if is_b else ("heit" if is_i else "helv"))
 
         self.result_fitz_font = fitz_font

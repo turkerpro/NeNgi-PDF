@@ -506,23 +506,13 @@ class PageRenderWidget(QWidget):
                     break
 
             if target_block:
-                block_rect = fitz.Rect(target_block[0], target_block[1], target_block[2], target_block[3])
-                style = self.doc.detect_text_style_at_rect(self.page_idx, block_rect)
-                dlg = TextEditorDialog(
-                    initial_text=target_block[4],
-                    detected_style=style,
-                    title="✏️ Paragrafı Düzenle",
-                    parent=self
-                )
-                if dlg.exec() == QDialog.DialogCode.Accepted and dlg.result_text != target_block[4]:
-                    self.doc.replace_text_block(
-                        self.page_idx, block_rect, dlg.result_text,
-                        fontname=dlg.result_fitz_font, fontsize=dlg.result_fontsize, color=dlg.result_color_rgb,
-                        baseline_y=style.get("baseline_y"), origin_x=style.get("origin_x")
-                    )
-                    self.render_cache()
-                    self.update()
-                    self.page_modified.emit()
+                # Studio style: canvas üstünde satır-içi düzenleme
+                # (mevcut prompt_edit_selected_text / InlineTextEditor mekanizması).
+                self.selected_words = []
+                self.selected_blocks = [target_block]
+                self.hovered_block = target_block
+                self.update()
+                self.prompt_edit_selected_text()
                 return
 
             # Fallback to single word
