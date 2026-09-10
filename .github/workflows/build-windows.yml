@@ -35,6 +35,7 @@ jobs:
 
       - name: Run Tests
         run: |
+          pip install pytest
           python -m pytest tests/ -v
         continue-on-error: false
 
