@@ -316,6 +316,9 @@ class MainWindow(QMainWindow):
         tools_menu.addAction("Belge Özeti", self.action_document_summary)
         tools_menu.addAction("Görsel Karşılaştır", self.action_visual_compare)
         tools_menu.addAction("TXT Dışa Aktar", self.action_export_txt)
+
+        help_menu = menubar.addMenu("Yardım")
+        help_menu.addAction("Güncellemeleri Denetle...", self.action_check_for_updates)
         
     def action_form_designer(self):
         doc = self.get_current_doc()
@@ -1683,6 +1686,93 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(current_is_dark=self.is_dark_mode, parent=self)
         dlg.theme_changed.connect(self._on_settings_theme_changed)
         dlg.exec()
+
+    # ==========================================
+    # Uygulama İçi Güncelleme (GitHub latest-build)
+    # ==========================================
+
+    def action_check_for_updates(self):
+        """Yardım menüsü: yeni Setup.exe varsa indirip sessiz kurar."""
+        from nengi.core.updater import UpdateCheckWorker
+        if getattr(self, "_update_check_worker", None) and self._update_check_worker.isRunning():
+            return
+        self.show_status_message("Güncellemeler denetleniyor...")
+        self._update_check_worker = UpdateCheckWorker(parent=self)
+        self._update_check_worker.finished.connect(self._on_update_check_finished)
+        self._update_check_worker.failed.connect(self._on_update_check_failed)
+        self._update_check_worker.start()
+
+    def _on_update_check_failed(self, message: str):
+        self.show_status_message("Güncelleme denetimi başarısız.")
+        QMessageBox.warning(self, "Güncelleme", message)
+
+    def _on_update_check_finished(self, info):
+        self.show_status_message("Hazır")
+        if not info.has_update:
+            QMessageBox.information(
+                self, "Güncelleme",
+                f"NeNgi PDF güncel. (Sürüm {info.local_version})",
+            )
+            return
+        reply = QMessageBox.question(
+            self, "Yeni Sürüm Mevcut",
+            f"Yeni sürüm bulundu: {info.local_version} → {info.remote_version}\n\n"
+            "Kurulum dosyası indirilip sessiz kuruluma başlansın mı?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self._start_update_download(info.download_url)
+
+    def _start_update_download(self, url: str):
+        from PyQt6.QtWidgets import QProgressDialog
+        from nengi.core.updater import UpdateDownloadWorker
+        self._update_progress = QProgressDialog(
+            "Kurulum dosyası indiriliyor...", "İptal", 0, 100, self
+        )
+        self._update_progress.setWindowTitle("Güncelleme İndiriliyor")
+        self._update_progress.setMinimumDuration(0)
+        self._update_progress.setAutoClose(True)
+        self._update_dl_worker = UpdateDownloadWorker(url, parent=self)
+        self._update_dl_worker.progress.connect(self._on_update_download_progress)
+        self._update_dl_worker.finished.connect(self._on_update_download_finished)
+        self._update_dl_worker.failed.connect(self._on_update_check_failed)
+        self._update_progress.canceled.connect(self._update_dl_worker.terminate)
+        self._update_dl_worker.start()
+        self._update_progress.show()
+
+    def _on_update_download_progress(self, downloaded: int, total: int):
+        dlg = getattr(self, "_update_progress", None)
+        if dlg is None:
+            return
+        if total > 0:
+            dlg.setMaximum(100)
+            dlg.setValue(int(downloaded * 100 / total))
+        else:
+            dlg.setMaximum(0)
+
+    def _on_update_download_finished(self, installer_path: str):
+        from PyQt6.QtWidgets import QApplication
+        from nengi.core.updater import launch_silent_install
+        dlg = getattr(self, "_update_progress", None)
+        if dlg is not None:
+            dlg.close()
+        reply = QMessageBox.question(
+            self, "Kurulum Hazır",
+            "Yeni sürüm indirildi. Kurulum başlatılıp uygulama kapatılsın mı?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            launch_silent_install(installer_path)
+        except Exception as e:
+            QMessageBox.warning(self, "Güncelleme", f"Kurulum başlatılamadı: {e}")
+            return
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
+        self.close()
 
     def _on_settings_theme_changed(self, theme_name: str):
         self.is_dark_mode = (theme_name == "dark")
