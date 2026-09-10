@@ -144,7 +144,7 @@ class MainWindow(QMainWindow):
         # Keep a reference safe for subcomponents that may access before full init
         self._settings_initialized = True
 
-        self.setWindowTitle("NeNgi PDF v1.8.2")
+        self.setWindowTitle("NeNgi PDF v2.0.0")
         self.resize(1340, 860)
         self.is_dark_mode = self.settings.value("theme", "dark") == "dark"
         self.recent_files: List[str] = []
@@ -311,6 +311,11 @@ class MainWindow(QMainWindow):
         tools_menu.addAction("Erişilebilirlik Tam Denetimi (PDF/UA)...", self.action_accessibility_audit)
         tools_menu.addAction("OCR Şüpheli Kelime Düzeltici...", self.action_ocr_correction)
         tools_menu.addAction("Ekli Dosyaları Yönet...", self.action_manage_attachments)
+        tools_menu.addSeparator()
+        tools_menu.addAction("Toplu İşlem (Batch)", self.action_batch_process)
+        tools_menu.addAction("Belge Özeti", self.action_document_summary)
+        tools_menu.addAction("Görsel Karşılaştır", self.action_visual_compare)
+        tools_menu.addAction("TXT Dışa Aktar", self.action_export_txt)
         
     def action_form_designer(self):
         doc = self.get_current_doc()
@@ -423,6 +428,112 @@ class MainWindow(QMainWindow):
         panel.load_document(doc)
         lay.addWidget(panel)
         dlg.exec()
+
+    def action_batch_process(self):
+        from nengi.ui.batch_dialog import BatchDialog
+        dlg = BatchDialog(self)
+        dlg.exec()
+
+    def action_document_summary(self):
+        from nengi.core.summary_bridge import summarize_document
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        try:
+            result = summarize_document(doc)
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Özet alınırken hata: {e}")
+            return
+        summary = (result.get("summary") or "").strip() if isinstance(result, dict) else ""
+        keywords = result.get("keywords", []) if isinstance(result, dict) else []
+        if not summary:
+            QMessageBox.information(self, "Belge Özeti", "Bu belgeden özet çıkarılamadı (metin bulunamadı).")
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Belge Özeti")
+        dlg.resize(520, 420)
+        lay = QVBoxLayout(dlg)
+        lbl_title = QLabel("Belge Özeti:")
+        lbl_title.setStyleSheet("font-weight: bold; font-size: 13px;")
+        lay.addWidget(lbl_title)
+        from PyQt6.QtWidgets import QTextEdit, QDialogButtonBox
+        txt = QTextEdit()
+        txt.setReadOnly(True)
+        txt.setPlainText(summary)
+        lay.addWidget(txt)
+        kw_text = ", ".join(keywords) if keywords else "-"
+        lbl_kw = QLabel(f"Anahtar kelimeler: {kw_text}")
+        lbl_kw.setWordWrap(True)
+        lay.addWidget(lbl_kw)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        btns.rejected.connect(dlg.reject)
+        lay.addWidget(btns)
+        dlg.exec()
+
+    def action_visual_compare(self):
+        from nengi.core.visual_diff import visual_diff_highlights
+        open_tabs: List[Tuple[int, str, PDFDocument]] = []
+        for i in range(self.tabs.count()):
+            w = self.tabs.widget(i)
+            from nengi.ui.pdf_view import PDFViewer as _PV
+            if isinstance(w, _PV) and w.doc and w.doc.is_open:
+                name = os.path.basename(w.doc.file_path) if w.doc.file_path else f"Sekme {i+1}"
+                open_tabs.append((i, name, w.doc))
+        doc_a = doc_b = None
+        name_a = name_b = ""
+        if len(open_tabs) >= 2:
+            if len(open_tabs) == 2:
+                (_, name_a, doc_a), (_, name_b, doc_b) = open_tabs[0], open_tabs[1]
+            else:
+                dlg = OpenTabsDiffDialog(open_tabs, default_a=0, default_b=1, parent=self)
+                if dlg.exec() != QDialog.DialogCode.Accepted:
+                    return
+                idx_a = dlg.selected_a_idx
+                idx_b = dlg.selected_b_idx
+                _by_idx = {t[0]: t for t in open_tabs}
+                if idx_a not in _by_idx or idx_b not in _by_idx:
+                    return
+                _, name_a, doc_a = _by_idx[idx_a]
+                _, name_b, doc_b = _by_idx[idx_b]
+        else:
+            f_a, _ = QFileDialog.getOpenFileName(self, "İlk PDF'i Seçin (A)", "", "PDF Dosyaları (*.pdf)")
+            if not f_a:
+                return
+            f_b, _ = QFileDialog.getOpenFileName(self, "İkinci PDF'i Seçin (B)", "", "PDF Dosyaları (*.pdf)")
+            if not f_b:
+                return
+            doc_a = PDFDocument(f_a)
+            doc_b = PDFDocument(f_b)
+            name_a = os.path.basename(f_a)
+            name_b = os.path.basename(f_b)
+        try:
+            highlights = visual_diff_highlights(doc_a, doc_b)
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Görsel karşılaştırma hatası: {e}")
+            return
+        self._launch_diff(doc_a, doc_b, name_a, name_b)
+        self.show_status_message(f"Görsel fark: {len(highlights)} alan bulundu.")
+
+    def action_export_txt(self):
+        doc = self.get_current_doc()
+        if not doc or not doc.is_open:
+            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            return
+        base = os.path.splitext(os.path.basename(doc.file_path))[0] if doc.file_path else "Belge"
+        suggested = f"{base}.txt"
+        out_path, _ = QFileDialog.getSaveFileName(self, "TXT Olarak Kaydet", suggested, "Metin Dosyası (*.txt)")
+        if not out_path:
+            return
+        try:
+            ok = ExportEngine.pdf_to_txt(doc, out_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"TXT dışa aktarma hatası: {e}")
+            return
+        if ok:
+            self.show_status_message(f"TXT dışa aktarıldı: {os.path.basename(out_path)}")
+        else:
+            QMessageBox.critical(self, "Hata", "TXT dışa aktarılamadı.")
 
     def action_header_footer(self):
         doc = self.get_current_doc()

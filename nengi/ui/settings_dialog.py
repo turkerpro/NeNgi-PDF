@@ -150,7 +150,7 @@ class SettingsDialog(QDialog):
         lbl_app_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #0078D4;")
         lay_abt.addWidget(lbl_app_title)
 
-        lbl_version = QLabel("Sürüm: 1.8.1 (Complete Professional PDF Parity)")
+        lbl_version = QLabel("Sürüm: 2.0.0")
         lbl_version.setStyleSheet("color: #AAAAAA;")
         lay_abt.addWidget(lbl_version)
 

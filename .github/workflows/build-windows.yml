@@ -36,7 +36,7 @@ jobs:
       - name: Run Tests
         run: |
           python -m pytest tests/ -v
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Build Windows Setup Installer (onedir)
         run: |
@@ -91,7 +91,7 @@ jobs:
           $tag = "${{ github.ref_name }}"
           if (-not $tag -or $tag -eq "main" -or $tag -eq "master") {
             $match = (Select-String -Path "nengi/ui/main_window.py" -Pattern 'v(\d+\.\d+\.\d+)' | Select-Object -First 1)
-            $ver = if ($match) { $match.Matches.Groups[1].Value } else { "1.8.2" }
+            $ver = if ($match) { $match.Matches.Groups[1].Value } else { "2.0.0" }
             $tag = "v$ver"
           }
           echo "VERSION=$tag" >> $env:GITHUB_OUTPUT

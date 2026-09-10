@@ -97,6 +97,34 @@ class ExportEngine:
         return True
 
     @staticmethod
+    def pdf_to_txt(doc, output_path, options=None):
+        """Convert PDF page texts to a plain-text file."""
+        fitz_doc = getattr(doc, "doc", doc) if not isinstance(doc, str) else None
+        opened_here = False
+        try:
+            if isinstance(doc, str):
+                fitz_doc = fitz.open(doc)
+                opened_here = True
+            if fitz_doc is None or getattr(fitz_doc, "is_closed", False):
+                return False
+            with open(output_path, "w", encoding="utf-8") as f:
+                for i in range(len(fitz_doc)):
+                    page = fitz_doc[i]
+                    f.write(page.get_text("text"))
+                    if i < len(fitz_doc) - 1:
+                        f.write("\n")
+            return True
+        except Exception as e:
+            print(f"Error exporting TXT: {e}")
+            return False
+        finally:
+            if opened_here and fitz_doc is not None:
+                try:
+                    fitz_doc.close()
+                except Exception:
+                    pass
+
+    @staticmethod
     def pdf_to_html(doc, output_path, options=None):
         """Convert PDF to HTML."""
         if doc is None or getattr(doc, "doc", None) is None or not getattr(doc, "is_open", False):
