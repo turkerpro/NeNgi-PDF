@@ -1,4 +1,4 @@
-; =========================================================
+﻿; =========================================================
 ; NeNgi PDF - Windows NSIS Kurulum Paketi Betiği (Setup.exe)
 ; C:\Program Files\NeNgi PDF dizinine kurulum yapar,
 ; Masaüstü ve Başlat Menüsü kısayollarını ve .pdf ilişkisini kurar.

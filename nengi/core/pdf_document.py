@@ -19,6 +19,54 @@ logger = logging.getLogger(__name__)
 _cached_font_buffer: Optional[bytes] = None
 
 
+def _resolve_tr_font() -> Optional[str]:
+    """Türkçe glifleri olan ilk TTF dosya yolunu döndür, yoksa None.
+
+    V2 (src/core/textedit.py) ile aynı çözüm: helv (WinAnsi) içinde
+    ğ/ş/İ/ı yok → TTF gömülüp fontname ile yazılır, yazı kaybolmaz.
+    Not: insert_text(fontfile=...) bu PyMuPDF sürümünde Latin-1 dışı
+    gliflerde bozuk ToUnicode üretir; bu yüzden insert_font(fontfile=...)
+    + fontname kullanılır (V2'deki gibi).
+    Sıra: repo resources/fonts/LiberationSans-Regular.ttf (*.ttf) varsa o,
+    Windows'ta C:/Windows/Fonts/arial.ttf öncelikli sistem fontu,
+    sonra Linux DejaVu/Liberation fallback.
+    """
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    # 1. Repo içi font (source + frozen exe)
+    repo_candidates = [
+        os.path.join(base_dir, "resources", "fonts", "LiberationSans-Regular.ttf"),
+    ]
+    if hasattr(sys, "_MEIPASS"):
+        repo_candidates.append(
+            os.path.join(sys._MEIPASS, "resources", "fonts", "LiberationSans-Regular.ttf")
+        )
+    for p in repo_candidates:
+        if p and os.path.exists(p):
+            return p
+    try:
+        import glob as _glob
+        for p in sorted(_glob.glob(os.path.join(base_dir, "resources", "fonts", "*.ttf"))):
+            if os.path.isfile(p):
+                return p
+    except Exception:
+        pass
+
+    # 2. Windows sistem fontu (öncelikli: arial)
+    arial = "C:/Windows/Fonts/arial.ttf"
+    if os.path.exists(arial):
+        return arial
+
+    # 3. Linux fallback
+    for p in (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    ):
+        if os.path.exists(p):
+            return p
+    return None
+
+
 def get_unicode_font_buffer() -> Optional[bytes]:
     """Finds and loads a TrueType font buffer that supports Turkish and Unicode characters."""
     global _cached_font_buffer
@@ -515,14 +563,22 @@ class PDFDocument:
                 fontsize = max(7.0, min(36.0, h * 0.85))
 
             insert_point = fitz.Point(rect.x0, rect.y1 - 1.5)
-            font_buf = get_unicode_font_buffer()
+            tr_font = _resolve_tr_font()
             target_font = fontname
-            if font_buf:
+            if tr_font:
                 try:
-                    page.insert_font(fontname="f_unicode", fontbuffer=font_buf)
-                    target_font = "f_unicode"
+                    page.insert_font(fontname="tr-sans", fontfile=tr_font)
+                    target_font = "tr-sans"
                 except Exception:
                     pass
+            if target_font == fontname:
+                font_buf = get_unicode_font_buffer()
+                if font_buf:
+                    try:
+                        page.insert_font(fontname="f_unicode", fontbuffer=font_buf)
+                        target_font = "f_unicode"
+                    except Exception:
+                        pass
             page.insert_text(insert_point, new_text, fontsize=fontsize, fontname=target_font, color=color)
             self.is_modified = True
             return True
@@ -555,14 +611,22 @@ class PDFDocument:
             page.add_redact_annot(rect, fill=(1, 1, 1))
             page.apply_redactions()
 
-            font_buf = get_unicode_font_buffer()
+            tr_font = _resolve_tr_font()
             target_font = fontname
-            if font_buf:
+            if tr_font:
                 try:
-                    page.insert_font(fontname="f_unicode", fontbuffer=font_buf)
-                    target_font = "f_unicode"
+                    page.insert_font(fontname="tr-sans", fontfile=tr_font)
+                    target_font = "tr-sans"
                 except Exception:
                     pass
+            if target_font == fontname:
+                font_buf = get_unicode_font_buffer()
+                if font_buf:
+                    try:
+                        page.insert_font(fontname="f_unicode", fontbuffer=font_buf)
+                        target_font = "f_unicode"
+                    except Exception:
+                        pass
 
             lines = new_text.splitlines()
             if len(lines) == 1:
@@ -602,14 +666,22 @@ class PDFDocument:
             self.save_state_for_undo()
             page = self.get_page(page_number)
 
-            font_buf = get_unicode_font_buffer()
+            tr_font = _resolve_tr_font()
             target_font = fontname
-            if font_buf:
+            if tr_font:
                 try:
-                    page.insert_font(fontname="f_unicode", fontbuffer=font_buf)
-                    target_font = "f_unicode"
+                    page.insert_font(fontname="tr-sans", fontfile=tr_font)
+                    target_font = "tr-sans"
                 except Exception:
                     pass
+            if target_font == fontname:
+                font_buf = get_unicode_font_buffer()
+                if font_buf:
+                    try:
+                        page.insert_font(fontname="f_unicode", fontbuffer=font_buf)
+                        target_font = "f_unicode"
+                    except Exception:
+                        pass
 
             rot = page.rotation
             lines = text.splitlines()
