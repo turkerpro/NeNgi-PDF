@@ -821,14 +821,81 @@ class PDFDocument:
             )
             return False
         try:
-            self.save_state_for_undo()
+            rect = fitz.Rect(rect)
+            rect.normalize()
             page = self.get_page(page_number)
-            page.add_redact_annot(rect, fill=(1, 1, 1))
-            page.apply_redactions()
+            if int(page.rotation or 0) % 360 != 0:
+                logger.warning(
+                    "Rotasyonlu sayfada (%s°) replace_text_block atlandı, orijinal korundu.",
+                    page.rotation,
+                )
+                return False
 
             res = resolve_font_for_text(new_text, fontname)
             target_font = fontname
-            if res.get("fontfile"):
+            _fontfile = res.get("fontfile")
+            _fontbuffer = res.get("fontbuffer")
+
+            def _measure_width(s: str, fs: float) -> float:
+                try:
+                    if _fontfile:
+                        return fitz.Font(fontfile=_fontfile).text_length(s, fontsize=fs)
+                    if _fontbuffer and target_font == fontname:
+                        # fontbuffer yolu henuz sayfaya gomulmedi; olcum icin
+                        # dosyadan cozulen fontu dene, olmazsa base14'e dus.
+                        pass
+                    return fitz.get_text_length(s, fontname=target_font, fontsize=fs)
+                except Exception:
+                    try:
+                        return fitz.get_text_length(s, fontname="helv", fontsize=fs)
+                    except Exception:
+                        return float(len(s or "")) * float(fs) * 0.55
+
+            # Redact ONCESI sığma hesabı: satırlara böl, genişlik kontrolü,
+            # puntoyu 6pt tabanına kadar küçült; gerekirse rect'i sayfa
+            # altına kadar genişlet (veri kaybı/boş ekran yok).
+            eff_fontsize = float(fontsize) if fontsize else 11.0
+            eff_rect = fitz.Rect(rect)
+            if new_text:
+                import math as _math
+                _lines = new_text.splitlines() or [new_text]
+                while eff_fontsize > 6.0:
+                    # insert_textbox otomatik satır kaydırır; ham satır genişliği
+                    # değil, kaydırılmış toplam yükseklik belirleyicidir.
+                    _total = 0
+                    for _ln in _lines:
+                        _w = _measure_width(_ln or " ", eff_fontsize)
+                        if eff_rect.width > 0:
+                            _total += max(1, int(_math.ceil(_w / eff_rect.width)))
+                        else:
+                            _total += 9999
+                    _need_h = _total * eff_fontsize * 1.2
+                    if _need_h <= eff_rect.height:
+                        break
+                    eff_fontsize = round(eff_fontsize - 0.5, 2)
+                eff_fontsize = max(6.0, eff_fontsize)
+                _total = 0
+                for _ln in _lines:
+                    _w = _measure_width(_ln or " ", eff_fontsize)
+                    if eff_rect.width > 0:
+                        _total += max(1, int(_math.ceil(_w / eff_rect.width)))
+                    else:
+                        _total += 9999
+                _need_h = _total * eff_fontsize * 1.2
+                if _need_h > eff_rect.height:
+                    try:
+                        _bottom = page.rect.y1 - 1.0
+                        eff_rect.y1 = min(_bottom, eff_rect.y0 + _need_h + 2.0)
+                        if _need_h > eff_rect.height:
+                            eff_rect.y1 = _bottom
+                    except Exception:
+                        pass
+
+            self.save_state_for_undo()
+            page.add_redact_annot(eff_rect, fill=(1, 1, 1))
+            page.apply_redactions()
+
+            if _fontfile:
                 try:
                     page.insert_font(fontname="tr-sans", fontfile=res["fontfile"])
                     target_font = "tr-sans"
@@ -845,13 +912,27 @@ class PDFDocument:
             if len(lines) == 1:
                 # Single line: use exact baseline if provided, else use textbox for perfect bounds
                 if baseline_y is not None:
-                    x_pos = origin_x if origin_x is not None else rect.x0
-                    page.insert_text((x_pos, baseline_y), lines[0], fontsize=fontsize, fontname=target_font, color=color)
+                    x_pos = origin_x if origin_x is not None else eff_rect.x0
+                    page.insert_text((x_pos, baseline_y), lines[0], fontsize=eff_fontsize, fontname=target_font, color=color)
                 else:
-                    page.insert_textbox(rect, lines[0], fontsize=fontsize, fontname=target_font, color=color, align=0)
+                    rc = page.insert_textbox(eff_rect, lines[0], fontsize=eff_fontsize, fontname=target_font, color=color, align=0)
+                    if rc is not None and rc < 0:
+                        logger.warning(
+                            "insert_textbox sığmadı (rc=%r); redact uygulanmıştı, undo ile geri alınabilir.",
+                            rc,
+                        )
+                        self.is_modified = True
+                        return False
             else:
                 # Multi-line: use insert_textbox for automatic wrapping and line-heights
-                page.insert_textbox(rect, new_text, fontsize=fontsize, fontname=target_font, color=color, align=0)
+                rc = page.insert_textbox(eff_rect, new_text, fontsize=eff_fontsize, fontname=target_font, color=color, align=0)
+                if rc is not None and rc < 0:
+                    logger.warning(
+                        "insert_textbox sığmadı (rc=%r); redact uygulanmıştı, undo ile geri alınabilir.",
+                        rc,
+                    )
+                    self.is_modified = True
+                    return False
 
             self.is_modified = True
             return True

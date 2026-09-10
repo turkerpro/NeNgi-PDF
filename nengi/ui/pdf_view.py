@@ -612,6 +612,9 @@ class PageRenderWidget(QWidget):
                     return
                 self.selected_words = []
                 self.selected_blocks = []
+                self.words = []
+                self.blocks = []
+                self.hovered_block = None
                 self.render_cache()
                 self.update()
                 if ok:
