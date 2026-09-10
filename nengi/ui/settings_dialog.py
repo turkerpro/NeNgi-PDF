@@ -8,8 +8,8 @@ from typing import Optional, Callable
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, 
-    QLabel, QPushButton, QComboBox, QCheckBox, QGroupBox, 
-    QMessageBox, QFrame
+    QLabel, QPushButton, QComboBox, QCheckBox, QGroupBox, QRadioButton,
+    QMessageBox, QFrame, QButtonGroup
 )
 from nengi.core.windows_integration import (
     register_as_default_pdf_viewer, 
@@ -150,7 +150,7 @@ class SettingsDialog(QDialog):
         lbl_app_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #0078D4;")
         lay_abt.addWidget(lbl_app_title)
 
-        lbl_version = QLabel("Sürüm: 2.0.0")
+        lbl_version = QLabel("Sürüm: 2.0.1-beta")
         lbl_version.setStyleSheet("color: #AAAAAA;")
         lay_abt.addWidget(lbl_version)
 
@@ -174,6 +174,26 @@ class SettingsDialog(QDialog):
         self.btn_check_update.setObjectName("accentButton")
         self.btn_check_update.clicked.connect(self._on_check_updates)
         lay_abt.addWidget(self.btn_check_update)
+
+        # Güncelleme kanalı seçici (Beta/Stabil)
+        from nengi.core.updater import get_update_channel
+        grp_channel = QGroupBox("📡 Güncelleme Kanalı")
+        lay_ch = QHBoxLayout(grp_channel)
+        self.radio_beta = QRadioButton("Beta (erken erişim)")
+        self.radio_stabil = QRadioButton("Stabil (kararlı)")
+        self.channel_group = QButtonGroup(self)
+        self.channel_group.addButton(self.radio_beta)
+        self.channel_group.addButton(self.radio_stabil)
+        lay_ch.addWidget(self.radio_beta)
+        lay_ch.addWidget(self.radio_stabil)
+        lay_abt.addWidget(grp_channel)
+        current_channel = get_update_channel()
+        if current_channel == "stabil":
+            self.radio_stabil.setChecked(True)
+        else:
+            self.radio_beta.setChecked(True)
+        self.radio_beta.toggled.connect(self._on_channel_changed)
+        self.radio_stabil.toggled.connect(self._on_channel_changed)
 
         self.lbl_update_status = QLabel("")
         self.lbl_update_status.setStyleSheet("color: #888888; font-size: 11px;")
@@ -244,13 +264,24 @@ class SettingsDialog(QDialog):
         self.theme_changed.emit(theme_name)
 
     # ---------------- Güncelleme (main_window ile aynı UpdateChecker) ----------------
+    def _current_channel(self) -> str:
+        if getattr(self, "radio_stabil", None) and self.radio_stabil.isChecked():
+            return "stabil"
+        return "beta"
+
+    def _on_channel_changed(self):
+        from nengi.core.updater import set_update_channel
+        set_update_channel(self._current_channel())
+
     def _on_check_updates(self):
         from nengi.core.updater import UpdateCheckWorker
         if getattr(self, "_update_check_worker", None) and self._update_check_worker.isRunning():
             return
         self.btn_check_update.setEnabled(False)
         self.lbl_update_status.setText("Güncellemeler denetleniyor...")
-        self._update_check_worker = UpdateCheckWorker(parent=self)
+        self._update_check_worker = UpdateCheckWorker(
+            channel=self._current_channel(), parent=self
+        )
         self._update_check_worker.finished.connect(self._on_update_check_finished)
         self._update_check_worker.failed.connect(self._on_update_check_failed)
         self._update_check_worker.start()

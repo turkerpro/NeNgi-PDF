@@ -1,5 +1,5 @@
-from PyQt6.QtWidgets import QTextEdit, QWidget, QHBoxLayout, QVBoxLayout, QComboBox, QDoubleSpinBox, QPushButton
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QTextEdit, QWidget, QHBoxLayout, QVBoxLayout, QComboBox, QDoubleSpinBox, QPushButton, QSizeGrip
+from PyQt6.QtCore import Qt, pyqtSignal, QEvent
 from PyQt6.QtGui import QFont, QColor, QFontDatabase
 import fitz
 
@@ -94,11 +94,22 @@ class InlineTextEditor(QWidget):
             }
         """)
 
-        self.edit.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        self.edit.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.edit.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.edit.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.edit.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.edit.installEventFilter(self)
         layout.addWidget(self.edit, 1)
+
+        # Sağ-alt köşe tutamacı: sürükleyerek kutu genişletme.
+        # Font/punto korunur; WidgetWidth sarmalama ile metin çok satıra yayılır.
+        self.setMinimumSize(200, 80)
+        self._grip = QSizeGrip(self)
+        self._grip.setFixedSize(16, 16)
+        self._grip.show()
+
+        # İçerik taşınca otomatik yükseklik büyümesi
+        self._auto_fit_guard = False
+        self.edit.document().contentsChanged.connect(self._auto_fit_height)
 
         # Position and size (+şerit payı)
         sx = pdf_rect.x0 * zoom
@@ -107,6 +118,36 @@ class InlineTextEditor(QWidget):
         sw = max((pdf_rect.width * zoom) + 100, 200)
         sh = max((pdf_rect.height * zoom) + 50 + 30, 80)
         self.setGeometry(int(sx - 5), int(sy - 5), int(sw), int(sh))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "_grip"):
+            self._grip.move(max(0, self.width() - 16), max(0, self.height() - 16))
+
+    def _auto_fit_height(self):
+        """İçerik belge yüksekliğini aşarsa kutuyu otomatik büyüt (font değişmez)."""
+        if self._auto_fit_guard:
+            return
+        self._auto_fit_guard = True
+        try:
+            doc_h = self.edit.document().size().height()
+            frame = self.edit.frameWidth() * 2
+            toolbar_h = self.toolbar.sizeHint().height()
+            target = int(toolbar_h + doc_h + frame + 16)
+            target = max(target, 80)
+            target = min(target, 600)
+            # Sadece büyüt; küçültmeyi kullanıcı tutamaca bırakıyoruz.
+            if target > self.height() + 2:
+                self.resize(self.width(), target)
+        finally:
+            self._auto_fit_guard = False
+
+    @staticmethod
+    def _is_commit_key(event) -> bool:
+        return (
+            event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            and bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+        )
 
     # ---- format şeridi ----
     def _map_to_fitz(self, fam: str, is_b: bool, is_i: bool) -> str:
@@ -163,9 +204,14 @@ class InlineTextEditor(QWidget):
     def setFocus(self):
         self.edit.setFocus()
 
+    # Davranış sözleşmesi:
+    #   Enter (düz)      -> yeni satır (QTextEdit varsayılanı, commit YOK)
+    #   Ctrl+Enter       -> commit (replace_text_block zincirini tetikler)
+    #   Odak kaybı       -> commit (şerit içi gezinti hariç)
+    #   Esc / boş metin  -> iptal, orijinal korunur
     def eventFilter(self, obj, event):
         if obj is self.edit and event.type() == event.Type.KeyPress:
-            if event.key() == Qt.Key.Key_Return and event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+            if self._is_commit_key(event):
                 self.commit()
                 return True
             elif event.key() == Qt.Key.Key_Escape:
@@ -175,21 +221,30 @@ class InlineTextEditor(QWidget):
                 # Insert 4 spaces instead of \t because PyMuPDF doesn't render \t correctly
                 self.edit.insertPlainText("    ")
                 return True
+            # Düz Enter/Key_Enter: yeni satır için olaya dokunma (commit yok).
+        if obj is self.edit and event.type() == QEvent.Type.FocusOut:
+            self._maybe_commit_on_focus_out()
+            return False
         return super().eventFilter(obj, event)
 
-    def focusOutEvent(self, event):
-        # Şerit içi odak gezintisinde commit etme; odak tüm
-        # overlay dışına çıkınca commit et.
-        super().focusOutEvent(event)
+    def _maybe_commit_on_focus_out(self):
+        if self._committed:
+            return
         from PyQt6.QtWidgets import QApplication
         fw = QApplication.focusWidget()
         if fw is not None and self.isAncestorOf(fw):
             return
         self.commit()
 
+    def focusOutEvent(self, event):
+        # Şerit içi odak gezintisinde commit etme; odak tüm
+        # overlay dışına çıkınca commit et.
+        super().focusOutEvent(event)
+        self._maybe_commit_on_focus_out()
+
     def keyPressEvent(self, event):
         # Ctrl+Enter to commit
-        if event.key() == Qt.Key.Key_Return and event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+        if self._is_commit_key(event):
             self.commit()
             return
         elif event.key() == Qt.Key.Key_Escape:
@@ -202,11 +257,14 @@ class InlineTextEditor(QWidget):
         super().keyPressEvent(event)
 
     def commit(self):
+        """Düzenlenen metni kaydet: boşsa iptal sayılır (orijinal korunur)."""
         if self._committed:
             return
         self._committed = True
         new_text = self.edit.toPlainText().strip()
         if new_text:
+            # Başarı/hata bildirimi alıcı (pdf_view.on_commit) tarafında yapılır;
+            # burada sinyal her zaman gönderilir, sessiz yutma yoktur.
             self.editing_finished.emit(new_text, self.style, self.pdf_rect)
         else:
             self.editing_cancelled.emit()

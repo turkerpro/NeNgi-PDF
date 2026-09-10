@@ -2,7 +2,7 @@ name: Build Windows EXE & Setup Installer
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "beta" ]
     tags: [ 'v*' ]
   workflow_dispatch:
 
@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   build-windows:
+    if: github.ref != 'refs/heads/beta'
     runs-on: windows-latest
 
     steps:
@@ -91,8 +92,8 @@ jobs:
         run: |
           $tag = "${{ github.ref_name }}"
           if (-not $tag -or $tag -eq "main" -or $tag -eq "master") {
-            $match = (Select-String -Path "nengi/ui/main_window.py" -Pattern 'v(\d+\.\d+\.\d+)' | Select-Object -First 1)
-            $ver = if ($match) { $match.Matches.Groups[1].Value } else { "2.0.0" }
+            $match = (Select-String -Path "nengi/ui/main_window.py" -Pattern 'v(\d+\.\d+\.\d+(?:-beta)?)' | Select-Object -First 1)
+            $ver = if ($match) { $match.Matches.Groups[1].Value } else { "2.0.1-beta" }
             $tag = "v$ver"
           }
           echo "VERSION=$tag" >> $env:GITHUB_OUTPUT
@@ -160,6 +161,152 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: "NeNgi PDF ${{ github.ref_name }}"
+          files: |
+            dist/NeNgi_PDF_${{ steps.get_version.outputs.VERSION }}_Setup.exe
+            dist/NeNgi_PDF_${{ steps.get_version.outputs.VERSION }}_Portable.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-beta:
+    if: github.ref == 'refs/heads/beta'
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Install NSIS Compiler
+        run: |
+          choco install nsis -y --no-progress
+
+      - name: Run Tests
+        run: |
+          pip install pytest
+          python -m pytest tests/ -v
+        continue-on-error: false
+
+      - name: Build Windows Setup Installer (onedir)
+        run: |
+          python -m PyInstaller `
+            --noconfirm `
+            --onedir `
+            --windowed `
+            --name "NeNgi_PDF" `
+            --icon "resources/app_icon.ico" `
+            --collect-all pymupdf `
+            --collect-all fitz `
+            --collect-all PyQt6 `
+            --hidden-import PyQt6 `
+            --hidden-import PyQt6.QtCore `
+            --hidden-import PyQt6.QtGui `
+            --hidden-import PyQt6.QtWidgets `
+            --hidden-import PyQt6.QtPrintSupport `
+            --hidden-import PIL `
+            --hidden-import docx `
+            --hidden-import openpyxl `
+            --hidden-import pptx `
+            --add-data "resources;resources" `
+            nengi/main.py
+
+      - name: Build Portable EXE (onefile)
+        run: |
+          python -m PyInstaller `
+            --noconfirm `
+            --onefile `
+            --windowed `
+            --name "NeNgi_PDF_Portable" `
+            --icon "resources/app_icon.ico" `
+            --collect-all pymupdf `
+            --collect-all fitz `
+            --collect-all PyQt6 `
+            --hidden-import PyQt6 `
+            --hidden-import PyQt6.QtCore `
+            --hidden-import PyQt6.QtGui `
+            --hidden-import PyQt6.QtWidgets `
+            --hidden-import PyQt6.QtPrintSupport `
+            --hidden-import PIL `
+            --hidden-import docx `
+            --hidden-import openpyxl `
+            --hidden-import pptx `
+            --add-data "resources;resources" `
+            nengi/main.py
+
+      - name: Get Version
+        id: get_version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if (-not $tag -or $tag -eq "beta") {
+            $match = (Select-String -Path "nengi/ui/main_window.py" -Pattern 'v(\d+\.\d+\.\d+(?:-beta)?)' | Select-Object -First 1)
+            $ver = if ($match) { $match.Matches.Groups[1].Value } else { "2.0.1-beta" }
+            $tag = "v$ver"
+          }
+          echo "VERSION=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Build NSIS Setup Installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+          if ($LASTEXITCODE -ne 0) { throw "NSIS build failed" }
+
+      - name: Rename Artifacts
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.get_version.outputs.VERSION }}"
+          Copy-Item "dist\NeNgi_PDF_Portable.exe" "dist\NeNgi_PDF_${ver}_Portable.exe"
+          Copy-Item "dist\NeNgi_PDF_Setup.exe" "dist\NeNgi_PDF_${ver}_Setup.exe"
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: NeNgi-PDF-Windows-x64-Beta-${{ steps.get_version.outputs.VERSION }}
+          path: |
+            dist/NeNgi_PDF_*_Setup.exe
+            dist/NeNgi_PDF_*_Portable.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Delete Old 'beta-build' Release
+        shell: pwsh
+        run: |
+          $headers = @{ Authorization = "Bearer ${{ secrets.GITHUB_TOKEN }}"; Accept = "application/vnd.github+json" }
+          $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases" -Headers $headers
+          $old = $releases | Where-Object { $_.tag_name -eq "beta-build" }
+          if ($old) {
+            Invoke-RestMethod -Method Delete -Uri "https://api.github.com/repos/${{ github.repository }}/releases/$($old.id)" -Headers $headers
+            Start-Sleep -Seconds 2
+            try { Invoke-RestMethod -Method Delete -Uri "https://api.github.com/repos/${{ github.repository }}/git/refs/tags/beta-build" -Headers $headers } catch {}
+          }
+        continue-on-error: true
+
+      - name: Create Rolling 'beta-build' Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: beta-build
+          name: "NeNgi PDF – Beta (${{ steps.get_version.outputs.VERSION }})"
+          body: |
+            ## ⬇️ İndir (Beta)
+
+            | Dosya | Açıklama |
+            |-------|----------|
+            | `NeNgi_PDF_*_Setup.exe` | **Önerilen** – Masaüstü kısayolu + .pdf ilişkilendirmesi kurar |
+            | `NeNgi_PDF_*_Portable.exe` | Kurulum gerektirmez, tek dosya |
+
+            > **Beta derlemesi** – `beta` dalına her yeni güncelleme geldiğinde bu sürüm yenilenir.
+            > Commit: `${{ github.sha }}`
+          prerelease: true
           files: |
             dist/NeNgi_PDF_${{ steps.get_version.outputs.VERSION }}_Setup.exe
             dist/NeNgi_PDF_${{ steps.get_version.outputs.VERSION }}_Portable.exe

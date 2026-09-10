@@ -41,6 +41,12 @@ from nengi import __version__ as LOCAL_VERSION
 GITHUB_OWNER = "turkerpro"
 GITHUB_REPO = "NeNgi-PDF"
 RELEASE_TAG = "latest-build"
+BETA_TAG = "beta-build"
+CHANNEL_TAGS = {
+    "beta": BETA_TAG,
+    "stabil": RELEASE_TAG,
+}
+DEFAULT_CHANNEL = "beta"
 API_URL = (
     f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}"
     f"/releases/tags/{RELEASE_TAG}"
@@ -65,6 +71,55 @@ class UpdateInfo:
 
 
 # ---------------------------------------------------------------------------
+# Guncelleme kanali (beta + stabil)
+# ---------------------------------------------------------------------------
+
+def normalize_channel(channel: Optional[str]) -> str:
+    """Kanal adini normalize et: 'beta' veya 'stabil'. Bilinmeyende default."""
+    text = (channel or "").strip().lower()
+    if text in ("stabil", "stable", "latest", "latest-build"):
+        return "stabil"
+    if text in ("beta", "beta-build"):
+        return "beta"
+    return DEFAULT_CHANNEL
+
+
+def tag_for_channel(channel: Optional[str] = None) -> str:
+    """Kanala karsilik gelen release tag'i dondur."""
+    return CHANNEL_TAGS[normalize_channel(channel)]
+
+
+def api_url_for_channel(channel: Optional[str] = None) -> str:
+    """Kanalin GitHub release API URL'sini dondur."""
+    tag = tag_for_channel(channel)
+    return (
+        f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}"
+        f"/releases/tags/{tag}"
+    )
+
+
+def get_update_channel() -> str:
+    """QSettings 'update_channel' degerini oku (default 'beta')."""
+    try:
+        from PyQt6.QtCore import QSettings
+        value = QSettings("NeNgi", "NeNgiPDF").value("update_channel", DEFAULT_CHANNEL)
+        return normalize_channel(str(value) if value is not None else DEFAULT_CHANNEL)
+    except Exception:
+        return DEFAULT_CHANNEL
+
+
+def set_update_channel(channel: str) -> str:
+    """QSettings 'update_channel' degerini yaz, normalize edilmis degeri dondur."""
+    normalized = normalize_channel(channel)
+    try:
+        from PyQt6.QtCore import QSettings
+        QSettings("NeNgi", "NeNgiPDF").setValue("update_channel", normalized)
+    except Exception:
+        pass
+    return normalized
+
+
+# ---------------------------------------------------------------------------
 # Surum karsilastirma (saf mantik - ag gerektirmez, test edilebilir)
 # ---------------------------------------------------------------------------
 
@@ -84,7 +139,11 @@ def parse_version(version: str) -> tuple[int, ...]:
 
 
 def compare_versions(local: str, remote: str) -> int:
-    """Karsilastir: -1 local<remote (guncelleme var), 0 esit, +1 local>remote."""
+    """Karsilastir: -1 local<remote (guncelleme var), 0 esit, +1 local>remote.
+
+    '-beta' soneki anlasilir: '2.1.0-beta' < '2.1.0' (sayisal kisim esitse
+    beta one-surum sayilir ve kucuktur).
+    """
     lv, rv = parse_version(local), parse_version(remote)
     length = max(len(lv), len(rv))
     lv += (0,) * (length - len(lv))
@@ -92,6 +151,12 @@ def compare_versions(local: str, remote: str) -> int:
     if lv < rv:
         return -1
     if lv > rv:
+        return 1
+    local_beta = "beta" in (local or "").lower()
+    remote_beta = "beta" in (remote or "").lower()
+    if local_beta and not remote_beta:
+        return -1
+    if remote_beta and not local_beta:
         return 1
     return 0
 
@@ -157,19 +222,32 @@ def _http_get_json(url: str, timeout: int = REQUEST_TIMEOUT) -> dict:
 
 
 def extract_remote_version(release: dict) -> str:
-    """Release JSON icinden surum cikar: name -> tag_name -> asset adlari."""
+    """Release JSON icinden surum cikar: name -> tag_name -> asset adlari.
+
+    '-beta' soneki korunur: kaynak metinde 'beta' geciyorsa donen surume
+    '-beta' eklenir (or. '2.1.0-beta').
+    """
     for key in ("name", "tag_name"):
         value = str(release.get(key) or "")
         match = _VERSION_RE.search(value)
         if match:
-            # tag "latest-build" sayi icermez; name "(vX.Y.Z)" icerir.
+            # tag "latest-build"/"beta-build" sayi icermez; name "(vX.Y.Z)" icerir.
             if key == "tag_name" and "latest" in value.lower() and not re.search(r"\d", value):
                 continue
-            return match.group(1)
+            if key == "tag_name" and "beta-build" in value.lower() and not re.search(r"\d", value):
+                continue
+            version = match.group(1)
+            if "beta" in value.lower() and "beta" not in version.lower():
+                version = f"{version}-beta"
+            return version
     for asset in release.get("assets") or []:
-        match = _VERSION_RE.search(str(asset.get("name") or ""))
+        asset_name = str(asset.get("name") or "")
+        match = _VERSION_RE.search(asset_name)
         if match:
-            return match.group(1)
+            version = match.group(1)
+            if "beta" in asset_name.lower() and "beta" not in version.lower():
+                version = f"{version}-beta"
+            return version
     return ""
 
 
@@ -195,19 +273,25 @@ def find_setup_asset_url(release: dict) -> Optional[str]:
     return str(url) if url else None
 
 
-def fetch_latest_release(timeout: int = REQUEST_TIMEOUT) -> dict:
-    """`latest-build` release JSON'unu indirir."""
-    return _http_get_json(API_URL, timeout=timeout)
+def fetch_latest_release(timeout: int = REQUEST_TIMEOUT, channel: Optional[str] = None) -> dict:
+    """Kanalin release JSON'unu indirir (beta -> `beta-build`, stabil -> `latest-build`)."""
+    resolved = normalize_channel(channel) if channel is not None else get_update_channel()
+    return _http_get_json(api_url_for_channel(resolved), timeout=timeout)
 
 
-def check_for_update(current_version: Optional[str] = None) -> UpdateInfo:
+def check_for_update(
+    current_version: Optional[str] = None,
+    channel: Optional[str] = None,
+) -> UpdateInfo:
     """Bloke edici denetim: release'i al, karsilastir, UpdateInfo dondur.
 
     UI thread'de dogrudan cagirmayin; UpdateCheckWorker kullanin.
     Hata durumunda UpdateCheckError yukseltir (graceful Turkce mesaj).
+    `channel` verilmezse QSettings'teki 'update_channel' kullanilir.
     """
     local = (current_version or LOCAL_VERSION or "0.0.0").strip()
-    release = fetch_latest_release()
+    resolved = normalize_channel(channel) if channel is not None else get_update_channel()
+    release = fetch_latest_release(channel=resolved)
     remote = extract_remote_version(release)
     if not remote:
         raise UpdateCheckError(
@@ -317,11 +401,12 @@ class UpdateChecker:
     ile (QThread) cagirin.
     """
 
-    def __init__(self, current_version: Optional[str] = None):
+    def __init__(self, current_version: Optional[str] = None, channel: Optional[str] = None):
         self.current_version = (current_version or LOCAL_VERSION or "0.0.0").strip()
+        self.channel = normalize_channel(channel) if channel is not None else get_update_channel()
 
     def check(self) -> UpdateInfo:
-        return check_for_update(self.current_version)
+        return check_for_update(self.current_version, channel=self.channel)
 
     def download(
         self,
@@ -345,9 +430,9 @@ if _QT_AVAILABLE:  # pragma: no cover - GUI ortami gerektirir
         finished = pyqtSignal(object)  # UpdateInfo
         failed = pyqtSignal(str)       # Turkce hata mesaji
 
-        def __init__(self, current_version: Optional[str] = None, parent=None):
+        def __init__(self, current_version: Optional[str] = None, channel: Optional[str] = None, parent=None):
             super().__init__(parent)
-            self._checker = UpdateChecker(current_version)
+            self._checker = UpdateChecker(current_version, channel=channel)
 
         def run(self):  # type: ignore[override]
             try:

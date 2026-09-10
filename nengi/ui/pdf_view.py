@@ -593,17 +593,35 @@ class PageRenderWidget(QWidget):
             def on_commit(new_text, s, r):
                 if editor in self.active_text_widgets:
                     self.active_text_widgets.remove(editor)
-                self.doc.replace_text_block(
-                    self.page_idx, r, new_text,
-                    fontname=s.get("fitz_font", "helv"), 
-                    fontsize=s.get("size", 11.0), 
-                    color=s.get("color_rgb", (0,0,0)),
-                    baseline_y=s.get("baseline_y"), 
-                    origin_x=s.get("origin_x")
-                )
+                try:
+                    ok = self.doc.replace_text_block(
+                        self.page_idx, r, new_text,
+                        fontname=s.get("fitz_font", "helv"),
+                        fontsize=s.get("size", 11.0),
+                        color=s.get("color_rgb", (0,0,0)),
+                        baseline_y=s.get("baseline_y"),
+                        origin_x=s.get("origin_x")
+                    )
+                except Exception as e:
+                    self.render_cache()
+                    self.update()
+                    QMessageBox.critical(
+                        self, "Kayıt Hatası",
+                        f"Metin kaydedilirken hata oluştu; orijinal korundu.\n\n{e}"
+                    )
+                    return
                 self.selected_words = []
+                self.selected_blocks = []
                 self.render_cache()
                 self.update()
+                if ok:
+                    # replace_text_block is_modified'i işaretler; görünümü de bilgilendir.
+                    self.page_modified.emit()
+                else:
+                    QMessageBox.warning(
+                        self, "Kayıt Başarısız",
+                        "Metin değişikliği kaydedilemedi; orijinal korundu."
+                    )
                 
             def on_cancel():
                 if editor in self.active_text_widgets:
