@@ -32,7 +32,8 @@ class VirtualPrinterManager:
             ps_cmd = f"Get-Printer -Name '{cls.PRINTER_NAME}' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name"
             cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd]
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-            return cls.PRINTER_NAME.lower() in res.stdout.lower()
+            installed = cls.PRINTER_NAME.lower() in res.stdout.lower()
+            return Result.ok(installed)
         except Exception as e:
             logger = __import__("logging").getLogger(__name__)
             logger.exception("Error checking printer installation")
