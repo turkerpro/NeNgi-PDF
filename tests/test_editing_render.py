@@ -7,6 +7,7 @@ import tempfile
 import fitz
 
 from nengi.core.pdf_document import PDFDocument
+from nengi.core.result import Result
 
 
 def _make_doc(tmp_dir, stub_text="kisa not"):
@@ -27,7 +28,9 @@ def test_replace_long_text_into_narrow_box_stays_readable():
         "Bu uzun bir yedek metindir ve dar kutuya sigmalidir "
         "duzgun sarmalama ve punto kuculme ile kaybolmamalidir"
     )
-    ok = doc.replace_text_block(0, narrow, long_text, fontsize=11.0)
+    result = doc.replace_text_block(0, narrow, long_text, fontsize=11.0)
+    assert result.success
+    ok = result.value
     page_text = doc.get_page(0).get_text("text")
     doc.close()
     assert ok is True
@@ -41,7 +44,8 @@ def test_overflow_never_returns_true_with_blank_page():
     tiny = fitz.Rect(50, 820, 70, 830)  # sayfa altinda minik kutu
     token = "SIGMAYANDEVASA"
     giant = " ".join([token] * 800)
-    ok = doc.replace_text_block(0, tiny, giant, fontsize=11.0)
+    result = doc.replace_text_block(0, tiny, giant, fontsize=11.0)
+    ok = result.value if result and result.success else False
     page_text = doc.get_page(0).get_text("text")
     can_undo = doc.can_undo()
     doc.close()

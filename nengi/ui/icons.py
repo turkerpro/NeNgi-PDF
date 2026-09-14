@@ -246,6 +246,34 @@ SVG_ICONS: Dict[str, str] = {
         '<polygon points="22 2 15 22 11 13 2 9 22 2"/>'
         '</svg>'
     ),
+    "chevron_up": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        '<polyline points="18 15 12 9 6 15"/>'
+        '</svg>'
+    ),
+    "chevron_down": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        '<polyline points="6 9 12 15 18 9"/>'
+        '</svg>'
+    ),
+    "more": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        '<circle cx="12" cy="12" r="1"/>'
+        '<circle cx="19" cy="12" r="1"/>'
+        '<circle cx="5" cy="12" r="1"/>'
+        '</svg>'
+    ),
+    "suggest": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M9.663 17h11.706a1 1 0 0 0 .966-.744l1.547-7.272a1 1 0 0 0-.966-1.256H13.71a1 1 0 0 1-.693-1.72L12 3.19l-1.017 4.835a1 1 0 0 1-.694 1.72H5.086a1 1 0 0 0-.966 1.256l1.547 7.272a1 1 0 0 0 .966.744z"/>'
+        '</svg>'
+    ),
+    "recent": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        '<circle cx="12" cy="12" r="10"/>'
+        '<polyline points="12 6 12 12 16 14"/>'
+        '</svg>'
+    ),
     "draw": (
         '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>'

@@ -9,6 +9,8 @@ import os
 import sys
 import subprocess
 from typing import Tuple, List
+from nengi.core.result import Result
+from nengi.core.result import Result
 
 
 class VirtualPrinterManager:
@@ -22,17 +24,19 @@ class VirtualPrinterManager:
         return sys.platform == "win32" or os.name == "nt"
 
     @classmethod
-    def is_printer_installed(cls) -> bool:
+    def is_printer_installed(cls) -> Result[bool]:
         """Checks if the 'NeNgi PDF' virtual printer is installed in Windows."""
         if not cls.is_windows():
-            return False
+            return Result.fail("Not on Windows", "This feature only works on Windows", "NOT_WINDOWS")
         try:
             ps_cmd = f"Get-Printer -Name '{cls.PRINTER_NAME}' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name"
             cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd]
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
             return cls.PRINTER_NAME.lower() in res.stdout.lower()
-        except Exception:
-            return False
+        except Exception as e:
+            logger = __import__("logging").getLogger(__name__)
+            logger.exception("Error checking printer installation")
+            return Result.from_exception(e, "Failed to check printer status", "CHECK_PRINTER_FAILED")
 
     @classmethod
     def get_spool_dir(cls) -> str:
@@ -81,14 +85,14 @@ class VirtualPrinterManager:
         return unique
 
     @classmethod
-    def install_printer(cls) -> Tuple[bool, str]:
+    def install_printer(cls) -> Result[bool]:
         """
         Installs the 'NeNgi PDF' virtual printer using the built-in Microsoft Print to PDF driver
         connected to a dedicated automated spool file port.
         Also clears Outlook outlprnt cache so Outlook recognizes the printer without errors.
         """
         if not cls.is_windows():
-            return False, "Sanal yazıcı sadece Windows işletim sisteminde desteklenmektedir."
+            return Result.fail("Not on Windows", "This feature only works on Windows", "NOT_WINDOWS"), "Sanal yazıcı sadece Windows işletim sisteminde desteklenmektedir."
 
         try:
             spool_file = cls.get_spool_file_path().replace("\\", "\\\\")
@@ -121,13 +125,15 @@ class VirtualPrinterManager:
             else:
                 return False, f"Yazıcı eklenirken hata oluştu. Lütfen Yönetici Olarak Çalıştırın:\n{res.stderr.strip() or res.stdout.strip()}"
         except Exception as e:
-            return False, f"Yazıcı kurulum hatası: {e}"
+            logger = __import__("logging").getLogger(__name__)
+            logger.exception("Printer installation error")
+            return Result.from_exception(e, "Failed to install printer", "INSTALL_FAILED")
 
     @classmethod
-    def uninstall_printer(cls) -> Tuple[bool, str]:
+    def uninstall_printer(cls) -> Result[bool]:
         """Removes the 'NeNgi PDF' virtual printer from Windows."""
         if not cls.is_windows():
-            return False, "Sanal yazıcı sadece Windows işletim sisteminde desteklenmektedir."
+            return Result.fail("Not on Windows", "This feature only works on Windows", "NOT_WINDOWS"), "Sanal yazıcı sadece Windows işletim sisteminde desteklenmektedir."
 
         try:
             ps_script = f"Remove-Printer -Name '{cls.PRINTER_NAME}' -ErrorAction SilentlyContinue"
@@ -135,4 +141,6 @@ class VirtualPrinterManager:
             subprocess.run(cmd, capture_output=True, text=True, timeout=10)
             return True, f"'{cls.PRINTER_NAME}' yazıcısı kaldırıldı."
         except Exception as e:
-            return False, f"Yazıcı kaldırma hatası: {e}"
+            logger = __import__("logging").getLogger(__name__)
+            logger.exception("Printer uninstall error")
+            return Result.from_exception(e, "Failed to uninstall printer", "UNINSTALL_FAILED")

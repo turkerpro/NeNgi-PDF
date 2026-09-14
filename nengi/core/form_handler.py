@@ -7,16 +7,17 @@ from __future__ import annotations
 from typing import List, Dict, Any, Optional
 import fitz
 from .pdf_document import PDFDocument
+from nengi.core.result import Result
 
 
 class FormHandler:
     """Interacts with interactive AcroForm fields in a PDF."""
 
     @staticmethod
-    def get_all_fields(doc: PDFDocument) -> List[Dict[str, Any]]:
+    def get_all_fields(doc: PDFDocument) -> Result[List[Dict[str, Any]]]:
         """Returns metadata and current values of all form fields in the document."""
         if not doc.is_open:
-            return []
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         fields = []
         for page_idx in range(doc.page_count):
@@ -30,13 +31,13 @@ class FormHandler:
                     "rect": widget.rect,
                     "widget": widget
                 })
-        return fields
+        return Result.ok(fields)
 
     @staticmethod
-    def set_field_value(doc: PDFDocument, field_name: str, value: Any) -> bool:
+    def set_field_value(doc: PDFDocument, field_name: str, value: Any) -> Result[bool]:
         """Sets the value of a specific named form field across all pages."""
         if not doc.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         updated = False
         for page_idx in range(doc.page_count):
@@ -49,4 +50,4 @@ class FormHandler:
 
         if updated:
             doc.is_modified = True
-        return updated
+        return Result.ok(updated)

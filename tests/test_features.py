@@ -10,6 +10,7 @@ import tempfile
 import fitz
 
 from nengi.core.pdf_document import PDFDocument
+from nengi.core.result import Result
 from nengi.core.annotations import AnnotationManager
 from nengi.core.form_designer import FormDesigner, FormFieldConfig, FIELD_TEXT, FIELD_CHECKBOX
 from nengi.core.measurement import MeasurementEngine, ScaleRatio
@@ -39,30 +40,43 @@ class TestNeNgiAdvancedFeatures(unittest.TestCase):
     def test_annotations_crud(self):
         """Tests adding and managing annotations via AnnotationManager."""
         doc = PDFDocument()
-        self.assertTrue(doc.open(self.sample_pdf))
+        open_result = doc.open(self.sample_pdf)
+        self.assertTrue(open_result)
         page = doc.get_page(0)
 
         # Highlight
         quad = fitz.Rect(50, 90, 200, 110).quad
-        annot_hl = AnnotationManager.add_highlight(page, [quad], color=(1, 1, 0))
+        result = AnnotationManager.add_highlight(page, [quad], color=(1, 1, 0))
+        self.assertTrue(result)
+        annot_hl = result.value
         self.assertIsNotNone(annot_hl)
 
         # Underline
-        annot_ul = AnnotationManager.add_underline(page, [quad], color=(0, 0, 1))
+        result = AnnotationManager.add_underline(page, [quad], color=(0, 0, 1))
+        self.assertTrue(result)
+        annot_ul = result.value
         self.assertIsNotNone(annot_ul)
 
         # Sticky note
-        annot_note = AnnotationManager.add_sticky_note(page, fitz.Point(100, 100), "Önemli Not")
+        result = AnnotationManager.add_sticky_note(page, fitz.Point(100, 100), "Önemli Not")
+        self.assertTrue(result)
+        annot_note = result.value
         self.assertIsNotNone(annot_note)
 
         # Line & Rect
-        annot_line = AnnotationManager.add_line(page, fitz.Point(50, 200), fitz.Point(200, 200))
+        result = AnnotationManager.add_line(page, fitz.Point(50, 200), fitz.Point(200, 200))
+        self.assertTrue(result)
+        annot_line = result.value
         self.assertIsNotNone(annot_line)
 
-        annot_rect = AnnotationManager.add_rect(page, fitz.Rect(50, 250, 150, 300))
+        result = AnnotationManager.add_rect(page, fitz.Rect(50, 250, 150, 300))
+        self.assertTrue(result)
+        annot_rect = result.value
         self.assertIsNotNone(annot_rect)
 
-        annots = AnnotationManager.get_all_annotations(page)
+        result = AnnotationManager.get_all_annotations(page)
+        self.assertTrue(result)
+        annots = result.value
         self.assertGreaterEqual(len(annots), 5)
 
         doc.close()
@@ -70,7 +84,8 @@ class TestNeNgiAdvancedFeatures(unittest.TestCase):
     def test_form_designer_and_data_exchange(self):
         """Tests creating form fields, filling them, and exporting/importing form data."""
         doc = PDFDocument()
-        self.assertTrue(doc.open(self.sample_pdf))
+        open_result = doc.open(self.sample_pdf)
+        self.assertTrue(open_result)
 
         # Create text field
         cfg_text = FormFieldConfig(
@@ -79,7 +94,9 @@ class TestNeNgiAdvancedFeatures(unittest.TestCase):
             rect=fitz.Rect(100, 200, 280, 225),
             value="Ahmet Yilmaz"
         )
-        w_text = FormDesigner.create_field(doc, 0, cfg_text)
+        result = FormDesigner.create_field(doc, 0, cfg_text)
+        self.assertTrue(result)
+        w_text = result.value
         self.assertIsNotNone(w_text)
 
         # Create checkbox
@@ -89,10 +106,14 @@ class TestNeNgiAdvancedFeatures(unittest.TestCase):
             rect=fitz.Rect(100, 240, 120, 260),
             value="Yes"
         )
-        w_chk = FormDesigner.create_field(doc, 0, cfg_chk)
+        result = FormDesigner.create_field(doc, 0, cfg_chk)
+        self.assertTrue(result)
+        w_chk = result.value
         self.assertIsNotNone(w_chk)
 
-        fields = FormDesigner.get_fields_on_page(doc, 0)
+        result = FormDesigner.get_fields_on_page(doc, 0)
+        self.assertTrue(result)
+        fields = result.value
         self.assertEqual(len(fields), 2)
         self.assertEqual(fields[0]["name"], "ad_soyad")
 
@@ -102,11 +123,15 @@ class TestNeNgiAdvancedFeatures(unittest.TestCase):
         self.assertTrue(os.path.exists(csv_path))
 
         # Clear fields
-        cleared = FormDesigner.clear_all_fields(doc)
+        result = FormDesigner.clear_all_fields(doc)
+        self.assertTrue(result)
+        cleared = result.value
         self.assertEqual(cleared, 2)
 
         # Import back from CSV
-        imported = FormDesigner.import_form_data(doc, csv_path, fmt="csv")
+        result = FormDesigner.import_form_data(doc, csv_path, fmt="csv")
+        self.assertTrue(result)
+        imported = result.value
         self.assertEqual(imported, 2)
 
         doc.close()
@@ -137,19 +162,25 @@ class TestNeNgiAdvancedFeatures(unittest.TestCase):
     def test_redaction_and_sanitization(self):
         """Tests pattern search (TCKN, email) and permanent sanitization."""
         doc = PDFDocument()
-        self.assertTrue(doc.open(self.sample_pdf))
+        open_result = doc.open(self.sample_pdf)
+        self.assertTrue(open_result)
 
         # Search TCKN pattern
-        matches = RedactionEngine.search_patterns(doc, "tckn", is_custom_regex=False)
+        result = RedactionEngine.search_patterns(doc, "tckn", is_custom_regex=False)
+        self.assertTrue(result)
+        matches = result.value
         self.assertGreaterEqual(len(matches), 1)
         self.assertEqual(matches[0]["text"], "12345678901")
 
         # Mark for redaction
-        marked = RedactionEngine.mark_for_redaction(doc, matches, overlay_text="REDACTED")
+        result = RedactionEngine.mark_for_redaction(doc, matches, overlay_text="REDACTED")
+        self.assertTrue(result)
+        marked = result.value
         self.assertEqual(marked, len(matches))
 
         # Apply redaction permanently
-        self.assertTrue(RedactionEngine.apply_redactions(doc))
+        result = RedactionEngine.apply_redactions(doc)
+        self.assertTrue(result)
 
         # Verify text was obliterated
         page = doc.get_page(0)
@@ -158,16 +189,20 @@ class TestNeNgiAdvancedFeatures(unittest.TestCase):
 
         # Sanitize metadata
         res = RedactionEngine.sanitize_document(doc, remove_metadata=True)
-        self.assertEqual(res["metadata_cleared"], 1)
+        self.assertTrue(res)
+        self.assertEqual(res.value["metadata_cleared"], 1)
 
         doc.close()
 
     def test_accessibility_checker(self):
         """Tests accessibility auditing on document."""
         doc = PDFDocument()
-        self.assertTrue(doc.open(self.sample_pdf))
+        open_result = doc.open(self.sample_pdf)
+        self.assertTrue(open_result)
 
-        results = AccessibilityChecker.audit_document(doc)
+        result = AccessibilityChecker.audit_document(doc)
+        self.assertTrue(result)
+        results = result.value
         self.assertIsInstance(results, list)
         self.assertGreaterEqual(len(results), 5)
 
@@ -179,7 +214,8 @@ class TestNeNgiAdvancedFeatures(unittest.TestCase):
     def test_attachments_manager(self):
         """Tests embedding, listing, and extracting attachments."""
         doc = PDFDocument()
-        self.assertTrue(doc.open(self.sample_pdf))
+        open_result = doc.open(self.sample_pdf)
+        self.assertTrue(open_result)
 
         # Create dummy file to attach
         dummy_file = os.path.join(self.temp_dir.name, "ek_belge.txt")
@@ -189,7 +225,9 @@ class TestNeNgiAdvancedFeatures(unittest.TestCase):
         # Embed attachment
         self.assertTrue(AttachmentManager.add_attachment(doc, dummy_file, "Test Açıklaması"))
 
-        atts = AttachmentManager.get_attachments(doc)
+        result = AttachmentManager.get_attachments(doc)
+        self.assertTrue(result)
+        atts = result.value
         self.assertEqual(len(atts), 1)
         self.assertEqual(atts[0]["name"], "ek_belge.txt")
 
@@ -201,8 +239,11 @@ class TestNeNgiAdvancedFeatures(unittest.TestCase):
         self.assertEqual(content, "Bu bir test eki metnidir.")
 
         # Delete attachment
-        self.assertTrue(AttachmentManager.delete_attachment(doc, "ek_belge.txt"))
-        atts_after = AttachmentManager.get_attachments(doc)
+        result = AttachmentManager.delete_attachment(doc, "ek_belge.txt")
+        self.assertTrue(result)
+        result = AttachmentManager.get_attachments(doc)
+        self.assertTrue(result)
+        atts_after = result.value
         self.assertEqual(len(atts_after), 0)
 
         doc.close()
@@ -210,13 +251,16 @@ class TestNeNgiAdvancedFeatures(unittest.TestCase):
     def test_pdf_optimizer(self):
         """Tests PDF size optimization and space audit."""
         doc = PDFDocument()
-        self.assertTrue(doc.open(self.sample_pdf))
+        open_result = doc.open(self.sample_pdf)
+        self.assertTrue(open_result)
 
-        audit = PDFOptimizer.get_space_usage(doc)
+        result = PDFOptimizer.get_space_usage(doc)
+        self.assertTrue(result)
+        audit = result.value
         self.assertIn("total", audit)
 
-        opt_success = PDFOptimizer.optimize(doc, {"deflate": True, "garbage_collect": True})
-        self.assertTrue(opt_success)
+        result = PDFOptimizer.optimize(doc, {"deflate": True, "garbage_collect": True})
+        self.assertTrue(result)
 
         doc.close()
 

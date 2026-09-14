@@ -55,11 +55,13 @@ class ThumbnailBar(QWidget):
             return
 
         for i in range(self.doc.page_count):
-            pix = self.doc.render_page_pixmap(i, zoom=0.25)
-            item = QListWidgetItem(f"Sayfa {i + 1}")
-            item.setIcon(QIcon(pix))
-            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.list_widget.addItem(item)
+            result = self.doc.render_page_pixmap(i, zoom=0.25)
+            if result:
+                pix = result.value
+                item = QListWidgetItem(f"Sayfa {i + 1}")
+                item.setIcon(QIcon(pix))
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.list_widget.addItem(item)
 
         if self.doc.page_count > 0:
             target_row = curr_row if 0 <= curr_row < self.doc.page_count else 0

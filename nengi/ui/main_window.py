@@ -37,11 +37,13 @@ from nengi.ui.page_manager_dialog import PageManagerDialog
 from nengi.ui.settings_dialog import SettingsDialog
 from nengi.ui.merge_dialog import MergeFilesDialog
 from nengi.ui.navigation_rail import NavigationRail
-from nengi.ui.annotation_toolbar import AnnotationToolbar
+from nengi.ui.floating_toolbar import FloatingPillToolbar
+from nengi.ui.annotation_toolbar import CollapsibleAnnotationToolbar
 from nengi.ui.comments_panel import CommentsPanel
 from nengi.ui.copilot_panel import CopilotPanel
 from nengi.ui.bookmarks_panel import BookmarksPanel
 from nengi.ui.styles import DARK_THEME, LIGHT_THEME
+from nengi.ui.toast import show_error_toast, ToastManager
 from nengi.ui.icons import get_svg_icon
 
 from nengi.ui.header_footer_dialog import HeaderFooterDialog
@@ -144,7 +146,7 @@ class MainWindow(QMainWindow):
         # Keep a reference safe for subcomponents that may access before full init
         self._settings_initialized = True
 
-        self.setWindowTitle("NeNgi PDF v2.0.2-beta")
+        self.setWindowTitle("NeNgi PDF v2.0.3-beta")
         self.resize(1340, 860)
         self.is_dark_mode = self.settings.value("theme", "dark") == "dark"
         self.recent_files: List[str] = []
@@ -280,6 +282,9 @@ class MainWindow(QMainWindow):
         sc_l.activated.connect(lambda: _tool_guard("line"))
         
         self._init_menus()
+        
+        # Toast notification manager
+        self._toast_manager = ToastManager(self)
 
     def _init_menus(self):
         menubar = self.menuBar()
@@ -323,7 +328,7 @@ class MainWindow(QMainWindow):
     def action_form_designer(self):
         doc = self.get_current_doc()
         if not doc or not doc.is_open:
-            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            show_error_toast(self, "Belge bulunamadı", "Lütfen bir belge açın.")
             return
         viewer = self.get_current_viewer()
         cur_page = viewer.current_page_idx if viewer else 0
@@ -335,7 +340,7 @@ class MainWindow(QMainWindow):
     def action_export_form_data(self):
         doc = self.get_current_doc()
         if not doc or not doc.is_open:
-            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            show_error_toast(self, "Belge bulunamadı", "Lütfen bir belge açın.")
             return
         dlg = FormDataDialog(doc, mode="export", parent=self)
         dlg.exec()
@@ -343,7 +348,7 @@ class MainWindow(QMainWindow):
     def action_import_form_data(self):
         doc = self.get_current_doc()
         if not doc or not doc.is_open:
-            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            show_error_toast(self, "Belge bulunamadı", "Lütfen bir belge açın.")
             return
         dlg = FormDataDialog(doc, mode="import", parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
@@ -354,11 +359,14 @@ class MainWindow(QMainWindow):
     def action_clear_form(self):
         doc = self.get_current_doc()
         if not doc or not doc.is_open:
-            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            show_error_toast(self, "Belge bulunamadı", "Lütfen bir belge açın.")
             return
         from nengi.core.form_designer import FormDesigner
-        count = FormDesigner.clear_all_fields(doc)
-        QMessageBox.information(self, "Tamamlandı", f"{count} form alanı temizlendi.")
+        result = FormDesigner.clear_all_fields(doc)
+        if result:
+            show_success_toast(self, f"{result.value} form alanı temizlendi.")
+        else:
+            show_error_toast(self, result.error, result.hint)
         viewer = self.get_current_viewer()
         if viewer:
             viewer.refresh_all_pages()
@@ -370,7 +378,7 @@ class MainWindow(QMainWindow):
     def action_search_redact(self):
         doc = self.get_current_doc()
         if not doc or not doc.is_open:
-            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            show_error_toast(self, "Belge bulunamadı", "Lütfen bir belge açın.")
             return
         dlg = SearchAndRedactDialog(doc, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
@@ -381,7 +389,7 @@ class MainWindow(QMainWindow):
     def action_sanitize(self):
         doc = self.get_current_doc()
         if not doc or not doc.is_open:
-            QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
+            show_error_toast(self, "Belge bulunamadı", "Lütfen bir belge açın.")
             return
         dlg = SanitizeDocumentDialog(doc, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
@@ -545,9 +553,12 @@ class MainWindow(QMainWindow):
             return
         dlg = HeaderFooterDialog(self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            if doc.add_header_footer(dlg.get_config()):
+            result = doc.add_header_footer(dlg.get_config())
+            if result:
                 self.show_status_message("Üstbilgi/Altbilgi eklendi.")
                 self.get_current_viewer().refresh_view()
+            else:
+                show_error_toast(self, result.error, result.hint)
                 
     def action_watermark(self):
         doc = self.get_current_doc()
@@ -556,9 +567,12 @@ class MainWindow(QMainWindow):
             return
         dlg = WatermarkDialog(self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            if doc.add_watermark(dlg.get_config()):
+            result = doc.add_watermark(dlg.get_config())
+            if result:
                 self.show_status_message("Filigran eklendi.")
                 self.get_current_viewer().refresh_view()
+            else:
+                show_error_toast(self, result.error, result.hint)
                 
     def action_crop(self):
         doc = self.get_current_doc()
@@ -580,9 +594,14 @@ class MainWindow(QMainWindow):
             cfg = dlg.get_config()
             if cfg['page_range'] == 'all':
                 for i in range(doc.page_count):
-                    doc.crop_page(i, cfg['rect'], cfg['box_type'])
+                    result = doc.crop_page(i, cfg['rect'], cfg['box_type'])
+                    if not result:
+                        show_error_toast(self, result.error, result.hint)
+                        break
             else:
-                doc.crop_page(curr_page, cfg['rect'], cfg['box_type'])
+                result = doc.crop_page(curr_page, cfg['rect'], cfg['box_type'])
+                if not result:
+                    show_error_toast(self, result.error, result.hint)
             self.show_status_message("Kırpma uygulandı.")
             viewer.refresh_view()
             
@@ -594,9 +613,12 @@ class MainWindow(QMainWindow):
         dlg = SplitDocumentDialog(self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             cfg = dlg.get_config()
-            if PageManager.split_document(doc, cfg['mode'], cfg['value'], cfg['output_dir'], cfg['prefix']):
+            result = PageManager.split_document(doc, cfg['mode'], cfg['value'], cfg['output_dir'], cfg['prefix'])
+            if result:
                 self.show_status_message("Belge başarıyla bölündü.")
                 QMessageBox.information(self, "Başarılı", f"Bölünmüş dosyalar {cfg['output_dir']} klasörüne kaydedildi.")
+            else:
+                show_error_toast(self, result.error, result.hint)
                 
     def action_export(self):
         doc = self.get_current_doc()
@@ -607,11 +629,14 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             cfg = dlg.get_config()
             try:
-                if cfg['format'] == 'docx': ExportEngine.pdf_to_docx(doc, cfg['output_path'])
-                elif cfg['format'] == 'xlsx': ExportEngine.pdf_to_xlsx(doc, cfg['output_path'])
-                elif cfg['format'] == 'pptx': ExportEngine.pdf_to_pptx(doc, cfg['output_path'])
-                elif cfg['format'] == 'html': ExportEngine.pdf_to_html(doc, cfg['output_path'])
-                self.show_status_message("Dışa aktarma tamamlandı.")
+                if cfg['format'] == 'docx': result = ExportEngine.pdf_to_docx(doc, cfg['output_path'])
+                elif cfg['format'] == 'xlsx': result = ExportEngine.pdf_to_xlsx(doc, cfg['output_path'])
+                elif cfg['format'] == 'pptx': result = ExportEngine.pdf_to_pptx(doc, cfg['output_path'])
+                elif cfg['format'] == 'html': result = ExportEngine.pdf_to_html(doc, cfg['output_path'])
+                if result:
+                    self.show_status_message("Dışa aktarma tamamlandı.")
+                else:
+                    show_error_toast(self, result.error, result.hint)
             except ImportError as e:
                 QMessageBox.critical(self, "Eksik Paket", str(e))
                 
@@ -693,15 +718,15 @@ class MainWindow(QMainWindow):
         self.btn_theme.clicked.connect(self._toggle_theme)
         h_layout.addWidget(self.btn_theme)
 
-        # Tools Panel Toggle Button (No Copilot / No AI)
-        self.btn_toggle_copilot = QPushButton("  Araçlar")
-        self.btn_toggle_copilot.setIcon(get_svg_icon("panel", "#D0D4DC", 16))
-        self.btn_toggle_copilot.setIconSize(QSize(16, 16))
-        self.btn_toggle_copilot.setCheckable(True)
-        self.btn_toggle_copilot.setChecked(True)
-        self.btn_toggle_copilot.setStyleSheet("font-weight: 600; padding: 6px 14px;")
-        self.btn_toggle_copilot.clicked.connect(self._toggle_copilot_panel)
-        h_layout.addWidget(self.btn_toggle_copilot)
+        # Tools Panel Toggle Button - toggles annotation toolbar
+        self.btn_toggle_tools = QPushButton("  Araçlar")
+        self.btn_toggle_tools.setIcon(get_svg_icon("panel", "#D0D4DC", 16))
+        self.btn_toggle_tools.setIconSize(QSize(16, 16))
+        self.btn_toggle_tools.setCheckable(True)
+        self.btn_toggle_tools.setChecked(False)
+        self.btn_toggle_tools.setStyleSheet("font-weight: 600; padding: 6px 14px;")
+        self.btn_toggle_tools.clicked.connect(self._toggle_annotation_toolbar)
+        h_layout.addWidget(self.btn_toggle_tools)
 
         self.btn_toggle_comments = QPushButton("  Yorumlar")
         self.btn_toggle_comments.setIcon(get_svg_icon("comments", "#D0D4DC", 16))
@@ -760,17 +785,22 @@ class MainWindow(QMainWindow):
         self.doc_splitter.setStretchFactor(2, 1)
         layout.addWidget(self.doc_splitter, 1)
 
-        # Floating Bottom Pill Toolbar (Centered capsule island)
+        # Annotation Toolbar (Collapsible, hidden by default)
+        self.annotation_toolbar = CollapsibleAnnotationToolbar(is_dark=self.is_dark_mode)
+        self.annotation_toolbar.tool_selected.connect(self._on_floating_tool_changed)
+        self.annotation_toolbar.color_changed.connect(self._on_color_changed)
+        self.annotation_toolbar.property_changed.connect(self._on_property_changed)
+        layout.addWidget(self.annotation_toolbar)
+
+        # Floating Bottom Pill Toolbar (Centered capsule island) - SINGLE AUTHORITATIVE TOOLBAR
         pill_container = QHBoxLayout()
         pill_container.setContentsMargins(0, 0, 0, 2)
         pill_container.addStretch()
 
         _settings = getattr(self, 'settings', None)
         _is_dark = (_settings.value("theme", "dark") == "dark") if _settings else False
-        self.floating_toolbar = AnnotationToolbar(is_dark=_is_dark)
-        self.floating_toolbar.tool_selected.connect(self._on_floating_tool_changed)
-        self.floating_toolbar.color_changed.connect(self._on_color_changed)
-        self.floating_toolbar.property_changed.connect(self._on_property_changed)
+        self.floating_toolbar = FloatingPillToolbar()
+        self.floating_toolbar.tool_changed.connect(self._on_floating_tool_changed)
         pill_container.addWidget(self.floating_toolbar)
 
         pill_container.addStretch()
@@ -996,8 +1026,6 @@ class MainWindow(QMainWindow):
                 doc = self.get_current_doc()
                 if doc:
                     self.bookmarks_panel.load_document(doc)
-        elif key == "tools":
-            self._toggle_copilot_panel()
         elif key == "settings":
             self._open_settings_dialog()
 
@@ -1012,8 +1040,9 @@ class MainWindow(QMainWindow):
             view.set_current_property(prop, value)
 
     def _on_floating_tool_changed(self, tool_id: str):
-        if tool_id in ["view", "text", "whiteout", "highlight", "underline", "strikethrough", 
-                       "line", "arrow", "rect", "oval", "polygon", "cloud", "draw", "sticky_note", "stamp"]:
+        if tool_id in ["view", "text", "whiteout", "highlight", "underline", "strikethrough",
+                       "line", "arrow", "rect", "oval", "polygon", "cloud", "draw", "sticky_note", "stamp",
+                       "stamp_preset"]:
             self._set_viewer_tool(tool_id)
         elif tool_id == "edit_text":
             self._edit_selected_text_trigger()
@@ -1027,6 +1056,8 @@ class MainWindow(QMainWindow):
             self.undo_current()
         elif tool_id == "redo":
             self.redo_current()
+        elif tool_id == "more":
+            self._toggle_annotation_toolbar(True)
 
     def _toggle_copilot_panel(self, checked: Optional[bool] = None):
         if checked is None:
@@ -1062,6 +1093,18 @@ class MainWindow(QMainWindow):
             self.comments_panel.hide()
         if hasattr(self, "btn_toggle_comments"):
             self.btn_toggle_comments.setChecked(is_vis)
+
+    def _toggle_annotation_toolbar(self, checked: Optional[bool] = None):
+        if checked is None:
+            is_vis = not self.annotation_toolbar.isVisible()
+        else:
+            is_vis = bool(checked)
+        self.annotation_toolbar.setVisible(is_vis)
+        if hasattr(self, "btn_toggle_tools"):
+            self.btn_toggle_tools.setChecked(is_vis)
+            icon = "chevron_up" if is_vis else "panel"
+            color = "#D0D4DC" if self.is_dark_mode else "#374151"
+            self.btn_toggle_tools.setIcon(get_svg_icon(icon, color, 16))
 
     def _on_comment_clicked(self, page_idx: int, annot_info: dict):
         viewer = self.get_current_viewer()
@@ -1800,8 +1843,8 @@ class MainWindow(QMainWindow):
             self.btn_save.setIcon(get_svg_icon("save", icon_color, 16))
         if hasattr(self, "btn_theme"):
             self.btn_theme.setIcon(get_svg_icon("theme", icon_color, 18))
-        if hasattr(self, "btn_toggle_copilot"):
-            self.btn_toggle_copilot.setIcon(get_svg_icon("panel", icon_color, 16))
+        if hasattr(self, "btn_toggle_tools"):
+            self.btn_toggle_tools.setIcon(get_svg_icon("panel", icon_color, 16))
 
         if hasattr(self, "btn_prev"):
             self.btn_prev.setIcon(get_svg_icon("prev", icon_color, 14))
@@ -1818,6 +1861,8 @@ class MainWindow(QMainWindow):
             self.nav_rail.update_theme(is_dark)
         if hasattr(self, "floating_toolbar") and hasattr(self.floating_toolbar, "update_theme"):
             self.floating_toolbar.update_theme(is_dark)
+        if hasattr(self, "annotation_toolbar") and hasattr(self.annotation_toolbar, "update_theme"):
+            self.annotation_toolbar.update_theme(is_dark)
         if hasattr(self, "copilot_panel") and hasattr(self.copilot_panel, "update_theme"):
             self.copilot_panel.update_theme(is_dark)
 

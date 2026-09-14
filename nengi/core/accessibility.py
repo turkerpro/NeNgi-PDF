@@ -8,16 +8,17 @@ from __future__ import annotations
 from typing import List, Dict, Any
 import fitz
 from nengi.core.pdf_document import PDFDocument
+from nengi.core.result import Result
 
 
 class AccessibilityChecker:
     """Performs standardized accessibility audits on PDF documents."""
 
     @staticmethod
-    def audit_document(doc: PDFDocument) -> List[Dict[str, Any]]:
+    def audit_document(doc: PDFDocument) -> Result[List[Dict[str, Any]]]:
         """Executes full accessibility evaluation across 7 core categories."""
         if not doc.is_open:
-            return []
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         results = []
 
@@ -112,7 +113,8 @@ class AccessibilityChecker:
             })
 
         # --- 2. Yer İmleri (Bookmarks) ---
-        toc = doc.get_toc() if hasattr(doc, "get_toc") else (doc.doc.get_toc() if doc.doc else [])
+        toc_result = doc.get_toc() if hasattr(doc, "get_toc") else Result.ok([])
+        toc = toc_result.value if toc_result.success else []
         if doc.page_count > 10 and not toc:
             results.append({
                 "category": "Gezinti",
@@ -189,4 +191,4 @@ class AccessibilityChecker:
             "details": "Metin ve arka plan kontrastının (en az 4.5:1) görsel olarak denetlenmesi gerekir.",
         })
 
-        return results
+        return Result.ok(results)

@@ -6,47 +6,50 @@ import os
 import io
 import fitz
 from PIL import Image
+from nengi.core.result import Result
 
 class ExportEngine:
     @staticmethod
-    def pdf_to_docx(doc, output_path, options=None):
+    def pdf_to_docx(doc, output_path, options=None) -> Result[bool]:
         """Convert PDF to Word (.docx) using python-docx."""
-        if doc is None or getattr(doc, "doc", None) is None or not getattr(doc, "is_open", False):
-            return False
+        fitz_doc = getattr(doc, "doc", doc) if not isinstance(doc, str) else None
+        if fitz_doc is None or getattr(fitz_doc, "is_closed", False):
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         try:
             from docx import Document
             from docx.shared import Pt
         except ImportError:
-            raise ImportError("python-docx gerekli. Lütfen kurun (pip install python-docx).")
-            
+            return Result.fail("python-docx not installed", "Run: pip install python-docx", "MISSING_DEPENDENCY")
+        
         word_doc = Document()
-        for i in range(len(doc.doc)):
-            page = doc.get_page(i)
+        for i in range(len(fitz_doc)):
+            page = fitz_doc[i]
             text = page.get_text("text")
             if text.strip():
                 p = word_doc.add_paragraph(text)
-            if i < len(doc.doc) - 1:
+            if i < len(fitz_doc) - 1:
                 word_doc.add_page_break()
                 
         word_doc.save(output_path)
-        return True
+        return Result.ok(True)
 
     @staticmethod
-    def pdf_to_xlsx(doc, output_path, options=None):
+    def pdf_to_xlsx(doc, output_path, options=None) -> Result[bool]:
         """Convert PDF to Excel (.xlsx) using openpyxl."""
-        if doc is None or getattr(doc, "doc", None) is None or not getattr(doc, "is_open", False):
-            return False
+        fitz_doc = getattr(doc, "doc", doc) if not isinstance(doc, str) else None
+        if fitz_doc is None or getattr(fitz_doc, "is_closed", False):
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         try:
             from openpyxl import Workbook
         except ImportError:
-            raise ImportError("openpyxl gerekli. Lütfen kurun (pip install openpyxl).")
-            
+            return Result.fail("openpyxl not installed", "Run: pip install openpyxl", "MISSING_DEPENDENCY")
+        
         wb = Workbook()
         ws = wb.active
         
         row_idx = 1
-        for i in range(len(doc.doc)):
-            page = doc.get_page(i)
+        for i in range(len(fitz_doc)):
+            page = fitz_doc[i]
             # Find tables (basic text split for now, real table detection is complex)
             tabs = page.find_tables()
             if tabs:
@@ -63,24 +66,25 @@ class ExportEngine:
                         row_idx += 1
                         
         wb.save(output_path)
-        return True
+        return Result.ok(True)
 
     @staticmethod
-    def pdf_to_pptx(doc, output_path, options=None):
+    def pdf_to_pptx(doc, output_path, options=None) -> Result[bool]:
         """Convert PDF to PowerPoint (.pptx) using python-pptx."""
-        if doc is None or getattr(doc, "doc", None) is None or not getattr(doc, "is_open", False):
-            return False
+        fitz_doc = getattr(doc, "doc", doc) if not isinstance(doc, str) else None
+        if fitz_doc is None or getattr(fitz_doc, "is_closed", False):
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         try:
             from pptx import Presentation
             from pptx.util import Inches
         except ImportError:
-            raise ImportError("python-pptx gerekli. Lütfen kurun (pip install python-pptx).")
-            
+            return Result.fail("python-pptx not installed", "Run: pip install python-pptx", "MISSING_DEPENDENCY")
+        
         prs = Presentation()
         blank_slide_layout = prs.slide_layouts[6]
         
-        for i in range(len(doc.doc)):
-            page = doc.get_page(i)
+        for i in range(len(fitz_doc)):
+            page = fitz_doc[i]
             slide = prs.slides.add_slide(blank_slide_layout)
             
             # Render page as image and place on slide
@@ -94,10 +98,10 @@ class ExportEngine:
             slide.shapes.add_picture(buf, 0, 0, prs.slide_width, prs.slide_height)
             
         prs.save(output_path)
-        return True
+        return Result.ok(True)
 
     @staticmethod
-    def pdf_to_txt(doc, output_path, options=None):
+    def pdf_to_txt(doc, output_path, options=None) -> Result[bool]:
         """Convert PDF page texts to a plain-text file."""
         fitz_doc = getattr(doc, "doc", doc) if not isinstance(doc, str) else None
         opened_here = False
@@ -106,17 +110,18 @@ class ExportEngine:
                 fitz_doc = fitz.open(doc)
                 opened_here = True
             if fitz_doc is None or getattr(fitz_doc, "is_closed", False):
-                return False
+                return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
             with open(output_path, "w", encoding="utf-8") as f:
                 for i in range(len(fitz_doc)):
                     page = fitz_doc[i]
                     f.write(page.get_text("text"))
                     if i < len(fitz_doc) - 1:
                         f.write("\n")
-            return True
+            return Result.ok(True)
         except Exception as e:
-            print(f"Error exporting TXT: {e}")
-            return False
+            logger = __import__('logging').getLogger(__name__)
+            logger.exception("Error exporting TXT")
+            return Result.from_exception(e, "Failed to export TXT", "EXPORT_TXT_FAILED")
         finally:
             if opened_here and fitz_doc is not None:
                 try:
@@ -125,18 +130,24 @@ class ExportEngine:
                     pass
 
     @staticmethod
-    def pdf_to_html(doc, output_path, options=None):
+    def pdf_to_html(doc, output_path, options=None) -> Result[bool]:
         """Convert PDF to HTML."""
-        if doc is None or getattr(doc, "doc", None) is None or not getattr(doc, "is_open", False):
-            return False
-        html_content = "<html><body>"
-        for i in range(len(doc.doc)):
-            page = doc.get_page(i)
-            html_content += f"<div id='page_{i+1}'>"
-            html_content += page.get_text("html")
-            html_content += "</div><hr/>"
-        html_content += "</body></html>"
-        
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(html_content)
-        return True
+        fitz_doc = getattr(doc, "doc", doc) if not isinstance(doc, str) else None
+        if fitz_doc is None or getattr(fitz_doc, "is_closed", False):
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
+        try:
+            html_content = "<html><body>"
+            for i in range(len(fitz_doc)):
+                page = fitz_doc[i]
+                html_content += f"<div id='page_{i+1}'>"
+                html_content += page.get_text("html")
+                html_content += "</div><hr/>"
+            html_content += "</body></html>"
+            
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(html_content)
+            return Result.ok(True)
+        except Exception as e:
+            logger = __import__('logging').getLogger(__name__)
+            logger.exception("Error exporting HTML")
+            return Result.from_exception(e, "Failed to export HTML", "EXPORT_HTML_FAILED")

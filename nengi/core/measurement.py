@@ -9,6 +9,7 @@ from typing import List, Tuple, Dict, Any, Optional
 import math
 import fitz
 from nengi.core.pdf_document import PDFDocument
+from nengi.core.result import Result
 
 
 # Standard PDF points per unit (1 inch = 72 points)
@@ -115,10 +116,10 @@ class MeasurementEngine:
         points: List[fitz.Point],
         scale: ScaleRatio,
         color: Tuple[float, float, float] = (0.9, 0.2, 0.2),
-    ) -> Optional[fitz.Annot]:
+    ) -> Result[fitz.Annot]:
         """Creates a permanent measurement dimension line or polygon annotation with text callout."""
         if not doc.is_open or page_num < 0 or page_num >= doc.page_count:
-            return None
+            return Result.fail("Document not open or invalid page", "Open a document and select valid page", "INVALID_PAGE")
 
         doc.save_state_for_undo()
         page = doc.get_page(page_num)
@@ -141,7 +142,7 @@ class MeasurementEngine:
             mid = fitz.Point((p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 4)
             page.insert_text(mid, label, fontsize=9, color=color)
             doc.is_modified = True
-            return annot
+            return Result.ok(annot)
 
         elif measure_type == "area" and len(points) >= 3:
             area_pts = MeasurementEngine.calculate_polygon_area(points)
@@ -159,6 +160,6 @@ class MeasurementEngine:
             centroid_y = sum(p.y for p in points) / len(points)
             page.insert_text(fitz.Point(centroid_x - 30, centroid_y), scale.format_area(area_pts), fontsize=9, color=color)
             doc.is_modified = True
-            return annot
+            return Result.ok(annot)
 
-        return None
+        return Result.fail("Invalid measurement type or insufficient points", "Check measurement type and point count", "INVALID_MEASUREMENT")

@@ -14,20 +14,21 @@ from PyQt6.QtWidgets import QWidget, QMessageBox
 from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
 
 from nengi.core.pdf_document import PDFDocument
+from nengi.core.result import Result
 
 
 class PDFPrinter:
     """Handles printing documents through Qt's print subsystem."""
 
     @staticmethod
-    def print_document(doc: PDFDocument, parent: Optional[QWidget] = None, current_page: int = 0) -> bool:
+    def print_document(doc: PDFDocument, parent: Optional[QWidget] = None, current_page: int = 0) -> Result[bool]:
         """
         Opens Windows Print Dialog and prints the PDF document to chosen printer.
         """
         if not doc or not doc.is_open or doc.page_count == 0:
             if parent:
                 QMessageBox.warning(parent, "Uyarı", "Yazdırılacak belge açık değil.")
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         try:
             printer = QPrinter(QPrinter.PrinterMode.HighResolution)
@@ -38,7 +39,7 @@ class PDFPrinter:
             dialog = QPrintDialog(printer, parent)
             dialog.setWindowTitle("🖨️ Belgeyi Yazdır - NeNgi PDF")
             if dialog.exec() != QPrintDialog.DialogCode.Accepted:
-                return False
+                return Result.ok(False)
 
             # Determine page range
             from_page = 0
@@ -54,7 +55,7 @@ class PDFPrinter:
             if not painter.begin(printer):
                 if parent:
                     QMessageBox.critical(parent, "Yazdırma Hatası", "Yazıcı başlatılamadı.")
-                return False
+                return Result.fail("Printer initialization failed", "Could not start printer", "PRINTER_INIT_FAILED")
 
             try:
                 # Use 200 DPI for optimal high-res quality without overwhelming Windows GDI spooler
@@ -63,7 +64,11 @@ class PDFPrinter:
                     if idx > 0:
                         printer.newPage()
 
-                    qimg = doc.render_page_qimage(page_num, dpi=print_dpi)
+                    render_result = doc.render_page_qimage(page_num, dpi=print_dpi)
+                    if not render_result:
+                        return Result.fail(render_result.error, render_result.hint, render_result.error_code)
+                    
+                    qimg = render_result.value
                     if qimg.isNull():
                         continue
 
@@ -85,9 +90,11 @@ class PDFPrinter:
 
             if parent:
                 QMessageBox.information(parent, "Yazdırma Tamamlandı", "Belge yazıcıya/dosyaya başarıyla aktarıldı.")
-            return True
+            return Result.ok(True)
 
         except Exception as e:
+            logger = __import__('logging').getLogger(__name__)
+            logger.exception("Printing error")
             if parent:
                 QMessageBox.critical(parent, "Yazdırma Hatası", f"Yazdırma sırasında bir hata oluştu:\n{e}")
-            return False
+            return Result.from_exception(e, "Failed to print document", "PRINT_FAILED")

@@ -15,6 +15,7 @@ from typing import Optional, Dict, Any
 from PyQt6.QtCore import QObject, pyqtSignal, QFileSystemWatcher, QTimer
 import fitz
 from .pdf_document import PDFDocument
+from nengi.core.result import Result
 
 
 class ImageRoundtripHandler(QObject):
@@ -42,13 +43,13 @@ class ImageRoundtripHandler(QObject):
         self.temp_dir = os.path.join(tempfile.gettempdir(), "nengi_pdf_edits")
         os.makedirs(self.temp_dir, exist_ok=True)
 
-    def edit_embedded_image(self, doc: PDFDocument, page_num: int, xref: int) -> Optional[str]:
+    def edit_embedded_image(self, doc: PDFDocument, page_num: int, xref: int) -> Result[str]:
         """
         Extracts an embedded image to a temp file, watches it, and launches
         the external editor.
         """
         if not doc.is_open:
-            return None
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         try:
             image_bytes, ext = doc.extract_image_bytes(xref)
@@ -72,18 +73,18 @@ class ImageRoundtripHandler(QObject):
             self.status_message.emit(
                 f"Resim harici düzenleyicide açıldı. Düzenleyip kaydettiğinizde (Ctrl+S) PDF otomatik güncellenecek."
             )
-            return temp_path
+            return Result.ok(temp_path)
         except Exception as e:
             self.status_message.emit(f"Resim dışa aktarılırken hata: {e}")
-            return None
+            return Result.from_exception(e, "Failed to export image", "EXPORT_IMAGE_FAILED")
 
-    def edit_scanned_page(self, doc: PDFDocument, page_num: int, dpi: int = 300) -> Optional[str]:
+    def edit_scanned_page(self, doc: PDFDocument, page_num: int, dpi: int = 300) -> Result[str]:
         """
         Renders an entire scanned page to high-res PNG, watches it, and opens
         in external editor to clean pen marks, handwriting, or stains.
         """
         if not doc.is_open:
-            return None
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         try:
             page = doc.get_page(page_num)
@@ -109,10 +110,10 @@ class ImageRoundtripHandler(QObject):
             self.status_message.emit(
                 f"Sayfa {page_num + 1} resim editöründe açıldı. Temizleyip kaydettiğinizde PDF otomatik güncellenecektir."
             )
-            return temp_path
+            return Result.ok(temp_path)
         except Exception as e:
             self.status_message.emit(f"Sayfa resim editörüne gönderilirken hata: {e}")
-            return None
+            return Result.from_exception(e, "Failed to send page to editor", "SEND_TO_EDITOR_FAILED")
 
     def _launch_editor(self, file_path: str):
         """Launches the platform-appropriate image editor."""

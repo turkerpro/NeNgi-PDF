@@ -14,6 +14,8 @@ from PIL import Image
 from PyQt6.QtGui import QImage, QPixmap
 import sys
 
+from nengi.core.result import Result
+
 logger = logging.getLogger(__name__)
 
 _cached_font_buffer: Optional[bytes] = None
@@ -233,11 +235,11 @@ def resolve_font_for_text(text: str, preferred: str = "helv") -> Dict[str, Any]:
     }
 
 
-def get_unicode_font_buffer() -> Optional[bytes]:
+def get_unicode_font_buffer() -> Result[Optional[bytes]]:
     """Finds and loads a TrueType font buffer that supports Turkish and Unicode characters."""
     global _cached_font_buffer
     if _cached_font_buffer is not None:
-        return _cached_font_buffer
+        return Result.ok(_cached_font_buffer)
 
     candidates = []
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -298,10 +300,10 @@ def get_unicode_font_buffer() -> Optional[bytes]:
             try:
                 with open(p, "rb") as f:
                     _cached_font_buffer = f.read()
-                    return _cached_font_buffer
+                    return Result.ok(_cached_font_buffer)
             except Exception:
                 continue
-    return None
+    return Result.fail("No suitable TTF font found", "Install a TTF font with Unicode support", "FONT_NOT_FOUND")
 
 
 class PDFDocument:
@@ -325,24 +327,23 @@ class PDFDocument:
         """Returns the base filename of the currently loaded document."""
         return os.path.basename(self.file_path) if self.file_path else "NeNgi_PDF_Belge.pdf"
 
-    def save_state_for_undo(self):
+    def save_state_for_undo(self) -> Result[None]:
         """Saves current document snapshot into in-memory undo stack."""
         if not self.is_open:
-            return
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         try:
             data = self.doc.tobytes(garbage=3, deflate=True)
             self._undo_stack.append(data)
             if len(self._undo_stack) > self._max_history:
                 self._undo_stack.pop(0)
             self._redo_stack.clear()
+            return Result.ok(None)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError saving undo state")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
         except Exception as e:
-            print(f"Could not save undo state: {e}")
+            logger.exception("Could not save undo state")
+            return Result.from_exception(e, "Failed to save undo state", "UNDO_SAVE_FAILED")
 
     def can_undo(self) -> bool:
         return len(self._undo_stack) > 0
@@ -350,12 +351,12 @@ class PDFDocument:
     def can_redo(self) -> bool:
         return len(self._redo_stack) > 0
 
-    def undo(self) -> bool:
+    def undo(self) -> Result[bool]:
         """Restores previous document state."""
         if not self.can_undo():
-            return False
+            return Result.fail("Nothing to undo", "No previous state available", "NOTHING_TO_UNDO")
         if not self.is_open or self.doc is None:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         try:
             current_data = self.doc.tobytes(garbage=3, deflate=True)
             self._redo_stack.append(current_data)
@@ -367,23 +368,20 @@ class PDFDocument:
             self.doc = fitz.open("pdf", prev_data)
             self.file_path = file_path
             self.is_modified = True
-            return True
+            return Result.ok(True)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError during undo")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
         except Exception as e:
-            print(f"Error during undo: {e}")
-            return False
+            logger.exception("Error during undo")
+            return Result.from_exception(e, "Failed to undo", "UNDO_FAILED")
 
-    def redo(self) -> bool:
+    def redo(self) -> Result[bool]:
         """Restores next document state."""
         if not self.can_redo():
-            return False
+            return Result.fail("Nothing to redo", "No next state available", "NOTHING_TO_REDO")
         if not self.is_open or self.doc is None:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         try:
             current_data = self.doc.tobytes(garbage=3, deflate=True)
             self._undo_stack.append(current_data)
@@ -395,18 +393,15 @@ class PDFDocument:
             self.doc = fitz.open("pdf", next_data)
             self.file_path = file_path
             self.is_modified = True
-            return True
+            return Result.ok(True)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError during redo")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
         except Exception as e:
-            print(f"Error during redo: {e}")
-            return False
+            logger.exception("Error during redo")
+            return Result.from_exception(e, "Failed to redo", "REDO_FAILED")
 
-    def open(self, file_path: str, password: Optional[str] = None) -> bool:
+    def open(self, file_path: str, password: Optional[str] = None) -> Result[bool]:
         """Opens a PDF file, checking for encryption and corrupted files."""
         self.file_path = file_path
         self._undo_stack.clear()
@@ -423,27 +418,29 @@ class PDFDocument:
                     self.is_authenticated = False
             else:
                 self.is_authenticated = True
-            return self.is_authenticated
+            return Result.ok(self.is_authenticated)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
+            logger.exception("FileDataError opening PDF")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
-            return False
+            return Result.from_exception(e, "PDF file may be corrupted or not a valid PDF", "FILE_DATA_ERROR")
         except Exception as e:
-            print(f"Failed to open PDF file {self.file_path}: {e}")
+            logger.exception("Failed to open PDF file")
             self.doc = None
             self.is_encrypted = False
             self.is_authenticated = False
-            return False
+            return Result.from_exception(e, "Failed to open PDF file", "OPEN_FAILED")
 
-    def authenticate(self, password: str) -> bool:
+    def authenticate(self, password: str) -> Result[bool]:
         """Attempts to authenticate an encrypted document."""
         if not self.doc or not self.is_encrypted:
-            return True
+            return Result.ok(True)
         success = self.doc.authenticate(password) > 0
         self.is_authenticated = success
-        return success
+        if not success:
+            return Result.fail("Invalid password", "Check the password and try again", "INVALID_PASSWORD")
+        return Result.ok(True)
 
     @property
     def is_open(self) -> bool:
@@ -459,82 +456,120 @@ class PDFDocument:
             raise IndexError(f"Page index {page_number} out of range (total: {self.page_count})")
         return self.doc[page_number]
 
-    def render_page_qimage(self, page_number: int, zoom: float = 1.0, dpi: Optional[int] = None) -> QImage:
+    def render_page_qimage(self, page_number: int, zoom: float = 1.0, dpi: Optional[int] = None) -> Result[QImage]:
         """Renders a page at the specified zoom level or DPI into a PyQt6 QImage."""
-        page = self.get_page(page_number)
-        if dpi is not None and dpi > 0:
-            eff_zoom = dpi / 72.0
-        else:
-            eff_zoom = zoom
-        mat = fitz.Matrix(eff_zoom, eff_zoom)
-        pix = page.get_pixmap(matrix=mat, alpha=False)
-        
-        # FormatRGB888 is compatible with pix.samples
-        qimg = QImage(
-            pix.samples,
-            pix.width,
-            pix.height,
-            pix.stride,
-            QImage.Format.Format_RGB888
-        )
-        return qimg.copy()
+        if not self.is_open:
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
+        try:
+            page = self.get_page(page_number)
+            if dpi is not None and dpi > 0:
+                eff_zoom = dpi / 72.0
+            else:
+                eff_zoom = zoom
+            mat = fitz.Matrix(eff_zoom, eff_zoom)
+            pix = page.get_pixmap(matrix=mat, alpha=False)
+            
+            # FormatRGB888 is compatible with pix.samples
+            qimg = QImage(
+                pix.samples,
+                pix.width,
+                pix.height,
+                pix.stride,
+                QImage.Format.Format_RGB888
+            )
+            return Result.ok(qimg.copy())
+        except IndexError as e:
+            return Result.fail(str(e), "Page index out of range", "INVALID_PAGE")
+        except Exception as e:
+            logger.exception("Error rendering page to QImage")
+            return Result.from_exception(e, "Failed to render page", "RENDER_FAILED")
 
-    def render_page_pixmap(self, page_number: int, zoom: float = 1.0, dpi: Optional[int] = None) -> QPixmap:
+    def render_page_pixmap(self, page_number: int, zoom: float = 1.0, dpi: Optional[int] = None) -> Result[QPixmap]:
         """Renders a page at the specified zoom level or DPI into a PyQt6 QPixmap."""
-        qimg = self.render_page_qimage(page_number, zoom, dpi=dpi)
-        return QPixmap.fromImage(qimg)
+        result = self.render_page_qimage(page_number, zoom, dpi)
+        if not result:
+            return Result.fail(result.error, result.hint, result.error_code)
+        return Result.ok(QPixmap.fromImage(result.value))
 
-    def get_page_text_words(self, page_number: int) -> List[Tuple[float, float, float, float, str, int, int, int]]:
+    def get_page_text_words(self, page_number: int) -> Result[List[Tuple[float, float, float, float, str, int, int, int]]]:
         """
         Extracts words with their bounding boxes:
         Returns list of tuples: (x0, y0, x1, y1, word_str, block_no, line_no, word_no)
         """
-        page = self.get_page(page_number)
-        return page.get_text("words")
+        if not self.is_open:
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
+        try:
+            page = self.get_page(page_number)
+            return Result.ok(page.get_text("words"))
+        except IndexError as e:
+            return Result.fail(str(e), "Page index out of range", "INVALID_PAGE")
+        except Exception as e:
+            logger.exception("Error getting page text words")
+            return Result.from_exception(e, "Failed to extract words", "EXTRACT_WORDS_FAILED")
 
-    def get_page_text(self, page_number: int) -> str:
+    def get_page_text(self, page_number: int) -> Result[str]:
         """Returns full text of a page."""
-        page = self.get_page(page_number)
-        return page.get_text("text")
+        if not self.is_open:
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
+        try:
+            page = self.get_page(page_number)
+            return Result.ok(page.get_text("text"))
+        except IndexError as e:
+            return Result.fail(str(e), "Page index out of range", "INVALID_PAGE")
+        except Exception as e:
+            logger.exception("Error getting page text")
+            return Result.from_exception(e, "Failed to extract text", "EXTRACT_TEXT_FAILED")
 
-    def get_page_images(self, page_number: int) -> List[Dict[str, Any]]:
+    def get_page_images(self, page_number: int) -> Result[List[Dict[str, Any]]]:
         """
         Returns all embedded images on a page with their xref and bounding boxes.
         """
-        page = self.get_page(page_number)
-        image_list = page.get_images(full=True)
-        results = []
+        if not self.is_open:
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
+        try:
+            page = self.get_page(page_number)
+            image_list = page.get_images(full=True)
+            results = []
 
-        for img_info in image_list:
-            xref = img_info[0]
-            rects = page.get_image_rects(xref)
-            bbox = rects[0] if rects else None
-            
-            results.append({
-                "xref": xref,
-                "name": img_info[7],
-                "width": img_info[2],
-                "height": img_info[3],
-                "bpc": img_info[4],
-                "colorspace": img_info[5],
-                "bbox": bbox
-            })
-        return results
+            for img_info in image_list:
+                xref = img_info[0]
+                rects = page.get_image_rects(xref)
+                bbox = rects[0] if rects else None
+                
+                results.append({
+                    "xref": xref,
+                    "name": img_info[7],
+                    "width": img_info[2],
+                    "height": img_info[3],
+                    "bpc": img_info[4],
+                    "colorspace": img_info[5],
+                    "bbox": bbox
+                })
+            return Result.ok(results)
+        except IndexError as e:
+            return Result.fail(str(e), "Page index out of range", "INVALID_PAGE")
+        except Exception as e:
+            logger.exception("Error getting page images")
+            return Result.from_exception(e, "Failed to extract images", "EXTRACT_IMAGES_FAILED")
 
-    def extract_image_bytes(self, xref: int) -> Tuple[bytes, str]:
+    def extract_image_bytes(self, xref: int) -> Result[Tuple[bytes, str]]:
         """Extracts raw image bytes and file extension for an embedded image."""
         if not self.is_open:
-            raise ValueError("Document not open")
-        base_image = self.doc.extract_image(xref)
-        return base_image["image"], base_image["ext"]
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
+        try:
+            base_image = self.doc.extract_image(xref)
+            return Result.ok((base_image["image"], base_image["ext"]))
+        except Exception as e:
+            logger.exception("Error extracting image bytes")
+            return Result.from_exception(e, "Failed to extract image", "EXTRACT_IMAGE_FAILED")
 
-    def replace_image(self, xref: int, new_image_path: str) -> bool:
+    def replace_image(self, xref: int, new_image_path: str) -> Result[bool]:
         """
         Replaces an embedded image (by xref) with a new image file in-place!
         This updates all pages displaying this image.
         """
         if not self.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         try:
             with open(new_image_path, "rb") as f:
@@ -542,23 +577,23 @@ class PDFDocument:
 
             self.doc.update_stream(xref, new_image_bytes)
             self.is_modified = True
-            return True
+            return Result.ok(True)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError replacing image")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
+        except FileNotFoundError as e:
+            logger.exception("Image file not found")
+            return Result.from_exception(e, "Image file not found", "FILE_NOT_FOUND")
         except Exception as e:
-            print(f"Error replacing image xref {xref}: {e}")
-            return False
+            logger.exception("Error replacing image")
+            return Result.from_exception(e, "Failed to replace image", "REPLACE_IMAGE_FAILED")
 
-    def replace_page_with_scanned_image(self, page_number: int, image_path: str) -> bool:
+    def replace_page_with_scanned_image(self, page_number: int, image_path: str) -> Result[bool]:
         """
         Replaces a full scanned page's content with an edited image.
         """
         if not self.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         try:
             page = self.get_page(page_number)
@@ -570,74 +605,61 @@ class PDFDocument:
             else:
                 page.insert_image(rect, filename=image_path, overlay=True)
                 self.is_modified = True
-                return True
+                return Result.ok(True)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError replacing page with image")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
+        except FileNotFoundError as e:
+            logger.exception("Image file not found")
+            return Result.from_exception(e, "Image file not found", "FILE_NOT_FOUND")
         except Exception as e:
-            print(f"Error replacing page with image: {e}")
-            return False
+            logger.exception("Error replacing page with image")
+            return Result.from_exception(e, "Failed to replace page with image", "REPLACE_PAGE_FAILED")
 
-    def whiteout_area(self, page_number: int, rect: fitz.Rect, fill_color: Tuple[float, float, float] = (1, 1, 1)) -> bool:
+    def whiteout_area(self, page_number: int, rect: fitz.Rect, fill_color: Tuple[float, float, float] = (1, 1, 1)) -> Result[bool]:
         """
         Draws an opaque rectangle to whiteout / erase unwanted marks/drawings.
         Coordinates are in PDF points.
         """
         if not self.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         try:
-            self.save_state_for_undo()
+            save_result = self.save_state_for_undo()
+            if not save_result:
+                return save_result
             page = self.get_page(page_number)
             rot = page.rotation
             target_rect = (rect * ~page.rotation_matrix).normalize() if rot != 0 else rect
             page.add_redact_annot(target_rect, fill=fill_color)
             page.apply_redactions()
             self.is_modified = True
-            return True
+            return Result.ok(True)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError whiting out area")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
         except Exception as e:
-            print(f"Error whiting out area: {e}")
-            return False
+            logger.exception("Error whiting out area")
+            return Result.from_exception(e, "Failed to whiteout area", "WHITEOUT_FAILED")
 
-    def get_page_text_words(self, page_number: int) -> List[Tuple[float, float, float, float, str, int, int, int]]:
-        """
-        Returns list of words on page with coordinates:
-        (x0, y0, x1, y1, word_text, block_no, line_no, word_no).
-        """
-        if not self.is_open:
-            return []
-        try:
-            page = self.get_page(page_number)
-            return page.get_text("words")
-        except Exception as e:
-            logger.warning("get_page_text_words failed for page %s: %s", page_number, e)
-            return []
-
-    def get_page_blocks(self, page_number: int) -> List[Tuple[float, float, float, float, str, int, int]]:
+    def get_page_blocks(self, page_number: int) -> Result[List[Tuple[float, float, float, float, str, int, int]]]:
         """
         Returns text paragraph blocks on page:
         (x0, y0, x1, y1, text, block_no, block_type).
         block_type == 0 is text.
         """
         if not self.is_open:
-            return []
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         try:
             page = self.get_page(page_number)
             blocks = page.get_text("blocks")
-            return [b for b in blocks if b[6] == 0 and b[4].strip()]
+            return Result.ok([b for b in blocks if b[6] == 0 and b[4].strip()])
+        except IndexError as e:
+            return Result.fail(str(e), "Page index out of range", "INVALID_PAGE")
         except Exception as e:
-            logger.warning("get_page_blocks failed for page %s: %s", page_number, e)
-            return []
+            logger.exception("get_page_blocks failed for page")
+            return Result.from_exception(e, "Failed to extract text blocks", "EXTRACT_BLOCKS_FAILED")
 
-    def detect_text_style_at_rect(self, page_number: int, rect: fitz.Rect) -> dict:
+    def detect_text_style_at_rect(self, page_number: int, rect: fitz.Rect) -> Result[dict]:
         """
         Inspects spans within or intersecting rect to detect font family,
         font size, flags (bold/italic), and color.
@@ -654,7 +676,7 @@ class PDFDocument:
             "origin_x": None
         }
         if not self.is_open:
-            return default_style
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         try:
             page = self.get_page(page_number)
@@ -669,7 +691,7 @@ class PDFDocument:
                                 matching_spans.append(span)
 
             if not matching_spans:
-                return default_style
+                return Result.ok(default_style)
 
             # Pick largest span as representative
             span = max(matching_spans, key=lambda s: len(s.get("text", "")))
@@ -722,7 +744,7 @@ class PDFDocument:
             else:
                 fitz_font = "helv"
 
-            return {
+            return Result.ok({
                 "family": family,
                 "size": round(size, 1),
                 "is_bold": is_bold,
@@ -730,21 +752,18 @@ class PDFDocument:
                 "color_rgb": color_rgb,
                 "raw_font": raw_font,
                 "fitz_font": fitz_font
-            }
+            })
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError detecting text style")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
         except Exception as e:
-            print(f"Error detecting text style: {e}")
-            return default_style
+            logger.exception("Error detecting text style")
+            return Result.from_exception(e, "Failed to detect text style", "DETECT_STYLE_FAILED")
 
     def edit_text_at_rect(
         self, page_number: int, rect: fitz.Rect, new_text: str,
         fontsize: Optional[float] = None, fontname: str = "helv", color: Tuple[float, float, float] = (0, 0, 0)
-    ) -> bool:
+    ) -> Result[bool]:
         """
         Directly edits and replaces text at specified rect:
         1. Saves undo state.
@@ -752,7 +771,7 @@ class PDFDocument:
         3. Inserts new_text at the baseline coordinates with matching font size.
         """
         if not self.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         # Sessiz veri kaybı guardı: TR-özel karakter + gömülecek font yoksa
         # redact YAPMADAN False dön (orijinal korunur).
         if not font_supports_tr(new_text):
@@ -760,9 +779,11 @@ class PDFDocument:
                 "TR font bulunamadı; edit_text_at_rect atlandı, orijinal korundu: %r",
                 (new_text or "")[:60],
             )
-            return False
+            return Result.fail("Turkish font not available", "Install a TTF font with Turkish glyph support", "FONT_NOT_FOUND")
         try:
-            self.save_state_for_undo()
+            save_result = self.save_state_for_undo()
+            if not save_result:
+                return save_result
             page = self.get_page(page_number)
             page.add_redact_annot(rect, fill=(1, 1, 1))
             page.apply_redactions()
@@ -788,22 +809,19 @@ class PDFDocument:
                     logger.warning("insert_font(fontbuffer=...) başarısız, fallback deneniyor: %s", e)
             page.insert_text(insert_point, new_text, fontsize=fontsize, fontname=target_font, color=color)
             self.is_modified = True
-            return True
+            return Result.ok(True)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError editing text")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
         except Exception as e:
-            print(f"Error editing text at rect: {e}")
-            return False
+            logger.exception("Error editing text at rect")
+            return Result.from_exception(e, "Failed to edit text", "EDIT_TEXT_FAILED")
 
     def replace_text_block(
         self, page_number: int, rect: fitz.Rect, new_text: str,
         fontname: str = "helv", fontsize: float = 11.0, color: Tuple[float, float, float] = (0, 0, 0),
         baseline_y: float = None, origin_x: float = None
-    ) -> bool:
+    ) -> Result[bool]:
         """
         Replaces a paragraph or multi-line text block:
         1. Saves undo state.
@@ -811,7 +829,7 @@ class PDFDocument:
         3. Inserts replacement text line by line preserving paragraph bounds.
         """
         if not self.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         # Sessiz veri kaybı guardı: TR-özel karakter + gömülecek font yoksa
         # redact YAPMADAN False dön (orijinal korunur).
         if not font_supports_tr(new_text):
@@ -819,7 +837,7 @@ class PDFDocument:
                 "TR font bulunamadı; replace_text_block atlandı, orijinal korundu: %r",
                 (new_text or "")[:60],
             )
-            return False
+            return Result.fail("Turkish font not available", "Install a TTF font with Turkish glyph support", "FONT_NOT_FOUND")
         try:
             rect = fitz.Rect(rect)
             rect.normalize()
@@ -829,7 +847,7 @@ class PDFDocument:
                     "Rotasyonlu sayfada (%s°) replace_text_block atlandı, orijinal korundu.",
                     page.rotation,
                 )
-                return False
+                return Result.fail("Page is rotated", "Rotate page to 0° first", "PAGE_ROTATED")
 
             res = resolve_font_for_text(new_text, fontname)
             target_font = fontname
@@ -891,7 +909,9 @@ class PDFDocument:
                     except Exception:
                         pass
 
-            self.save_state_for_undo()
+            save_result = self.save_state_for_undo()
+            if not save_result:
+                return save_result
             page.add_redact_annot(eff_rect, fill=(1, 1, 1))
             page.apply_redactions()
 
@@ -922,7 +942,7 @@ class PDFDocument:
                             rc,
                         )
                         self.is_modified = True
-                        return False
+                        return Result.fail("Text does not fit in rectangle", "Try smaller font size or larger rectangle", "TEXT_OVERFLOW")
             else:
                 # Multi-line: use insert_textbox for automatic wrapping and line-heights
                 rc = page.insert_textbox(eff_rect, new_text, fontsize=eff_fontsize, fontname=target_font, color=color, align=0)
@@ -932,30 +952,27 @@ class PDFDocument:
                         rc,
                     )
                     self.is_modified = True
-                    return False
+                    return Result.fail("Text does not fit in rectangle", "Try smaller font size or larger rectangle", "TEXT_OVERFLOW")
 
             self.is_modified = True
-            return True
+            return Result.ok(True)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError replacing text block")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
         except Exception as e:
-            print(f"Error replacing text block: {e}")
-            return False
+            logger.exception("Error replacing text block")
+            return Result.from_exception(e, "Failed to replace text block", "REPLACE_TEXT_FAILED")
 
     def insert_new_text(
         self, page_number: int, point: fitz.Point, text: str,
         fontname: str = "helv", fontsize: float = 11.0, color: Tuple[float, float, float] = (0, 0, 0)
-    ) -> bool:
+    ) -> Result[bool]:
         """
         Studio style text insertion at point.
         Saves undo state and inserts text lines with full Turkish/Unicode support.
         """
         if not self.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         # Sessiz veri kaybı guardı: TR-özel karakter + gömülecek font yoksa
         # yazmadan False dön (orijinal korunur).
         if not font_supports_tr(text):
@@ -963,9 +980,11 @@ class PDFDocument:
                 "TR font bulunamadı; insert_new_text atlandı, orijinal korundu: %r",
                 (text or "")[:60],
             )
-            return False
+            return Result.fail("Turkish font not available", "Install a TTF font with Turkish glyph support", "FONT_NOT_FOUND")
         try:
-            self.save_state_for_undo()
+            save_result = self.save_state_for_undo()
+            if not save_result:
+                return save_result
             page = self.get_page(page_number)
 
             res = resolve_font_for_text(text, fontname)
@@ -995,24 +1014,21 @@ class PDFDocument:
                     page.insert_text(vis_pt, line, fontsize=fontsize, fontname=target_font, color=color)
 
             self.is_modified = True
-            return True
+            return Result.ok(True)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError inserting new text")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
         except Exception as e:
-            print(f"Error inserting new text: {e}")
-            return False
+            logger.exception("Error inserting new text")
+            return Result.from_exception(e, "Failed to insert text", "INSERT_TEXT_FAILED")
 
-    def ocr_page(self, page_number: int) -> List[Tuple[float, float, float, float, str]]:
+    def ocr_page(self, page_number: int) -> Result[List[Tuple[float, float, float, float, str]]]:
         """
         Runs OCR on a scanned page, extracts text blocks and coordinates,
         and embeds a searchable text layer onto the page.
         """
         if not self.is_open:
-            return []
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         try:
             # Check if RapidOCR is installed
             try:
@@ -1025,8 +1041,8 @@ class PDFDocument:
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                 results, _ = ocr(np.array(img))
                 if not results:
-                    return []
-                
+                    return Result.ok([])
+
                 scale_x = page.rect.width / pix.width
                 scale_y = page.rect.height / pix.height
 
@@ -1037,33 +1053,32 @@ class PDFDocument:
                     x1 = max(p[0] for p in box) * scale_x
                     y1 = max(p[1] for p in box) * scale_y
                     recognized_items.append((x0, y0, x1, y1, text))
-                    
+
                     # Insert invisible/searchable text layer onto the page
                     h = y1 - y0
                     fs = max(6.0, min(32.0, h * 0.8))
                     page.insert_text(fitz.Point(x0, y1 - 1), text, fontsize=fs, fontname="helv", color=(0, 0, 0), render_mode=3)
 
                 self.is_modified = True
-                return recognized_items
+                return Result.ok(recognized_items)
             except ImportError as e:
                 logger.warning("RapidOCR not available, ocr_page returns empty list: %s", e)
-                return []
+                return Result.ok([])
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return []
+            logger.exception("FileDataError running OCR")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
         except Exception as e:
-            print(f"Error running OCR: {e}")
-            return []
+            logger.exception("Error running OCR")
+            return Result.from_exception(e, "Failed to run OCR", "OCR_FAILED")
 
-    def add_image_stamp(self, page_number: int, rect: fitz.Rect, image_path: str) -> bool:
+    def add_image_stamp(self, page_number: int, rect: fitz.Rect, image_path: str) -> Result[bool]:
         """Places an image (e.g. signature, stamp) onto the page at specified rect."""
         if not self.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         try:
-            self.save_state_for_undo()
+            save_result = self.save_state_for_undo()
+            if not save_result:
+                return save_result
             page = self.get_page(page_number)
             rot = page.rotation
             if rot != 0:
@@ -1072,81 +1087,105 @@ class PDFDocument:
             else:
                 page.insert_image(rect, filename=image_path, keep_proportion=True)
             self.is_modified = True
-            return True
+            return Result.ok(True)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError adding image stamp")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
+        except FileNotFoundError as e:
+            logger.exception("Image file not found")
+            return Result.from_exception(e, "Image file not found", "FILE_NOT_FOUND")
         except Exception as e:
-            print(f"Error adding image stamp: {e}")
-            return False
+            logger.exception("Error adding image stamp")
+            return Result.from_exception(e, "Failed to add image stamp", "ADD_STAMP_FAILED")
 
-    def rotate_page(self, page_number: int, angle_delta: int = 90) -> int:
+    def rotate_page(self, page_number: int, angle_delta: int = 90) -> Result[int]:
         """Rotates a page by angle_delta (e.g. 90, -90, 180). Returns new rotation."""
-        page = self.get_page(page_number)
-        current_rot = page.rotation
-        new_rot = (current_rot + angle_delta) % 360
-        page.set_rotation(new_rot)
-        self.is_modified = True
-        return new_rot
+        if not self.is_open:
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
+        try:
+            page = self.get_page(page_number)
+            current_rot = page.rotation
+            new_rot = (current_rot + angle_delta) % 360
+            page.set_rotation(new_rot)
+            self.is_modified = True
+            return Result.ok(new_rot)
+        except IndexError as e:
+            return Result.fail(str(e), "Page index out of range", "INVALID_PAGE")
+        except Exception as e:
+            logger.exception("Error rotating page")
+            return Result.from_exception(e, "Failed to rotate page", "ROTATE_FAILED")
 
-    def delete_page(self, page_number: int) -> bool:
+    def delete_page(self, page_number: int) -> Result[bool]:
         """Deletes a page from the document."""
         if not self.is_open or self.page_count <= 1:
-            return False
-        self.doc.delete_page(page_number)
-        self.is_modified = True
-        return True
+            return Result.fail("Cannot delete page", "Document must have at least one page", "CANNOT_DELETE")
+        try:
+            self.doc.delete_page(page_number)
+            self.is_modified = True
+            return Result.ok(True)
+        except IndexError as e:
+            return Result.fail(str(e), "Page index out of range", "INVALID_PAGE")
+        except Exception as e:
+            logger.exception("Error deleting page")
+            return Result.from_exception(e, "Failed to delete page", "DELETE_FAILED")
 
-    def move_page(self, from_index: int, to_index: int) -> bool:
+    def move_page(self, from_index: int, to_index: int) -> Result[bool]:
         """Moves a page from one index to another."""
         if not self.is_open or from_index == to_index:
-            return False
-        self.doc.move_page(from_index, to_index)
-        self.is_modified = True
-        return True
+            return Result.fail("Invalid page indices", "Check source and destination indices", "INVALID_INDICES")
+        try:
+            self.doc.move_page(from_index, to_index)
+            self.is_modified = True
+            return Result.ok(True)
+        except IndexError as e:
+            return Result.fail(str(e), "Page index out of range", "INVALID_PAGE")
+        except Exception as e:
+            logger.exception("Error moving page")
+            return Result.from_exception(e, "Failed to move page", "MOVE_FAILED")
 
-    def insert_blank_page(self, index: int = -1, width: float = 595.0, height: float = 842.0) -> int:
+    def insert_blank_page(self, index: int = -1, width: float = 595.0, height: float = 842.0) -> Result[int]:
         """Inserts a blank page (default A4: 595 x 842 pt). Returns new page index."""
         if not self.is_open:
-            return -1
-        idx = self.doc.insert_page(index, width=width, height=height)
-        self.is_modified = True
-        return idx
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
+        try:
+            idx = self.doc.insert_page(index, width=width, height=height)
+            self.is_modified = True
+            return Result.ok(idx)
+        except Exception as e:
+            logger.exception("Error inserting blank page")
+            return Result.from_exception(e, "Failed to insert blank page", "INSERT_FAILED")
 
-    def insert_file(self, file_path: str, at_index: int = -1) -> bool:
+    def insert_file(self, file_path: str, at_index: int = -1) -> Result[bool]:
         """Inserts pages from an external PDF."""
         if not self.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         try:
             other_doc = fitz.open(file_path)
             self.doc.insert_pdf(other_doc, start_at=at_index if at_index >= 0 else self.page_count)
             other_doc.close()
             self.is_modified = True
-            return True
+            return Result.ok(True)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError inserting external PDF")
+            return Result.from_exception(e, "Source PDF may be corrupted", "FILE_DATA_ERROR")
+        except FileNotFoundError as e:
+            logger.exception("File not found")
+            return Result.from_exception(e, "Source file not found", "FILE_NOT_FOUND")
         except Exception as e:
-            print(f"Error inserting external PDF: {e}")
-            return False
+            logger.exception("Error inserting external PDF")
+            return Result.from_exception(e, "Failed to insert PDF", "INSERT_FAILED")
 
-    def save(self, target_path: Optional[str] = None, password: Optional[str] = None) -> bool:
+    def save(self, target_path: Optional[str] = None, password: Optional[str] = None) -> Result[bool]:
         """
         Saves changes to target_path or overwrites original file safely.
         Optionally encrypts with password.
         """
         if not self.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         save_path = target_path or self.file_path
         if not save_path:
-            return False
+            return Result.fail("No save path specified", "Provide a target path", "NO_SAVE_PATH")
 
         try:
             encrypt_kw = {}
@@ -1169,18 +1208,21 @@ class PDFDocument:
                 self.file_path = save_path
 
             self.is_modified = False
-            return True
+            return Result.ok(True)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError saving PDF")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
+        except PermissionError as e:
+            logger.exception("Permission error saving PDF")
+            return Result.from_exception(e, "Permission denied - file may be open elsewhere", "PERMISSION_DENIED")
+        except OSError as e:
+            logger.exception("OS error saving PDF")
+            return Result.from_exception(e, "Disk full or write error", "IO_ERROR")
         except Exception as e:
-            print(f"Error saving PDF: {e}")
-            return False
+            logger.exception("Error saving PDF")
+            return Result.from_exception(e, "Failed to save PDF", "SAVE_FAILED")
 
-    def add_header_footer(self, config: dict) -> bool:
+    def add_header_footer(self, config: dict) -> Result[bool]:
         """Adds header/footer text to specified pages.
         config = {
             'slots': {'left_header': 'text', 'center_footer': 'Sayfa {page} / {total}', ...},
@@ -1191,10 +1233,12 @@ class PDFDocument:
         }
         """
         if not self.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         
         try:
-            self.save_state_for_undo()
+            save_result = self.save_state_for_undo()
+            if not save_result:
+                return save_result
             pages_to_process = []
             
             pr = config.get('page_range', 'all')
@@ -1261,18 +1305,15 @@ class PDFDocument:
                     page.insert_text((x, y), text_to_draw, fontname=font, fontsize=font_size, color=color)
 
             self.is_modified = True
-            return True
+            return Result.ok(True)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError adding header/footer")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
         except Exception as e:
-            print(f"Error adding header/footer: {e}")
-            return False
+            logger.exception("Error adding header/footer")
+            return Result.from_exception(e, "Failed to add header/footer", "HEADER_FOOTER_FAILED")
 
-    def add_watermark(self, config: dict) -> bool:
+    def add_watermark(self, config: dict) -> Result[bool]:
         """Adds text or image watermark to pages.
         config = {
             'type': 'text' | 'image',
@@ -1286,10 +1327,12 @@ class PDFDocument:
         }
         """
         if not self.is_open:
-            return False
-            
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
+        
         try:
-            self.save_state_for_undo()
+            save_result = self.save_state_for_undo()
+            if not save_result:
+                return save_result
             
             pages_to_process = []
             pr = config.get('page_range', 'all')
@@ -1350,23 +1393,25 @@ class PDFDocument:
                         page.insert_image(r, filename=img_path, rotate=rotation, overlay=overlay, alpha=opacity)
             
             self.is_modified = True
-            return True
+            return Result.ok(True)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError adding watermark")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
+        except FileNotFoundError as e:
+            logger.exception("Image file not found")
+            return Result.from_exception(e, "Watermark image not found", "FILE_NOT_FOUND")
         except Exception as e:
-            print(f"Error adding watermark: {e}")
-            return False
+            logger.exception("Error adding watermark")
+            return Result.from_exception(e, "Failed to add watermark", "WATERMARK_FAILED")
 
-    def crop_page(self, page_num: int, rect: fitz.Rect, box_type: str = 'CropBox') -> bool:
+    def crop_page(self, page_num: int, rect: fitz.Rect, box_type: str = 'CropBox') -> Result[bool]:
         """Crops page to specified rectangle."""
         if not self.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         try:
-            self.save_state_for_undo()
+            save_result = self.save_state_for_undo()
+            if not save_result:
+                return save_result
             page = self.get_page(page_num)
             
             if box_type == 'CropBox':
@@ -1381,30 +1426,31 @@ class PDFDocument:
                 page.set_cropbox(rect)
                 
             self.is_modified = True
-            return True
+            return Result.ok(True)
         except fitz.FileDataError as e:
-            print(f"FileDataError: Failed to open PDF file {self.file_path}: {e}")
-            self.doc = None
-            self.is_encrypted = False
-            self.is_authenticated = False
-            return False
+            logger.exception("FileDataError cropping page")
+            return Result.from_exception(e, "PDF file may be corrupted", "FILE_DATA_ERROR")
+        except IndexError as e:
+            return Result.fail(str(e), "Page index out of range", "INVALID_PAGE")
         except Exception as e:
-            print(f"Error cropping page: {e}")
-            return False
+            logger.exception("Error cropping page")
+            return Result.from_exception(e, "Failed to crop page", "CROP_FAILED")
 
-    def get_toc(self) -> list:
+    def get_toc(self) -> Result[list]:
         """Returns the document table of contents / outline as [[lvl, title, page], ...]."""
         if not self.is_open or not self.doc:
-            return []
+            return Result.ok([])
         try:
-            return self.doc.get_toc()
-        except Exception:
-            return []
+            return Result.ok(self.doc.get_toc())
+        except Exception as e:
+            logger.exception("Error getting TOC")
+            return Result.from_exception(e, "Failed to get table of contents", "TOC_FAILED")
 
-    def close(self):
+    def close(self) -> Result[None]:
         """Closes the document."""
         if self.is_open:
             self.doc.close()
             self.doc = None
             self.file_path = None
             self.is_modified = False
+        return Result.ok(None)

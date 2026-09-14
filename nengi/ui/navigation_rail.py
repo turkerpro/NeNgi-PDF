@@ -73,7 +73,6 @@ class NavigationRail(QWidget):
         self._add_nav_item(layout, "documents", "documents", "Belgelerim")
         self._add_nav_item(layout, "bookmarks", "bookmark", "Yer İmleri")
         self._add_nav_item(layout, "diff", "diff", "Karşılaştır (DIFF)")
-        self._add_nav_item(layout, "tools", "tools", "Hızlı Araçlar")
 
         layout.addStretch()
 

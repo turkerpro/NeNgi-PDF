@@ -2,4 +2,4 @@
 NeNgi PDF - NextGen Professional PDF Studio
 """
 
-__version__ = "2.0.2-beta"
+__version__ = "2.0.3-beta"

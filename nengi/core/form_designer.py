@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import List, Dict, Any, Optional, Tuple
 import fitz
 from .pdf_document import PDFDocument
+from nengi.core.result import Result
 
 
 # PyMuPDF widget type constants (safe fallbacks for all PyMuPDF versions)
@@ -98,10 +99,10 @@ class FormDesigner:
     @staticmethod
     def create_field(
         doc: PDFDocument, page_num: int, config: FormFieldConfig
-    ) -> Optional[fitz.Widget]:
+    ) -> Result[fitz.Widget]:
         """Creates a new form field on the specified page."""
         if not doc.is_open or page_num < 0 or page_num >= doc.page_count:
-            return None
+            return Result.fail("Document not open or invalid page", "Open a document and select valid page", "INVALID_PAGE")
 
         doc.save_state_for_undo()
         page = doc.get_page(page_num)
@@ -165,15 +166,15 @@ class FormDesigner:
 
         page.add_widget(widget)
         doc.is_modified = True
-        return widget
+        return Result.ok(widget)
 
     @staticmethod
     def update_field(
         doc: PDFDocument, page_num: int, widget: fitz.Widget, config: FormFieldConfig
-    ) -> bool:
+    ) -> Result[bool]:
         """Updates an existing form field's properties."""
         if not doc.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         doc.save_state_for_undo()
         widget.field_name = config.name
@@ -194,13 +195,13 @@ class FormDesigner:
 
         widget.update()
         doc.is_modified = True
-        return True
+        return Result.ok(True)
 
     @staticmethod
-    def delete_field(doc: PDFDocument, page_num: int, widget: fitz.Widget) -> bool:
+    def delete_field(doc: PDFDocument, page_num: int, widget: fitz.Widget) -> Result[bool]:
         """Removes a form field from the page."""
         if not doc.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         doc.save_state_for_undo()
         page = doc.get_page(page_num)
@@ -209,14 +210,14 @@ class FormDesigner:
             if w.field_name == widget.field_name and w.rect == widget.rect:
                 page.delete_widget(w)
                 doc.is_modified = True
-                return True
-        return False
+                return Result.ok(True)
+        return Result.fail("Widget not found", "Form field not found on page", "WIDGET_NOT_FOUND")
 
     @staticmethod
-    def get_fields_on_page(doc: PDFDocument, page_num: int) -> List[Dict[str, Any]]:
+    def get_fields_on_page(doc: PDFDocument, page_num: int) -> Result[List[Dict[str, Any]]]:
         """Returns all form fields on a specific page with their properties."""
         if not doc.is_open or page_num < 0 or page_num >= doc.page_count:
-            return []
+            return Result.fail("Document not open or invalid page", "Open a document and select valid page", "INVALID_PAGE")
 
         page = doc.get_page(page_num)
         fields = []
@@ -240,26 +241,26 @@ class FormDesigner:
             if widget.field_type in (FIELD_COMBO, FIELD_LISTBOX):
                 field_info["options"] = getattr(widget, "choice_values", [])
             fields.append(field_info)
-        return fields
+        return Result.ok(fields)
 
     @staticmethod
-    def get_all_field_names(doc: PDFDocument) -> List[str]:
+    def get_all_field_names(doc: PDFDocument) -> Result[List[str]]:
         """Returns unique names of all form fields in the document."""
         if not doc.is_open:
-            return []
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         names = set()
         for page_idx in range(doc.page_count):
             page = doc.get_page(page_idx)
             for widget in page.widgets():
                 if widget.field_name:
                     names.add(widget.field_name)
-        return sorted(names)
+        return Result.ok(sorted(names))
 
     @staticmethod
-    def clear_all_fields(doc: PDFDocument) -> int:
+    def clear_all_fields(doc: PDFDocument) -> Result[int]:
         """Resets all form field values to empty/default. Returns count."""
         if not doc.is_open:
-            return 0
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         doc.save_state_for_undo()
         count = 0
         for page_idx in range(doc.page_count):
@@ -272,13 +273,13 @@ class FormDesigner:
                 widget.update()
                 count += 1
         doc.is_modified = True
-        return count
+        return Result.ok(count)
 
     @staticmethod
-    def export_form_data(doc: PDFDocument, output_path: str, fmt: str = "csv") -> bool:
+    def export_form_data(doc: PDFDocument, output_path: str, fmt: str = "csv") -> Result[bool]:
         """Exports form field data to file (csv, xml, or json)."""
         if not doc.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         fields = []
         for page_idx in range(doc.page_count):
@@ -312,13 +313,13 @@ class FormDesigner:
             import json
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(fields, f, ensure_ascii=False, indent=2)
-        return True
+        return Result.ok(True)
 
     @staticmethod
-    def import_form_data(doc: PDFDocument, input_path: str, fmt: str = "csv") -> int:
+    def import_form_data(doc: PDFDocument, input_path: str, fmt: str = "csv") -> Result[int]:
         """Imports form field data from file. Returns count of updated fields."""
         if not doc.is_open:
-            return 0
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         doc.save_state_for_undo()
         data = {}
@@ -347,14 +348,14 @@ class FormDesigner:
                     widget.update()
                     count += 1
         doc.is_modified = True
-        return count
+        return Result.ok(count)
 
     @staticmethod
-    def auto_detect_fields(doc: PDFDocument, page_num: int) -> List[FormFieldConfig]:
+    def auto_detect_fields(doc: PDFDocument, page_num: int) -> Result[List[FormFieldConfig]]:
         """Auto-detect potential form field locations on a page by analyzing
         horizontal lines, text labels ending with ':', and rectangular shapes."""
         if not doc.is_open or page_num < 0 or page_num >= doc.page_count:
-            return []
+            return Result.fail("Document not open or invalid page", "Open a document and select valid page", "INVALID_PAGE")
 
         page = doc.get_page(page_num)
         suggestions = []
@@ -412,4 +413,4 @@ class FormDesigner:
                 rect=rect,
             ))
 
-        return suggestions
+        return Result.ok(suggestions)

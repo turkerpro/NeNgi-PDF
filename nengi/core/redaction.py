@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Tuple, Optional
 import re
 import fitz
 from nengi.core.pdf_document import PDFDocument
+from nengi.core.result import Result
 
 
 # Standard PII Patterns (Turkey & Global)
@@ -45,14 +46,14 @@ class RedactionEngine:
         pattern_key_or_regex: str,
         is_custom_regex: bool = False,
         page_range: Optional[List[int]] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> Result[List[Dict[str, Any]]]:
         """Searches document for matching sensitive text patterns and returns bounding boxes.
 
         Returns:
             List of matches: [{"page": int, "text": str, "rect": fitz.Rect}, ...]
         """
         if not doc.is_open:
-            return []
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
         if not is_custom_regex and pattern_key_or_regex in PII_PATTERNS:
             regex_str = PII_PATTERNS[pattern_key_or_regex]["pattern"]
@@ -61,8 +62,8 @@ class RedactionEngine:
 
         try:
             compiled = re.compile(regex_str)
-        except re.error:
-            return []
+        except re.error as e:
+            return Result.fail(f"Invalid regex: {e}", "Check the regex syntax", "INVALID_REGEX")
 
         target_pages = page_range if page_range is not None else list(range(doc.page_count))
         matches = []
@@ -71,10 +72,7 @@ class RedactionEngine:
             if p_idx < 0 or p_idx >= doc.page_count:
                 continue
             page = doc.get_page(p_idx)
-            text_instances = []
 
-            # Extract words with positions
-            words = page.get_text("words")  # (x0, y0, x1, y1, word, block, line, word_idx)
             full_text = page.get_text("text")
 
             for m in compiled.finditer(full_text):
@@ -88,7 +86,7 @@ class RedactionEngine:
                         "rect": r,
                     })
 
-        return matches
+        return Result.ok(matches)
 
     @staticmethod
     def mark_for_redaction(
@@ -97,12 +95,14 @@ class RedactionEngine:
         overlay_text: str = "GİZLENDİ",
         fill_color: Tuple[float, float, float] = (0, 0, 0),
         text_color: Tuple[float, float, float] = (1, 1, 1),
-    ) -> int:
+    ) -> Result[int]:
         """Adds redaction annotations to matched regions without permanently deleting content yet."""
         if not doc.is_open or not matches:
-            return 0
+            return Result.ok(0)
 
-        doc.save_state_for_undo()
+        save_result = doc.save_state_for_undo()
+        if not save_result:
+            return save_result
         count = 0
 
         for m in matches:
@@ -122,21 +122,23 @@ class RedactionEngine:
             count += 1
 
         doc.is_modified = True
-        return count
+        return Result.ok(count)
 
     @staticmethod
-    def apply_redactions(doc: PDFDocument) -> bool:
+    def apply_redactions(doc: PDFDocument) -> Result[bool]:
         """Permanently burns redactions into the document. Irreversible."""
         if not doc.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
-        doc.save_state_for_undo()
+        save_result = doc.save_state_for_undo()
+        if not save_result:
+            return save_result
         for p_idx in range(doc.page_count):
             page = doc.get_page(p_idx)
             page.apply_redactions()
 
         doc.is_modified = True
-        return True
+        return Result.ok(True)
 
     @staticmethod
     def sanitize_document(
@@ -147,12 +149,14 @@ class RedactionEngine:
         remove_bookmarks: bool = False,
         remove_annotations: bool = False,
         remove_hidden_text: bool = False,
-    ) -> Dict[str, int]:
+    ) -> Result[Dict[str, int]]:
         """Strips hidden information, metadata, file attachments, and scripts from document."""
         if not doc.is_open:
-            return {}
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
 
-        doc.save_state_for_undo()
+        save_result = doc.save_state_for_undo()
+        if not save_result:
+            return save_result
         results = {
             "metadata_cleared": 0,
             "attachments_removed": 0,
@@ -201,4 +205,4 @@ class RedactionEngine:
                     results["annotations_removed"] += 1
 
         doc.is_modified = True
-        return results
+        return Result.ok(results)

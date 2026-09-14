@@ -7,6 +7,7 @@ sets file associations, and launches Windows Default Apps settings.
 import sys
 import os
 import subprocess
+from nengi.core.result import Result
 
 
 def is_windows() -> bool:
@@ -23,13 +24,13 @@ def get_executable_path() -> str:
         return sys.executable
 
 
-def register_as_default_pdf_viewer() -> tuple[bool, str]:
+def register_as_default_pdf_viewer() -> Result[bool]:
     r"""
     Registers NeNgi PDF in Windows Registry under HKEY_CURRENT_USER.
     Does not require Administrator privileges because it targets HKCU\Software\Classes.
     """
     if not is_windows():
-        return False, "Bu özellik yalnızca Windows işletim sisteminde çalışır."
+        return Result.fail("Not on Windows", "This feature only works on Windows", "NOT_WINDOWS")
 
     try:
         import winreg
@@ -65,28 +66,34 @@ def register_as_default_pdf_viewer() -> tuple[bool, str]:
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, "Software\\RegisteredApplications") as key:
             winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, app_reg)
 
-        return True, "NeNgi PDF başarıyla Windows varsayılan PDF okuyucusu olarak kaydedildi!"
+        return Result.ok(True)
     except Exception as e:
-        return False, f"Kayıt defteri güncellenirken hata oluştu: {e}"
+        logger = __import__('logging').getLogger(__name__)
+        logger.exception("Registry update error")
+        return Result.from_exception(e, "Failed to register as default PDF viewer", "REGISTER_FAILED")
 
 
-def open_windows_default_apps_settings():
+def open_windows_default_apps_settings() -> Result[None]:
     """Launches Windows 10/11 Default Apps settings page."""
     if is_windows():
         try:
             os.system("start ms-settings:defaultapps")
+            return Result.ok(None)
         except Exception as e:
-            print(f"Failed to open Windows settings: {e}")
+            logger = __import__('logging').getLogger(__name__)
+            logger.exception("Failed to open Windows settings")
+            return Result.from_exception(e, "Failed to open Windows settings", "OPEN_SETTINGS_FAILED")
+    return Result.fail("Not on Windows", "This feature only works on Windows", "NOT_WINDOWS")
 
 
-def register_shell_context_menus() -> tuple[bool, str]:
+def register_shell_context_menus() -> Result[bool]:
     r"""
     Registers Windows Explorer right-click context menus:
     - '📑 NeNgi PDF ile Birleştir'
     - '📄 NeNgi PDF ile PDF'e Dönüştür'
     """
     if not is_windows():
-        return False, "Bu özellik yalnızca Windows işletim sisteminde çalışır."
+        return Result.fail("Not on Windows", "This feature only works on Windows", "NOT_WINDOWS")
 
     try:
         import winreg
@@ -108,6 +115,8 @@ def register_shell_context_menus() -> tuple[bool, str]:
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{conv_key_path}\\command") as key:
             winreg.SetValueEx(key, "", 0, winreg.REG_SZ, f'"{exe_path}" --convert "%1"')
 
-        return True, "Windows Gezgini sağ tık menüleri (Birleştir ve Dönüştür) başarıyla kaydedildi."
+        return Result.ok(True)
     except Exception as e:
-        return False, f"Sağ tık menüleri kaydedilirken hata oluştu: {e}"
+        logger = __import__('logging').getLogger(__name__)
+        logger.exception("Context menu registration error")
+        return Result.from_exception(e, "Failed to register context menus", "REGISTER_MENU_FAILED")

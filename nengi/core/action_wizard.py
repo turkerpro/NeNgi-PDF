@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Callable, Optional
 import os
 import glob
 from nengi.core.pdf_document import PDFDocument
+from nengi.core.result import Result
 from nengi.core.pdf_optimizer import PDFOptimizer
 from nengi.core.security import SecurityManager
 
@@ -30,7 +31,7 @@ class ActionWizard:
         steps: List[ActionStep],
         output_dir: str,
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> Result[List[Dict[str, Any]]]:
         """Executes the action steps on each PDF file and outputs to output_dir.
 
         Returns:
@@ -46,7 +47,8 @@ class ActionWizard:
                 progress_callback(f_idx + 1, total_files, f"İşleniyor: {base_name}")
 
             doc = PDFDocument()
-            if not doc.open(in_path):
+            open_result = doc.open(in_path)
+            if not open_result:
                 results.append({
                     "file": base_name,
                     "success": False,
@@ -77,7 +79,9 @@ class ActionWizard:
                     if is_compress:
                         doc.doc.save(out_path, garbage=4, deflate=True, clean=True)
                     else:
-                        doc.save(out_path)
+                        save_result = doc.save(out_path)
+                        if not save_result:
+                            raise RuntimeError(f"Save failed: {save_result.error}")
 
                 doc.close()
                 results.append({

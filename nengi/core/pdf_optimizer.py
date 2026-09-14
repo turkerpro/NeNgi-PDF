@@ -3,14 +3,15 @@ NeNgi PDF - PDF Optimizer
 Analyzes and optimizes PDF files for size and performance.
 """
 import fitz
+from nengi.core.result import Result
 import os
 
 class PDFOptimizer:
     @staticmethod
-    def get_space_usage(doc) -> dict:
+    def get_space_usage(doc) -> Result[dict]:
         """Audit space usage: images, fonts, metadata, etc."""
         if not doc.is_open:
-            return {}
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
             
         usage = {
             'images': 0,
@@ -47,16 +48,16 @@ class PDFOptimizer:
             usage['fonts'] = total_size * 0.1 # assume 10% fonts if not exact
             usage['text_and_graphics'] = max(0, total_size - img_size - usage['metadata'] - usage['fonts'])
             
-            return usage
+            return Result.ok(usage)
         except Exception as e:
             print(f"Audit error: {e}")
-            return usage
+            return Result.ok(usage)
             
     @staticmethod  
-    def optimize(doc, options: dict) -> bool:
+    def optimize(doc, options: dict) -> Result[bool]:
         """Optimize PDF with given options."""
         if not doc.is_open:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
             
         try:
             # options: {'compress_images': True, 'image_quality': 75,
@@ -86,7 +87,8 @@ class PDFOptimizer:
                 save_path = "optimized.pdf"
                 doc.doc.save(save_path, garbage=garbage_level, deflate=deflate, clean=clean, linear=False)
             
-            return True
+            return Result.ok(True)
         except Exception as e:
-            print(f"Optimize error: {e}")
-            return False
+            logger = __import__("logging").getLogger(__name__)
+            logger.exception("Optimize error")
+            return Result.from_exception(e, "Failed to optimize PDF", "OPTIMIZE_FAILED")

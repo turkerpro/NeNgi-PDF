@@ -1,98 +1,143 @@
 import fitz
+import logging
+from nengi.core.result import Result
+from nengi.core.pdf_document import PDFDocument
+
+logger = logging.getLogger(__name__)
 
 class AnnotationManager:
     """Manages PDF annotations using PyMuPDF (fitz) API."""
     
     @staticmethod
-    def add_highlight(page, quads, color=(1, 1, 0), opacity=0.5) -> fitz.Annot:
+    def add_highlight(page, quads, color=(1, 1, 0), opacity=0.5) -> Result[fitz.Annot]:
         """Add highlight annotation over text quads."""
-        annot = page.add_highlight_annot(quads)
-        annot.set_colors(stroke=color)
-        annot.set_opacity(opacity)
-        annot.update()
-        return annot
-    
-    @staticmethod
-    def add_underline(page, quads, color=(0, 0, 1)) -> fitz.Annot:
-        annot = page.add_underline_annot(quads)
-        annot.set_colors(stroke=color)
-        annot.update()
-        return annot
-    
-    @staticmethod
-    def add_strikethrough(page, quads, color=(1, 0, 0)) -> fitz.Annot:
-        annot = page.add_strikeout_annot(quads)
-        annot.set_colors(stroke=color)
-        annot.update()
-        return annot
-    
-    @staticmethod
-    def add_sticky_note(page, point, text, icon='Note', color=(1, 1, 0)):
-        annot = page.add_text_annot(point, text, icon=icon)
-        annot.set_colors(stroke=color)
-        annot.update()
-        return annot
-    
-    @staticmethod
-    def add_freetext(page, rect, text, fontsize=12, color=(0,0,0), fill=(1,1,1)):
-        annot = page.add_freetext_annot(rect, text, fontsize=fontsize, text_color=color, fill_color=fill)
-        annot.update()
-        return annot
-    
-    @staticmethod
-    def add_line(page, p1, p2, color=(1, 0, 0), width=1.5, end_style=None):
-        annot = page.add_line_annot(p1, p2)
-        annot.set_colors(stroke=color)
-        annot.set_border(width=width)
-        if end_style:  # e.g. fitz.PDF_ANNOT_LE_CLOSED_ARROW
-            annot.set_line_ends(0, end_style)
-        annot.update()
-        return annot
-    
-    @staticmethod
-    def add_rect(page, rect, color=(0,0,1), fill=None, width=1.5):
-        annot = page.add_rect_annot(rect)
-        if fill:
-            annot.set_colors(stroke=color, fill=fill)
-        else:
+        try:
+            annot = page.add_highlight_annot(quads)
             annot.set_colors(stroke=color)
-        annot.set_border(width=width)
-        annot.update()
-        return annot
+            annot.set_opacity(opacity)
+            annot.update()
+            return Result.ok(annot)
+        except Exception as e:
+            logger.exception("Error adding highlight")
+            return Result.from_exception(e, "Failed to add highlight", "ADD_HIGHLIGHT_FAILED")
     
     @staticmethod
-    def add_circle(page, rect, color=(0,0,1), fill=None, width=1.5):
-        annot = page.add_circle_annot(rect)
-        if fill:
-            annot.set_colors(stroke=color, fill=fill)
-        else:
+    def add_underline(page, quads, color=(0, 0, 1)) -> Result[fitz.Annot]:
+        try:
+            annot = page.add_underline_annot(quads)
             annot.set_colors(stroke=color)
-        annot.set_border(width=width)
-        annot.update()
-        return annot
+            annot.update()
+            return Result.ok(annot)
+        except Exception as e:
+            logger.exception("Error adding underline")
+            return Result.from_exception(e, "Failed to add underline", "ADD_UNDERLINE_FAILED")
     
     @staticmethod
-    def add_ink(page, paths, color=(0,0,0), width=2.0):
+    def add_strikethrough(page, quads, color=(1, 0, 0)) -> Result[fitz.Annot]:
+        try:
+            annot = page.add_strikeout_annot(quads)
+            annot.set_colors(stroke=color)
+            annot.update()
+            return Result.ok(annot)
+        except Exception as e:
+            logger.exception("Error adding strikethrough")
+            return Result.from_exception(e, "Failed to add strikethrough", "ADD_STRIKE_FAILED")
+    
+    @staticmethod
+    def add_sticky_note(page, point, text, icon='Note', color=(1, 1, 0)) -> Result[fitz.Annot]:
+        try:
+            annot = page.add_text_annot(point, text, icon=icon)
+            annot.set_colors(stroke=color)
+            annot.update()
+            return Result.ok(annot)
+        except Exception as e:
+            logger.exception("Error adding sticky note")
+            return Result.from_exception(e, "Failed to add sticky note", "ADD_NOTE_FAILED")
+    
+    @staticmethod
+    def add_freetext(page, rect, text, fontsize=12, color=(0,0,0), fill=(1,1,1)) -> Result[fitz.Annot]:
+        try:
+            annot = page.add_freetext_annot(rect, text, fontsize=fontsize, text_color=color, fill_color=fill)
+            annot.update()
+            return Result.ok(annot)
+        except Exception as e:
+            logger.exception("Error adding freetext")
+            return Result.from_exception(e, "Failed to add freetext", "ADD_FREETEXT_FAILED")
+    
+    @staticmethod
+    def add_line(page, p1, p2, color=(1, 0, 0), width=1.5, end_style=None) -> Result[fitz.Annot]:
+        try:
+            annot = page.add_line_annot(p1, p2)
+            annot.set_colors(stroke=color)
+            annot.set_border(width=width)
+            if end_style:  # e.g. fitz.PDF_ANNOT_LE_CLOSED_ARROW
+                annot.set_line_ends(0, end_style)
+            annot.update()
+            return Result.ok(annot)
+        except Exception as e:
+            logger.exception("Error adding line")
+            return Result.from_exception(e, "Failed to add line", "ADD_LINE_FAILED")
+    
+    @staticmethod
+    def add_rect(page, rect, color=(0,0,1), fill=None, width=1.5) -> Result[fitz.Annot]:
+        try:
+            annot = page.add_rect_annot(rect)
+            if fill:
+                annot.set_colors(stroke=color, fill=fill)
+            else:
+                annot.set_colors(stroke=color)
+            annot.set_border(width=width)
+            annot.update()
+            return Result.ok(annot)
+        except Exception as e:
+            logger.exception("Error adding rect")
+            return Result.from_exception(e, "Failed to add rect", "ADD_RECT_FAILED")
+    
+    @staticmethod
+    def add_circle(page, rect, color=(0,0,1), fill=None, width=1.5) -> Result[fitz.Annot]:
+        try:
+            annot = page.add_circle_annot(rect)
+            if fill:
+                annot.set_colors(stroke=color, fill=fill)
+            else:
+                annot.set_colors(stroke=color)
+            annot.set_border(width=width)
+            annot.update()
+            return Result.ok(annot)
+        except Exception as e:
+            logger.exception("Error adding circle")
+            return Result.from_exception(e, "Failed to add circle", "ADD_CIRCLE_FAILED")
+    
+    @staticmethod
+    def add_ink(page, paths, color=(0,0,0), width=2.0) -> Result[fitz.Annot]:
         """Add freehand ink annotation. paths is list of point lists."""
-        annot = page.add_ink_annot(paths)
-        annot.set_colors(stroke=color)
-        annot.set_border(width=width)
-        annot.update()
-        return annot
-    
-    @staticmethod
-    def add_polygon(page, points, color=(0,0,1), fill=None, width=1.5):
-        annot = page.add_polygon_annot(points)
-        if fill:
-            annot.set_colors(stroke=color, fill=fill)
-        else:
+        try:
+            annot = page.add_ink_annot(paths)
             annot.set_colors(stroke=color)
-        annot.set_border(width=width)
-        annot.update()
-        return annot
+            annot.set_border(width=width)
+            annot.update()
+            return Result.ok(annot)
+        except Exception as e:
+            logger.exception("Error adding ink")
+            return Result.from_exception(e, "Failed to add ink", "ADD_INK_FAILED")
     
     @staticmethod
-    def add_stamp(page, rect, stamp_name='Draft'):
+    def add_polygon(page, points, color=(0,0,1), fill=None, width=1.5) -> Result[fitz.Annot]:
+        try:
+            annot = page.add_polygon_annot(points)
+            if fill:
+                annot.set_colors(stroke=color, fill=fill)
+            else:
+                annot.set_colors(stroke=color)
+            annot.set_border(width=width)
+            annot.update()
+            return Result.ok(annot)
+        except Exception as e:
+            logger.exception("Error adding polygon")
+            return Result.from_exception(e, "Failed to add polygon", "ADD_POLYGON_FAILED")
+    
+    @staticmethod
+    def add_stamp(page, rect, stamp_name='Draft') -> Result[fitz.Annot]:
         stamp_map = {
             "ONAYLANDI": 0,    # Approved
             "TASLAK": 4,       # Draft
@@ -102,26 +147,39 @@ class AnnotationManager:
             "GEÇERSİZ": 6,     # Expired
         }
         stamp_val = stamp_map.get(stamp_name, 4) # Default to Draft
-        annot = page.add_stamp_annot(rect, stamp=stamp_val)
-        annot.update()
-        return annot
+        try:
+            annot = page.add_stamp_annot(rect, stamp=stamp_val)
+            annot.update()
+            return Result.ok(annot)
+        except Exception as e:
+            logger.exception("Error adding stamp")
+            return Result.from_exception(e, "Failed to add stamp", "ADD_STAMP_FAILED")
     
     @staticmethod
-    def get_all_annotations(page):
-        return list(page.annots() or [])
+    def get_all_annotations(page) -> Result[list]:
+        try:
+            return Result.ok(list(page.annots() or []))
+        except Exception as e:
+            logger.exception("Error getting annotations")
+            return Result.from_exception(e, "Failed to get annotations", "GET_ANNOT_FAILED")
     
     @staticmethod
-    def delete_annotation(page, annot):
-        page.delete_annot(annot)
+    def delete_annotation(page, annot) -> Result[bool]:
+        try:
+            page.delete_annot(annot)
+            return Result.ok(True)
+        except Exception as e:
+            logger.exception("Error deleting annotation")
+            return Result.from_exception(e, "Failed to delete annotation", "DELETE_ANNOT_FAILED")
     
     @staticmethod
-    def export_annotations_xfdf(doc, output_path):
+    def export_annotations_xfdf(doc, output_path) -> Result[bool]:
         """Export all annotations to XFDF format (highlight/underline/strike/note)."""
         import xml.etree.ElementTree as ET
         try:
             fitz_doc = getattr(doc, "doc", doc)
             if fitz_doc is None:
-                return False
+                return Result.fail("Document not provided", "Provide a valid PDFDocument", "NO_DOCUMENT")
 
             def _to_hex(color):
                 try:
@@ -198,19 +256,19 @@ class AnnotationManager:
             tree = ET.ElementTree(xfdf)
             ET.indent(tree, space="  ")
             tree.write(output_path, encoding="utf-8", xml_declaration=True)
-            return True
+            return Result.ok(True)
         except Exception as e:
-            print(f"Error exporting XFDF: {e}")
-            return False
+            logger.exception("Error exporting XFDF")
+            return Result.from_exception(e, "Failed to export XFDF", "EXPORT_XFDF_FAILED")
 
     @staticmethod
-    def import_annotations_xfdf(doc, xfdf_path):
+    def import_annotations_xfdf(doc, xfdf_path) -> Result[int]:
         """Import annotations from XFDF file (highlight/underline/strike/note)."""
         import xml.etree.ElementTree as ET
         try:
             fitz_doc = getattr(doc, "doc", doc)
             if fitz_doc is None:
-                return 0
+                return Result.fail("Document not provided", "Provide a valid PDFDocument", "NO_DOCUMENT")
 
             def _parse_hex(s):
                 s = (s or "#FFFF00").strip().lstrip("#")
@@ -289,10 +347,10 @@ class AnnotationManager:
                     doc.is_modified = True
             except Exception:
                 pass
-            return imported
+            return Result.ok(imported)
         except Exception as e:
-            print(f"Error importing XFDF: {e}")
-            return 0
+            logger.exception("Error importing XFDF")
+            return Result.from_exception(e, "Failed to import XFDF", "IMPORT_XFDF_FAILED")
 
     @staticmethod
     def _coords_to_quads(coords, fallback_rect):

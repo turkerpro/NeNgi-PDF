@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional, Any
 import fitz
 from .pdf_document import PDFDocument
+from nengi.core.result import Result
 
 
 @dataclass
@@ -59,8 +60,10 @@ class DiffEngine:
             has_page_a = page_idx < self.doc_a.page_count
             has_page_b = page_idx < self.doc_b.page_count
 
-            words_a = self.doc_a.get_page_text_words(page_idx) if has_page_a else []
-            words_b = self.doc_b.get_page_text_words(page_idx) if has_page_b else []
+            words_a_result = self.doc_a.get_page_text_words(page_idx) if has_page_a else Result.ok([])
+            words_b_result = self.doc_b.get_page_text_words(page_idx) if has_page_b else Result.ok([])
+            words_a = words_a_result.unwrap_or([])
+            words_b = words_b_result.unwrap_or([])
 
             tokens_a = [w[4] for w in words_a]
             tokens_b = [w[4] for w in words_b]

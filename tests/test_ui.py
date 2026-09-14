@@ -17,6 +17,7 @@ import fitz
 from nengi.ui.main_window import MainWindow
 from nengi.ui.diff_view import DiffView
 from nengi.core.pdf_document import PDFDocument
+from nengi.core.result import Result
 
 
 class TestNeNgiUI(unittest.TestCase):
@@ -187,12 +188,15 @@ class TestNeNgiUI(unittest.TestCase):
 
         # Test Rotated Page Text Insertion
         pw = viewer.page_widgets[0]
-        pw.doc.rotate_page(0, 90)
+        rotate_result = pw.doc.rotate_page(0, 90)
+        self.assertTrue(rotate_result)
         self.assertEqual(pw.doc.get_page(0).rotation, 90)
 
         # Insert text on 90-degree rotated page
-        pw.doc.insert_new_text(0, fitz.Point(100, 150), "Rotated Test Text", fontsize=12)
-        words = [w[4] for w in pw.doc.get_page_text_words(0)]
+        insert_result = pw.doc.insert_new_text(0, fitz.Point(100, 150), "Rotated Test Text", fontsize=12)
+        self.assertTrue(insert_result)
+        words_result = pw.doc.get_page_text_words(0)
+        words = [w[4] for w in words_result.unwrap_or([])]
         self.assertTrue(any("Rotated" in w for w in words))
 
     def test_virtual_printer_spool_watcher(self):

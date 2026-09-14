@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Optional
 import fitz
 from .pdf_document import PDFDocument
+from nengi.core.result import Result
 
 
 class SecurityManager:
@@ -14,7 +15,7 @@ class SecurityManager:
 
     @staticmethod
     def encrypt_document(doc: PDFDocument, password: str, output_path: Optional[str] = None,
-                         owner_pw: Optional[str] = None, permissions: Optional[int] = None) -> bool:
+                         owner_pw: Optional[str] = None, permissions: Optional[int] = None) -> Result[bool]:
         """Protects PDF with AES-256 password (user/owner separation + permission flags).
 
         :param doc: open PDFDocument.
@@ -25,10 +26,10 @@ class SecurityManager:
             defaults to PRINT | COPY | ANNOTATE.
         """
         if not getattr(doc, "is_open", False) or doc.doc is None:
-            return False
+            return Result.fail("Document not open", "Open a document first", "DOC_NOT_OPEN")
         save_path = output_path or getattr(doc, "file_path", None)
         if not save_path:
-            return False
+            return Result.fail("No save path specified", "Provide an output path", "NO_SAVE_PATH")
         user_pw = password
         resolved_owner_pw = owner_pw if owner_pw is not None else password
         if permissions is None:
@@ -54,20 +55,22 @@ class SecurityManager:
                 doc.doc.save(save_path, garbage=3, deflate=True, **encrypt_kw)
                 doc.file_path = save_path
             doc.is_modified = False
-            return True
+            return Result.ok(True)
         except Exception as e:
-            print(f"Error encrypting PDF: {e}")
-            return False
+            logger = __import__('logging').getLogger(__name__)
+            logger.exception("Error encrypting PDF")
+            return Result.from_exception(e, "Failed to encrypt PDF", "ENCRYPT_FAILED")
 
     @staticmethod
-    def remove_password(doc: PDFDocument, output_path: str) -> bool:
+    def remove_password(doc: PDFDocument, output_path: str) -> Result[bool]:
         """Removes encryption from an authenticated PDF and saves a decrypted copy."""
         if not doc.is_open or not doc.is_authenticated:
-            return False
+            return Result.fail("Document not open or not authenticated", "Authenticate with password first", "NOT_AUTHENTICATED")
         try:
             # Saving without encryption parameters strips the password
             doc.doc.save(output_path, encryption=getattr(fitz, "PDF_ENCRYPT_NONE", 0), garbage=3, deflate=True)
-            return True
+            return Result.ok(True)
         except Exception as e:
-            print(f"Error removing password: {e}")
-            return False
+            logger = __import__('logging').getLogger(__name__)
+            logger.exception("Error removing password")
+            return Result.from_exception(e, "Failed to remove password", "REMOVE_PASSWORD_FAILED")

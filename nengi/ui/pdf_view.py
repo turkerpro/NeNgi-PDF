@@ -20,6 +20,7 @@ from PyQt6.QtGui import (
 import fitz
 
 from nengi.core.pdf_document import PDFDocument
+from nengi.core.result import Result
 from nengi.core.image_roundtrip import ImageRoundtripHandler
 from nengi.core.annotations import AnnotationManager
 from nengi.ui.text_editor_dialog import TextEditorDialog
@@ -88,9 +89,18 @@ class PageRenderWidget(QWidget):
     def _ensure_text_extracted(self):
         """Extracts text words and blocks on-demand only when user interacts with text."""
         if not self._text_extracted and self.doc and self.doc.is_open:
-            self.words = self.doc.get_page_text_words(self.page_idx)
-            self.blocks = self.doc.get_page_blocks(self.page_idx)
+            words_result = self.doc.get_page_text_words(self.page_idx)
+            blocks_result = self.doc.get_page_blocks(self.page_idx)
+            self.words = words_result.unwrap_or([])
+            self.blocks = blocks_result.unwrap_or([])
             self._text_extracted = True
+
+    def _render_pixmap(self) -> QPixmap:
+        """Render page to pixmap, handling Result wrapper."""
+        result = self.doc.render_page_pixmap(self.page_idx, self.zoom)
+        if result:
+            return result.value
+        return QPixmap()
 
     def set_zoom(self, zoom: float):
         if abs(self.zoom - zoom) > 0.01:
@@ -113,7 +123,7 @@ class PageRenderWidget(QWidget):
         """Pre-renders page pixmap at current zoom without blocking on heavy text parsing."""
         if not self.doc or not self.doc.is_open or self.page_idx >= self.doc.page_count:
             return
-        self.cached_pixmap = self.doc.render_page_pixmap(self.page_idx, self.zoom)
+        self.cached_pixmap = self._render_pixmap()
         self._text_extracted = False
         if self.cached_pixmap and self.size() != self.cached_pixmap.size():
             self.setFixedSize(self.cached_pixmap.size())

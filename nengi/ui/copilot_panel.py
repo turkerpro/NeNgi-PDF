@@ -10,7 +10,7 @@ from typing import List, Tuple
 from typing import Optional
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QScrollArea, QFrame
 )
 
@@ -21,7 +21,7 @@ class CopilotPanel(QWidget):
     """NextGen right sidebar for document utilities and quick tools."""
 
     closed = pyqtSignal()
-    action_triggered = pyqtSignal(str) # "summarize", "ocr", "diff", "merge", "protect"
+    action_triggered = pyqtSignal(str)
     query_submitted = pyqtSignal(str)
 
     def __init__(self, parent: Optional[QWidget] = None):
@@ -64,26 +64,12 @@ class CopilotPanel(QWidget):
 
         layout.addLayout(header_layout)
 
-        # 2. Suggested Section Header
-        lbl_suggested = QLabel("HIZLI İŞLEMLER")
-        lbl_suggested.setStyleSheet("font-size: 10.5px; font-weight: 600; color: #6E7681; letter-spacing: 0.8px;")
-        layout.addWidget(lbl_suggested)
+        # 2. Action Cards - Only: Search, Recent, Contextual Suggestions
+        self._add_action_card(layout, "search", "Arama", "search")
+        self._add_action_card(layout, "recent", "Son Kullanılanlar", "recent")
+        self._add_action_card(layout, "suggest", "Bağlamsal Öneri", "suggest")
 
-        # 3. Action Cards with SVG Icons
-        self._add_action_card(layout, "documents", "Sayfadaki Metinleri Kopyala", "summarize")
-        self._add_action_card(layout, "search", "Taranmış Metinleri Tanı (OCR)", "ocr")
-        self._add_action_card(layout, "diff", "Açık Sekmelerle Karşılaştır (DIFF)", "diff")
-        self._add_action_card(layout, "pages", "Birden Çok Dosyayı Birleştir", "merge")
-        self._add_action_card(layout, "settings", "Belgeyi Parola ile Şifrele", "protect")
-        self._add_action_card(layout, "text_add", "Üstbilgi & Altbilgi Ekle", "header_footer")
-        self._add_action_card(layout, "stamp", "Filigran Ekle", "watermark")
-        self._add_action_card(layout, "rect", "Sayfaları Kırp", "crop")
-        self._add_action_card(layout, "pages", "Belgeyi Böl", "split")
-        self._add_action_card(layout, "save", "Dışa Aktar", "export")
-        self._add_action_card(layout, "settings", "PDF'i Optimize Et", "optimize")
-
-
-        # 4. Message & Activity Area (Scrollable)
+        # 3. Message & Activity Area (Scrollable)
         self.msg_area = QScrollArea()
         self.msg_area.setWidgetResizable(True)
         self.msg_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
@@ -97,7 +83,7 @@ class CopilotPanel(QWidget):
         self.msg_area.setWidget(msg_container)
         layout.addWidget(self.msg_area, 1)
 
-        # 5. Bottom Interactive Input
+        # 4. Bottom Interactive Input
         self.input_frame = QFrame()
         self.input_frame.setStyleSheet(
             "QFrame { background-color: #24272D; border: 1px solid #353942; border-radius: 20px; padding: 2px 6px; }"
