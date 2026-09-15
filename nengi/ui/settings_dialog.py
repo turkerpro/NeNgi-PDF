@@ -27,7 +27,7 @@ class SettingsDialog(QDialog):
 
     def __init__(self, current_is_dark: bool = True, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("⚙️ Seçenekler ve Ayarlar - NeNgi PDF")
+        self.setWindowTitle("Seçenekler ve Ayarlar - NeNgi PDF")
         self.resize(560, 420)
         self.current_is_dark = current_is_dark
 
@@ -44,7 +44,7 @@ class SettingsDialog(QDialog):
         lay_gen.setSpacing(14)
 
         # Default App Card
-        grp_default = QGroupBox("📌 Varsayılan PDF Görüntüleyicisi (Windows)")
+        grp_default = QGroupBox("Varsayılan PDF Görüntüleyicisi (Windows)")
         lay_def = QVBoxLayout(grp_default)
         lay_def.setSpacing(8)
 
@@ -56,12 +56,12 @@ class SettingsDialog(QDialog):
         lay_def.addWidget(lbl_def_info)
 
         h_btns = QHBoxLayout()
-        btn_set_default = QPushButton("🚀 NeNgi PDF'i Varsayılan Yap")
+        btn_set_default = QPushButton("NeNgi PDF'i Varsayılan Yap")
         btn_set_default.setObjectName("accentButton")
         btn_set_default.clicked.connect(self._on_set_default)
         h_btns.addWidget(btn_set_default)
 
-        btn_open_win_settings = QPushButton("⚙️ Windows Ayarlarını Aç")
+        btn_open_win_settings = QPushButton("Windows Ayarlarını Aç")
         btn_open_win_settings.clicked.connect(self._on_open_win_settings)
         h_btns.addWidget(btn_open_win_settings)
         lay_def.addLayout(h_btns)
@@ -69,7 +69,7 @@ class SettingsDialog(QDialog):
         lay_gen.addWidget(grp_default)
 
         # Virtual Printer Card
-        grp_printer = QGroupBox("🖨️ NeNgi PDF Sanal Yazıcısı (Print to NeNgi PDF)")
+        grp_printer = QGroupBox("NeNgi PDF Sanal Yazıcısı (Print to NeNgi PDF)")
         lay_ptr = QVBoxLayout(grp_printer)
         lay_ptr.setSpacing(8)
 
@@ -81,12 +81,12 @@ class SettingsDialog(QDialog):
         lay_ptr.addWidget(lbl_ptr_info)
 
         h_ptr_btns = QHBoxLayout()
-        self.btn_install_printer = QPushButton("🖨️ NeNgi PDF Yazıcısını Kur / Aktifleştir")
+        self.btn_install_printer = QPushButton("NeNgi PDF Yazıcısını Kur / Aktifleştir")
         self.btn_install_printer.setObjectName("accentButton")
         self.btn_install_printer.clicked.connect(self._on_install_printer)
         h_ptr_btns.addWidget(self.btn_install_printer)
 
-        self.btn_uninstall_printer = QPushButton("🗑️ Yazıcıyı Kaldır")
+        self.btn_uninstall_printer = QPushButton("Yazıcıyı Kaldır")
         self.btn_uninstall_printer.clicked.connect(self._on_uninstall_printer)
         h_ptr_btns.addWidget(self.btn_uninstall_printer)
         lay_ptr.addLayout(h_ptr_btns)
@@ -94,7 +94,7 @@ class SettingsDialog(QDialog):
         lay_gen.addWidget(grp_printer)
 
         # Single Instance Card
-        grp_instance = QGroupBox("📑 Sekme ve Açılış Davranışı")
+        grp_instance = QGroupBox("Sekme ve Açılış Davranışı")
         lay_inst = QVBoxLayout(grp_instance)
         self.chk_single_instance = QCheckBox("E-postalardan ve klasörlerden açılan tüm PDF'leri aynı pencerede sekmelerde topla")
         self.chk_single_instance.setChecked(True)
@@ -113,7 +113,7 @@ class SettingsDialog(QDialog):
         lay_app = QVBoxLayout(tab_appearance)
         lay_app.setSpacing(14)
 
-        grp_theme = QGroupBox("🎨 Arayüz Teması")
+        grp_theme = QGroupBox("Arayüz Teması")
         lay_thm = QVBoxLayout(grp_theme)
 
         h_thm = QHBoxLayout()
@@ -126,7 +126,7 @@ class SettingsDialog(QDialog):
         lay_thm.addLayout(h_thm)
         lay_app.addWidget(grp_theme)
 
-        grp_zoom = QGroupBox("🔍 Varsayılan Yakınlaştırma (Zoom)")
+        grp_zoom = QGroupBox("Varsayılan Yakınlaştırma (Zoom)")
         lay_zm = QVBoxLayout(grp_zoom)
         h_zm = QHBoxLayout()
         h_zm.addWidget(QLabel("Belge Açılış Yakınlaştırması:"))
@@ -146,11 +146,11 @@ class SettingsDialog(QDialog):
         lay_abt.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay_abt.setSpacing(10)
 
-        lbl_app_title = QLabel("📑 NeNgi PDF")
+        lbl_app_title = QLabel("NeNgi PDF")
         lbl_app_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #0078D4;")
         lay_abt.addWidget(lbl_app_title)
 
-        lbl_version = QLabel("Sürüm: 2.0.4-beta")
+        lbl_version = QLabel("Sürüm: 2.0.5-beta")
         lbl_version.setStyleSheet("color: #AAAAAA;")
         lay_abt.addWidget(lbl_version)
 
@@ -170,14 +170,14 @@ class SettingsDialog(QDialog):
         lbl_github.setStyleSheet("color: #0078D4; font-size: 11px;")
         lay_abt.addWidget(lbl_github)
 
-        self.btn_check_update = QPushButton("🔄 Güncellemeleri Denetle")
+        self.btn_check_update = QPushButton("Güncellemeleri Denetle")
         self.btn_check_update.setObjectName("accentButton")
         self.btn_check_update.clicked.connect(self._on_check_updates)
         lay_abt.addWidget(self.btn_check_update)
 
         # Güncelleme kanalı seçici (Beta/Stabil)
         from nengi.core.updater import get_update_channel
-        grp_channel = QGroupBox("📡 Güncelleme Kanalı")
+        grp_channel = QGroupBox("Güncelleme Kanalı")
         lay_ch = QHBoxLayout(grp_channel)
         self.radio_beta = QRadioButton("Beta (erken erişim)")
         self.radio_stabil = QRadioButton("Stabil (kararlı)")

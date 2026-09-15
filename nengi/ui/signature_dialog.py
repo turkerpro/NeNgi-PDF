@@ -108,14 +108,14 @@ class SignatureDialog(QDialog):
         btn_clear = QPushButton("İmzayı Temizle")
         btn_clear.clicked.connect(self.canvas.clear)
         lay_draw.addWidget(btn_clear, alignment=Qt.AlignmentFlag.AlignRight)
-        self.tabs.addTab(tab_draw, "✍️ İmza Çiz")
+        self.tabs.addTab(tab_draw, "İmza Çiz")
 
         # Tab 2: Upload Image
         tab_upload = QWidget()
         lay_upload = QVBoxLayout(tab_upload)
         lay_upload.addWidget(QLabel("Bilgisayarınızdan imza resmi (PNG/JPG) seçin:"))
         
-        btn_browse = QPushButton("📁 İmza Resmi Seç...")
+        btn_browse = QPushButton("İmza Resmi Seç...")
         btn_browse.clicked.connect(self._browse_signature_file)
         lay_upload.addWidget(btn_browse)
 
@@ -134,7 +134,7 @@ class SignatureDialog(QDialog):
         self.lbl_status.setStyleSheet("font-size: 11px;")
         lay_upload.addWidget(self.lbl_status)
 
-        self.tabs.addTab(tab_upload, "🖼️ Resimden Yükle")
+        self.tabs.addTab(tab_upload, "Resimden Yükle")
 
         layout.addWidget(self.tabs)
 

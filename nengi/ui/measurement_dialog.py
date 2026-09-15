@@ -18,7 +18,7 @@ class MeasurementScaleDialog(QDialog):
 
     def __init__(self, current_scale: Optional[ScaleRatio] = None, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("📐 Ölçüm Ölçeği & Birim Ayarları - NeNgi PDF")
+        self.setWindowTitle("Ölçüm Ölçeği & Birim Ayarları - NeNgi PDF")
         self.resize(380, 240)
         self.scale = current_scale or ScaleRatio(1.0, "cm", 1.0, "m")
         self._init_ui()

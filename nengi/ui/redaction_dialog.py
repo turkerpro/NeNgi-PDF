@@ -21,7 +21,7 @@ class SearchAndRedactDialog(QDialog):
 
     def __init__(self, doc: PDFDocument, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("🛡️ Arama ve Kalıcı Redaksiyon (Kişisel Veri Temizleme)")
+        self.setWindowTitle("Arama ve Kalıcı Redaksiyon (Kişisel Veri Temizleme)")
         self.resize(560, 480)
         self.doc = doc
         self.found_matches: List[Dict[str, Any]] = []
@@ -47,7 +47,7 @@ class SearchAndRedactDialog(QDialog):
         lay_s.addWidget(self.rb_custom)
         lay_s.addWidget(self.txt_custom)
 
-        btn_search = QPushButton("🔍 Belgede Ara")
+        btn_search = QPushButton("Belgede Ara")
         btn_search.clicked.connect(self._do_search)
         lay_s.addWidget(btn_search)
 
@@ -77,7 +77,7 @@ class SearchAndRedactDialog(QDialog):
         btn_mark.clicked.connect(self._mark_redactions)
         btn_layout.addWidget(btn_mark)
 
-        btn_apply = QPushButton("🔥 Kalıcı Olarak Sil ve Uygula")
+        btn_apply = QPushButton("Kalıcı Olarak Sil ve Uygula")
         btn_apply.setObjectName("accentButton")
         btn_apply.setStyleSheet("background-color: #D83B01; color: white; font-weight: bold;")
         btn_apply.clicked.connect(self._apply_permanent)
@@ -142,7 +142,7 @@ class SanitizeDocumentDialog(QDialog):
 
     def __init__(self, doc: PDFDocument, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("🧹 Belgeyi Temizle (Gizli Bilgileri Kaldır)")
+        self.setWindowTitle("Belgeyi Temizle (Gizli Bilgileri Kaldır)")
         self.resize(440, 320)
         self.doc = doc
         self._init_ui()
@@ -186,7 +186,7 @@ class SanitizeDocumentDialog(QDialog):
         btn_cancel.clicked.connect(self.reject)
         btn_layout.addWidget(btn_cancel)
 
-        btn_sanitize = QPushButton("🧹 Belgeyi Temizle")
+        btn_sanitize = QPushButton("Belgeyi Temizle")
         btn_sanitize.setObjectName("accentButton")
         btn_sanitize.clicked.connect(self._do_sanitize)
         btn_layout.addWidget(btn_sanitize)

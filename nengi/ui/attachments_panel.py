@@ -38,7 +38,7 @@ class AttachmentsPanel(QWidget):
         h_head = QHBoxLayout()
         lbl_icon = QLabel()
         lbl_icon.setPixmap(get_svg_icon("documents", "#D0D4DC", 18).pixmap(18, 18))
-        lbl_title = QLabel("📎 Ekli Dosyalar")
+        lbl_title = QLabel("Ekli Dosyalar")
         lbl_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         h_head.addWidget(lbl_icon)
         h_head.addWidget(lbl_title)
@@ -52,15 +52,15 @@ class AttachmentsPanel(QWidget):
 
         # Buttons
         h_btns = QHBoxLayout()
-        self.btn_add = QPushButton("➕ Ekle")
+        self.btn_add = QPushButton("Ekle")
         self.btn_add.clicked.connect(self._add_file)
         h_btns.addWidget(self.btn_add)
 
-        self.btn_extract = QPushButton("💾 Çıkart")
+        self.btn_extract = QPushButton("Çıkart")
         self.btn_extract.clicked.connect(self._extract_selected)
         h_btns.addWidget(self.btn_extract)
 
-        self.btn_del = QPushButton("🗑️ Sil")
+        self.btn_del = QPushButton("Sil")
         self.btn_del.clicked.connect(self._delete_selected)
         h_btns.addWidget(self.btn_del)
 
@@ -80,7 +80,7 @@ class AttachmentsPanel(QWidget):
             name = att["name"]
             size_kb = att["size"] / 1024.0
             size_str = f"{size_kb:.1f} KB" if size_kb >= 1 else f"{att['size']} B"
-            item = QListWidgetItem(f"📄 {name} ({size_str})")
+            item = QListWidgetItem(f"{name} ({size_str})")
             item.setData(Qt.ItemDataRole.UserRole, name)
             self.list_widget.addItem(item)
 

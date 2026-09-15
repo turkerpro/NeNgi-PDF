@@ -45,6 +45,9 @@ class CopilotPanel(QWidget):
         tokens = _get_tokens(True)
         self.is_dark = True
         self._action_buttons: List[Tuple[QPushButton, str]] = []
+        self._action_order: List[str] = []
+        self._recent_keys: List[str] = []
+        self._action_by_key: dict = {}
 
         # 1. Header: Document Tools title and close button
         header_layout = QHBoxLayout()
@@ -52,7 +55,7 @@ class CopilotPanel(QWidget):
         lbl_icon.setPixmap(get_svg_icon("tools", tokens.colors.text_accent, 20).pixmap(20, 20))
         header_layout.addWidget(lbl_icon)
 
-        self.lbl_title = QLabel("Belge Araçları")
+        self.lbl_title = QLabel("Araçlar")
         self.lbl_title.setStyleSheet(f"font-size: 15px; font-weight: bold; color: {tokens.colors.text_primary};")
         header_layout.addWidget(self.lbl_title)
         header_layout.addStretch()
@@ -72,9 +75,13 @@ class CopilotPanel(QWidget):
         layout.addLayout(header_layout)
 
         # 2. Action Cards - Only: Search, Recent, Contextual Suggestions
-        self._add_action_card(layout, "search", "Arama", "search")
-        self._add_action_card(layout, "recent", "Son Kullanılanlar", "recent")
-        self._add_action_card(layout, "suggest", "Bağlamsal Öneri", "suggest")
+        self._actions_layout = QVBoxLayout()
+        self._actions_layout.setSpacing(6)
+        self._actions_layout.setContentsMargins(0, 0, 0, 0)
+        layout.addLayout(self._actions_layout)
+        self._add_action_card(self._actions_layout, "search", "Arama", "search")
+        self._add_action_card(self._actions_layout, "recent", "Son Kullanılanlar", "recent")
+        self._add_action_card(self._actions_layout, "suggest", "Bağlamsal Öneri", "suggest")
 
         # 3. Message & Activity Area (Scrollable)
         self.msg_area = QScrollArea()
@@ -136,9 +143,33 @@ class CopilotPanel(QWidget):
             f"  background-color: {tokens.colors.bg_hover}; border-color: {tokens.colors.accent_primary}; color: {tokens.colors.text_inverse};"
             f"}}"
         )
-        btn.clicked.connect(lambda: self.action_triggered.emit(action_key))
+        btn.clicked.connect(lambda: self._on_action_clicked(action_key))
         self._action_buttons.append((btn, icon_name))
+        self._action_order.append(action_key)
+        self._action_by_key[action_key] = btn
         layout.addWidget(btn)
+
+    def _on_action_clicked(self, action_key: str):
+        self.action_triggered.emit(action_key)
+        self._record_recent(action_key)
+
+    def _record_recent(self, action_key: str):
+        """Move last used action to top; keep only 4 most recent on top."""
+        if action_key in self._recent_keys:
+            self._recent_keys.remove(action_key)
+        self._recent_keys.insert(0, action_key)
+        self._recent_keys = self._recent_keys[:4]
+        self._reorder_actions()
+
+    def _reorder_actions(self):
+        if not hasattr(self, "_actions_layout"):
+            return
+        ordered = self._recent_keys + [k for k in self._action_order if k not in self._recent_keys]
+        for key in ordered:
+            btn = self._action_by_key.get(key)
+            if btn is not None:
+                self._actions_layout.removeWidget(btn)
+                self._actions_layout.addWidget(btn)
 
     def update_theme(self, is_dark: bool):
         """Updates icons, borders, and backgrounds dynamically when theme changes."""

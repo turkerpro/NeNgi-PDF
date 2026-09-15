@@ -154,19 +154,19 @@ class DraggableStampWidget(QWidget):
         bar_layout.setContentsMargins(4, 1, 4, 1)
         bar_layout.setSpacing(4)
 
-        lbl_hint = QLabel("✥ Taşı & Boyutlandır")
+        lbl_hint = QLabel("Taşı & Boyutlandır")
         lbl_hint.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         bar_layout.addWidget(lbl_hint)
         bar_layout.addStretch()
 
-        btn_apply = QPushButton("✅")
+        btn_apply = QPushButton("Uygula")
         btn_apply.setFixedSize(20, 20)
         btn_apply.setToolTip("İmzayı Buraya Sabitle (PDF'e Ekle)")
         btn_apply.setStyleSheet(f"background-color: {tokens.colors.accent_primary}; color: white; border-radius: {tokens.radius.xs}px; font-size: 10px;")
         btn_apply.clicked.connect(self.commit_to_pdf)
         bar_layout.addWidget(btn_apply)
 
-        btn_delete = QPushButton("🗑️")
+        btn_delete = QPushButton("Sil")
         btn_delete.setFixedSize(20, 20)
         btn_delete.setToolTip("İmzayı Kaldır")
         btn_delete.setStyleSheet(f"background-color: {tokens.colors.error_bg}; color: {tokens.colors.error_text}; border-radius: {tokens.radius.xs}px; font-size: 10px;")

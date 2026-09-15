@@ -21,7 +21,7 @@ class AccessibilityDialog(QDialog):
 
     def __init__(self, doc: PDFDocument, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("♿ Erişilebilirlik Tam Denetimi (PDF/UA & WCAG) - NeNgi PDF")
+        self.setWindowTitle("Erişilebilirlik Tam Denetimi (PDF/UA & WCAG) - NeNgi PDF")
         self.resize(650, 480)
         self.doc = doc
         self._init_ui()
@@ -41,7 +41,7 @@ class AccessibilityDialog(QDialog):
         layout.addWidget(self.tree)
 
         btn_layout = QHBoxLayout()
-        btn_recheck = QPushButton("🔄 Yeniden Denetle")
+        btn_recheck = QPushButton("Yeniden Denetle")
         btn_recheck.clicked.connect(self._run_audit)
         btn_layout.addWidget(btn_recheck)
 
@@ -76,10 +76,10 @@ class AccessibilityDialog(QDialog):
             categories[cat].append(r)
 
         status_symbols = {
-            "passed": ("✅ Başarılı", "#107C41"),
-            "failed": ("❌ Başarısız", "#A80000"),
-            "warning": ("⚠️ Uyarı", "#D83B01"),
-            "manual": ("ℹ️ Manuel Kontrol", "#0078D4"),
+            "passed": ("Başarılı", "#107C41"),
+            "failed": ("Başarısız", "#A80000"),
+            "warning": ("Uyarı", "#D83B01"),
+            "manual": ("Manuel Kontrol", "#0078D4"),
         }
 
         for cat_name, items in categories.items():

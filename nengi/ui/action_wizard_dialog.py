@@ -21,7 +21,7 @@ class ActionWizardDialog(QDialog):
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("⚡ Eylem Sihirbazı (Toplu Belge İşleme) - NeNgi PDF")
+        self.setWindowTitle("Eylem Sihirbazı (Toplu Belge İşleme) - NeNgi PDF")
         self.resize(600, 520)
         self.file_paths: List[str] = []
         self._init_ui()
@@ -37,11 +37,11 @@ class ActionWizardDialog(QDialog):
         lay_f.addWidget(self.list_files)
 
         h_fbtns = QHBoxLayout()
-        btn_add_files = QPushButton("➕ Dosya(lar) Ekle...")
+        btn_add_files = QPushButton("Dosya(lar) Ekle...")
         btn_add_files.clicked.connect(self._add_files)
         h_fbtns.addWidget(btn_add_files)
 
-        btn_add_dir = QPushButton("📁 Klasör Ekle...")
+        btn_add_dir = QPushButton("Klasör Ekle...")
         btn_add_dir.clicked.connect(self._add_folder)
         h_fbtns.addWidget(btn_add_dir)
 
@@ -56,18 +56,18 @@ class ActionWizardDialog(QDialog):
         grp_steps = QGroupBox("Uygulanacak Eylemler (Sırayla)")
         lay_s = QVBoxLayout(grp_steps)
 
-        self.chk_compress = QCheckBox("🗜️ PDF Boyutunu Küçült (Optimize Et)")
+        self.chk_compress = QCheckBox("PDF Boyutunu Küçült (Optimize Et)")
         self.chk_compress.setChecked(True)
         lay_s.addWidget(self.chk_compress)
 
-        self.chk_watermark = QCheckBox("💧 Filigran Ekle:")
+        self.chk_watermark = QCheckBox("Filigran Ekle:")
         self.txt_watermark = QLineEdit("GİZLİDİR")
         h_wm = QHBoxLayout()
         h_wm.addWidget(self.chk_watermark)
         h_wm.addWidget(self.txt_watermark)
         lay_s.addLayout(h_wm)
 
-        self.chk_encrypt = QCheckBox("🔒 Parola ile Şifrele:")
+        self.chk_encrypt = QCheckBox("Parola ile Şifrele:")
         self.txt_password = QLineEdit()
         self.txt_password.setPlaceholderText("Şifreleme parolası girin...")
         self.txt_password.setEchoMode(QLineEdit.EchoMode.Password)
@@ -102,7 +102,7 @@ class ActionWizardDialog(QDialog):
         btn_cancel.clicked.connect(self.reject)
         btn_layout.addWidget(btn_cancel)
 
-        btn_run = QPushButton("⚡ Toplu İşlemi Başlat")
+        btn_run = QPushButton("Toplu İşlemi Başlat")
         btn_run.setObjectName("accentButton")
         btn_run.clicked.connect(self._run_batch)
         btn_layout.addWidget(btn_run)

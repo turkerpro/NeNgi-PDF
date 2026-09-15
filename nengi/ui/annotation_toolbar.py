@@ -14,6 +14,19 @@ def _get_tokens(is_dark: bool = True):
     return get_dark_tokens() if is_dark else get_light_tokens()
 
 
+# Contextual categories: each maps to at most ~8 tools.
+# text: highlight/underline/strike/note, draw: line/arrow/rect/oval/ink,
+# shape: polygon/cloud/stamp, note: sticky/text/stamp, all: compact 8.
+CATEGORY_TOOLS = {
+    "text": ["highlight", "underline", "strikethrough", "sticky_note"],
+    "draw": ["line", "arrow", "rect", "oval", "draw"],
+    "shape": ["polygon", "cloud", "stamp"],
+    "note": ["sticky_note", "text", "stamp"],
+    "all": ["highlight", "underline", "line", "rect",
+            "draw", "sticky_note", "text", "stamp"],
+}
+
+
 class CollapsibleAnnotationToolbar(QFrame):
     """Expanded annotation panel - hidden by default, toggled via header chevron."""
 
@@ -21,16 +34,22 @@ class CollapsibleAnnotationToolbar(QFrame):
     color_changed = pyqtSignal(tuple)
     property_changed = pyqtSignal(str, object)
 
-    def __init__(self, parent=None, is_dark=False):
+    def __init__(self, parent=None, is_dark=False, category: str = "all"):
         super().__init__(parent)
         self.is_dark = is_dark
         self.current_color = (1, 1, 0)
         self.current_opacity = 0.5
         self.current_width = 1.5
         self._expanded = False
+        self._tool_buttons: dict = {}
+        self._section_labels: list = []
+        self._separators: list = []
+        self._section_tools: dict = {}
+        self._current_category = "all"
 
         self._setup_ui()
         self.update_theme(is_dark)
+        self.show_category(category)
         self.setVisible(False)
 
     def _setup_ui(self):
@@ -80,15 +99,16 @@ class CollapsibleAnnotationToolbar(QFrame):
         self.tool_group.setExclusive(True)
 
         # Metin İşaretleme
-        tools_layout.addWidget(self._create_section_label("Metin"))
+        self._begin_section(tools_layout, "Metin")
         self._add_tool_button(tools_layout, "highlight", "Vurgula (U)")
         self._add_tool_button(tools_layout, "underline", "Altı Çizili")
         self._add_tool_button(tools_layout, "strikethrough", "Üstü Çizili")
+        self._end_section(tools_layout, "Metin")
 
         tools_layout.addWidget(self._create_separator())
 
         # Çizim
-        tools_layout.addWidget(self._create_section_label("Çizim"))
+        self._begin_section(tools_layout, "Çizim")
         self._add_tool_button(tools_layout, "line", "Çizgi (Shift+L)")
         self._add_tool_button(tools_layout, "arrow", "Ok")
         self._add_tool_button(tools_layout, "rect", "Dikdörtgen")
@@ -96,19 +116,22 @@ class CollapsibleAnnotationToolbar(QFrame):
         self._add_tool_button(tools_layout, "polygon", "Çokgen")
         self._add_tool_button(tools_layout, "cloud", "Bulut")
         self._add_tool_button(tools_layout, "draw", "Serbest Çizim")
+        self._end_section(tools_layout, "Çizim")
 
         tools_layout.addWidget(self._create_separator())
 
         # Notlar
-        tools_layout.addWidget(self._create_section_label("Notlar"))
+        self._begin_section(tools_layout, "Notlar")
         self._add_tool_button(tools_layout, "sticky_note", "Not Ekle (S)")
         self._add_tool_button(tools_layout, "text", "Metin Kutusu")
+        self._end_section(tools_layout, "Notlar")
 
         tools_layout.addWidget(self._create_separator())
 
         # Damgalar
-        tools_layout.addWidget(self._create_section_label("Damgalar"))
+        self._begin_section(tools_layout, "Damgalar")
         self._create_stamp_button(tools_layout)
+        self._end_section(tools_layout, "Damgalar")
 
         tools_layout.addStretch()
         content_layout.addLayout(tools_layout)
@@ -157,6 +180,19 @@ class CollapsibleAnnotationToolbar(QFrame):
         color = tokens.colors.text_primary
         self.btn_chevron.setIcon(get_svg_icon(icon, color, 16))
 
+    def _begin_section(self, layout, name: str):
+        lbl = self._create_section_label(name)
+        layout.addWidget(lbl)
+        self._section_labels.append(lbl)
+        self._section_tools[id(lbl)] = []
+        self._active_section = name
+        self._active_section_tools = self._section_tools[id(lbl)]
+        self._active_section_label = lbl
+
+    def _end_section(self, layout, name: str):
+        self._active_section = ""
+        self._active_section_tools = []
+
     def _create_section_label(self, text):
         lbl = QLabel(text)
         tokens = _get_tokens(self.is_dark)
@@ -169,7 +205,30 @@ class CollapsibleAnnotationToolbar(QFrame):
         line.setFrameShadow(QFrame.Shadow.Sunken)
         tokens = _get_tokens(self.is_dark)
         line.setStyleSheet(f"color: {tokens.colors.border_subtle}; background-color: {tokens.colors.border_subtle};")
+        self._separators.append(line)
         return line
+
+    def show_category(self, category: str = "all"):
+        """Show only tools for the given contextual category.
+
+        Categories: "text" (highlight/underline/strike/note),
+        "draw" (line/arrow/rect/oval/ink), "shape" (polygon/cloud/stamp),
+        "note" (sticky/text/stamp), "all" (compact 8).
+        """
+        cat = (category or "all").lower()
+        if cat not in CATEGORY_TOOLS:
+            cat = "all"
+        self._current_category = cat
+        visible = set(CATEGORY_TOOLS[cat])
+        for name, btn in self._tool_buttons.items():
+            btn.setVisible(name in visible)
+        # Section labels: visible if any of their tools visible.
+        for lbl in self._section_labels:
+            tools = self._section_tools.get(id(lbl), [])
+            lbl.setVisible(any(t in visible for t in tools))
+        # Separators: keep visible only in "all", else hide to stay compact.
+        for sep in self._separators:
+            sep.setVisible(cat == "all")
 
     def _add_tool_button(self, layout, name, tooltip):
         btn = QPushButton()
@@ -185,11 +244,15 @@ class CollapsibleAnnotationToolbar(QFrame):
         self.tool_group.addButton(btn)
         btn.clicked.connect(lambda checked, n=name: self._tool_clicked(n))
         layout.addWidget(btn)
+        self._tool_buttons[name] = btn
+        if hasattr(self, "_active_section_tools"):
+            self._active_section_tools.append(name)
         return btn
 
     def _create_stamp_button(self, layout):
         btn = QPushButton()
         btn.setToolTip("Damga Ekle")
+        btn.setProperty("tool_name", "stamp")
         btn.setFixedSize(32, 32)
         tokens = _get_tokens(self.is_dark)
         color = tokens.colors.text_primary
@@ -204,6 +267,10 @@ class CollapsibleAnnotationToolbar(QFrame):
 
         btn.setMenu(menu)
         layout.addWidget(btn)
+        self._tool_buttons["stamp"] = btn
+        self._stamp_button = btn
+        if hasattr(self, "_active_section_tools"):
+            self._active_section_tools.append("stamp")
 
     def _tool_clicked(self, name):
         self.tool_selected.emit(name)
@@ -284,6 +351,9 @@ class CollapsibleAnnotationToolbar(QFrame):
             name = btn.property("tool_name")
             if name:
                 btn.setIcon(get_svg_icon(name, color=text))
+
+        if hasattr(self, "_stamp_button"):
+            self._stamp_button.setIcon(get_svg_icon("stamp", color=text))
 
         # Update header
         title_color = text

@@ -46,37 +46,37 @@ class PageManagerDialog(QDialog):
         # Right: Actions Panel
         right_panel = QVBoxLayout()
         right_panel.setSpacing(10)
-        right_panel.addWidget(QLabel("⚙️ Sayfa İşlemleri:"))
+        right_panel.addWidget(QLabel("Sayfa İşlemleri:"))
 
-        btn_rot_cw = QPushButton("🔄 90° Sağa Döndür")
+        btn_rot_cw = QPushButton("90° Sağa Döndür")
         btn_rot_cw.clicked.connect(lambda: self._rotate_selected(90))
         right_panel.addWidget(btn_rot_cw)
 
-        btn_rot_ccw = QPushButton("↺ 90° Sola Döndür")
+        btn_rot_ccw = QPushButton("90° Sola Döndür")
         btn_rot_ccw.clicked.connect(lambda: self._rotate_selected(-90))
         right_panel.addWidget(btn_rot_ccw)
 
-        btn_move_up = QPushButton("▲ Sayfayı Başa / Yukarı Taşı")
+        btn_move_up = QPushButton("Sayfayı Başa / Yukarı Taşı")
         btn_move_up.clicked.connect(self._move_up)
         right_panel.addWidget(btn_move_up)
 
-        btn_move_down = QPushButton("▼ Sayfayı Sona / Aşağı Taşı")
+        btn_move_down = QPushButton("Sayfayı Sona / Aşağı Taşı")
         btn_move_down.clicked.connect(self._move_down)
         right_panel.addWidget(btn_move_down)
 
         right_panel.addSpacing(15)
 
-        btn_add_blank = QPushButton("➕ Boş Sayfa Ekle")
+        btn_add_blank = QPushButton("Boş Sayfa Ekle")
         btn_add_blank.clicked.connect(self._add_blank)
         right_panel.addWidget(btn_add_blank)
 
-        btn_add_pdf = QPushButton("📑 Başka PDF'ten Sayfa Ekle...")
+        btn_add_pdf = QPushButton("Başka PDF'ten Sayfa Ekle...")
         btn_add_pdf.clicked.connect(self._insert_external_pdf)
         right_panel.addWidget(btn_add_pdf)
 
         right_panel.addSpacing(15)
 
-        btn_delete = QPushButton("🗑️ Seçili Sayfaları Sil")
+        btn_delete = QPushButton("Seçili Sayfaları Sil")
         btn_delete.setObjectName("dangerButton")
         btn_delete.clicked.connect(self._delete_selected)
         right_panel.addWidget(btn_delete)

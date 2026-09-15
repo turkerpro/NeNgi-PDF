@@ -89,8 +89,8 @@ def open_windows_default_apps_settings() -> Result[None]:
 def register_shell_context_menus() -> Result[bool]:
     r"""
     Registers Windows Explorer right-click context menus:
-    - '📑 NeNgi PDF ile Birleştir'
-    - '📄 NeNgi PDF ile PDF'e Dönüştür'
+    - 'NeNgi PDF ile Birleştir'
+    - "NeNgi PDF ile PDF'e Dönüştür"
     """
     if not is_windows():
         return Result.fail("Not on Windows", "This feature only works on Windows", "NOT_WINDOWS")

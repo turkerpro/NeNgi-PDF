@@ -30,7 +30,7 @@ class BookmarksPanel(QWidget):
         header_layout = QHBoxLayout()
         icon_lbl = QLabel()
         icon_lbl.setPixmap(get_svg_icon("bookmark").pixmap(20, 20))
-        title_lbl = QLabel("📑 Yer İmleri")
+        title_lbl = QLabel("Yer İmleri")
         title_lbl.setStyleSheet("font-weight: bold; font-size: 14px;")
         
         header_layout.addWidget(icon_lbl)

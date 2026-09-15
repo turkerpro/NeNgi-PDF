@@ -22,7 +22,7 @@ class OCRCorrectionDialog(QDialog):
 
     def __init__(self, doc: PDFDocument, current_page: int = 0, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("🔍 OCR Hata Düzeltme & Şüpheli Kelime İnceleme - NeNgi PDF")
+        self.setWindowTitle("OCR Hata Düzeltme & Şüpheli Kelime İnceleme - NeNgi PDF")
         self.resize(520, 360)
         self.doc = doc
         self.current_page = current_page
@@ -55,16 +55,16 @@ class OCRCorrectionDialog(QDialog):
         # Navigation Buttons
         btn_nav = QHBoxLayout()
 
-        self.btn_prev = QPushButton("◀ Önceki Kelime")
+        self.btn_prev = QPushButton("Önceki Kelime")
         self.btn_prev.clicked.connect(self._prev_word)
         btn_nav.addWidget(self.btn_prev)
 
-        self.btn_accept = QPushButton("✅ Kabul Et & İlerle")
+        self.btn_accept = QPushButton("Kabul Et & İlerle")
         self.btn_accept.setObjectName("accentButton")
         self.btn_accept.clicked.connect(self._accept_and_next)
         btn_nav.addWidget(self.btn_accept)
 
-        self.btn_next = QPushButton("Sonraki Kelime ▶")
+        self.btn_next = QPushButton("Sonraki Kelime")
         self.btn_next.clicked.connect(self._next_word)
         btn_nav.addWidget(self.btn_next)
 

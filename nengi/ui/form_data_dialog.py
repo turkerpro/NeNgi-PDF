@@ -21,7 +21,7 @@ class FormDataDialog(QDialog):
         super().__init__(parent)
         self.doc = doc
         self.mode = mode  # "export" or "import"
-        title = "📤 Form Verilerini Dışa Aktar" if mode == "export" else "📥 Form Verilerini İçe Aktar"
+        title = "Form Verilerini Dışa Aktar" if mode == "export" else "Form Verilerini İçe Aktar"
         self.setWindowTitle(f"{title} - NeNgi PDF")
         self.resize(400, 240)
         self._init_ui()

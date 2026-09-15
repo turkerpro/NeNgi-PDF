@@ -14,10 +14,10 @@ import sys
 from typing import Optional, List, Tuple
 from PyQt6.QtCore import Qt, QSize, QPoint, QRect, QTimer
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, 
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QStatusBar, QFileDialog, QMessageBox, QLabel, QLineEdit,
     QSplitter, QInputDialog, QComboBox, QMenu, QDialog, QPushButton,
-    QFrame
+    QFrame, QSlider
 )
 from PyQt6.QtGui import QIcon, QAction, QKeySequence, QPixmap, QPainter, QFont
 import fitz
@@ -87,7 +87,7 @@ class OpenTabsDiffDialog(QDialog):
 
         # Tab A combo
         h_a = QHBoxLayout()
-        lbl_a = QLabel("🔴 Orijinal Belge (A):")
+        lbl_a = QLabel("Orijinal Belge (A):")
         lbl_a.setFixedWidth(140)
         self.cb_a = QComboBox()
         for idx, name, _ in self.open_tabs:
@@ -100,7 +100,7 @@ class OpenTabsDiffDialog(QDialog):
 
         # Tab B combo
         h_b = QHBoxLayout()
-        lbl_b = QLabel("🟢 Revize Belge (B):")
+        lbl_b = QLabel("Revize Belge (B):")
         lbl_b.setFixedWidth(140)
         self.cb_b = QComboBox()
         for idx, name, _ in self.open_tabs:
@@ -120,7 +120,7 @@ class OpenTabsDiffDialog(QDialog):
         btn_cancel.clicked.connect(self.reject)
         btn_layout.addWidget(btn_cancel)
 
-        btn_compare = QPushButton("⚖️ Yan Yana Karşılaştır")
+        btn_compare = QPushButton("Yan Yana Karşılaştır")
         btn_compare.setObjectName("accentButton")
         btn_compare.clicked.connect(self._on_compare)
         btn_layout.addWidget(btn_compare)
@@ -146,7 +146,7 @@ class MainWindow(QMainWindow):
         # Keep a reference safe for subcomponents that may access before full init
         self._settings_initialized = True
 
-        self.setWindowTitle("NeNgi PDF v2.0.4-beta")
+        self.setWindowTitle("NeNgi PDF v2.0.5-beta")
         self.resize(1340, 860)
         self.is_dark_mode = self.settings.value("theme", "dark") == "dark"
         self.recent_files: List[str] = []
@@ -432,7 +432,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Bilgi", "Lütfen bir belge açın.")
             return
         dlg = QDialog(self)
-        dlg.setWindowTitle("📎 Ekli Dosyalar - NeNgi PDF")
+        dlg.setWindowTitle("Ekli Dosyalar - NeNgi PDF")
         dlg.resize(450, 360)
         lay = QVBoxLayout(dlg)
         panel = AttachmentsPanel(dlg, is_dark=self.is_dark_mode)
@@ -795,7 +795,7 @@ class MainWindow(QMainWindow):
         return container
 
     def _create_footer(self) -> QFrame:
-        """Creates bottom pagination and zoom footer."""
+        """Creates bottom footer with 3 controls: page info, zoom %, zoom slider."""
         footer = QFrame()
         footer.setObjectName("bottomFooter")
         footer.setFixedHeight(38)
@@ -803,77 +803,32 @@ class MainWindow(QMainWindow):
         f_layout.setContentsMargins(16, 4, 16, 4)
         f_layout.setSpacing(12)
 
-        # Left: Page Stepper with SVG icons
-        self.btn_prev = QPushButton()
-        self.btn_prev.setIcon(get_svg_icon("prev", "#D0D4DC", 14))
-        self.btn_prev.setIconSize(QSize(14, 14))
-        self.btn_prev.setFixedSize(28, 26)
-        self.btn_prev.setToolTip("Önceki Sayfa")
-        self.btn_prev.clicked.connect(self._prev_page)
-        f_layout.addWidget(self.btn_prev)
-
         self.lbl_footer_page = QLabel("Sayfa: - / -")
         self.lbl_footer_page.setStyleSheet("padding: 0 4px; font-weight: 500;")
         f_layout.addWidget(self.lbl_footer_page)
 
-        self.btn_next = QPushButton()
-        self.btn_next.setIcon(get_svg_icon("next", "#D0D4DC", 14))
-        self.btn_next.setIconSize(QSize(14, 14))
-        self.btn_next.setFixedSize(28, 26)
-        self.btn_next.setToolTip("Sonraki Sayfa")
-        self.btn_next.clicked.connect(self._next_page)
-        f_layout.addWidget(self.btn_next)
-
-        # Center Status Message
-        self.lbl_footer_status = QLabel("Hazır")
-        self.lbl_footer_status.setStyleSheet("color: #727883; margin-left: 20px;")
-        f_layout.addWidget(self.lbl_footer_status, 1)
-
-        # Right: Zoom & View controls with SVG icons
-        
-        self.cb_layout = QComboBox()
-        self.cb_layout.addItems(["Sürekli", "Tek Sayfa", "Çift Sayfa", "Sürekli Çift Sayfa"])
-        self.cb_layout.currentIndexChanged.connect(self._change_layout_mode)
-        f_layout.addWidget(self.cb_layout)
-
-        self.btn_fit_width = QPushButton("Genişliğe Sığdır")
-        self.btn_fit_width.clicked.connect(lambda: self.get_current_viewer().zoom_fit_width() if self.get_current_viewer() else None)
-        f_layout.addWidget(self.btn_fit_width)
-
-        self.btn_fit_page = QPushButton("Sayfaya Sığdır")
-        self.btn_fit_page.clicked.connect(lambda: self.get_current_viewer().zoom_fit_page() if self.get_current_viewer() else None)
-        f_layout.addWidget(self.btn_fit_page)
-
-        self.btn_zoom_out = QPushButton()
-        self.btn_zoom_out.setIcon(get_svg_icon("zoom_out", "#D0D4DC", 14))
-        self.btn_zoom_out.setIconSize(QSize(14, 14))
-        self.btn_zoom_out.setFixedSize(28, 26)
-        self.btn_zoom_out.setToolTip("Uzaklaştır")
-        self.btn_zoom_out.clicked.connect(self._zoom_out)
-        f_layout.addWidget(self.btn_zoom_out)
+        f_layout.addStretch(1)
 
         self.lbl_footer_zoom = QLabel("%120")
         self.lbl_footer_zoom.setStyleSheet("font-weight: 600; min-width: 44px; text-align: center;")
         f_layout.addWidget(self.lbl_footer_zoom)
 
-        self.btn_zoom_in = QPushButton()
-        self.btn_zoom_in.setIcon(get_svg_icon("zoom_in", "#D0D4DC", 14))
-        self.btn_zoom_in.setIconSize(QSize(14, 14))
-        self.btn_zoom_in.setFixedSize(28, 26)
-        self.btn_zoom_in.setToolTip("Yakınlaştır")
-        self.btn_zoom_in.clicked.connect(self._zoom_in)
-        f_layout.addWidget(self.btn_zoom_in)
-
-        # Thumbnails toggle with SVG icon
-        self.btn_thumbs = QPushButton()
-        self.btn_thumbs.setIcon(get_svg_icon("thumbnails", "#D0D4DC", 16))
-        self.btn_thumbs.setIconSize(QSize(16, 16))
-        self.btn_thumbs.setFixedSize(30, 26)
-        self.btn_thumbs.setToolTip("Sayfa Küçük Resimleri Panelini Aç / Kapat")
-        self.btn_thumbs.clicked.connect(self._toggle_thumbnails)
-        f_layout.addWidget(self.btn_thumbs)
+        from PyQt6.QtCore import Qt as _Qt
+        self.zoom_slider = QSlider(_Qt.Orientation.Horizontal)
+        self.zoom_slider.setRange(25, 400)
+        self.zoom_slider.setValue(120)
+        self.zoom_slider.setFixedWidth(160)
+        self.zoom_slider.setToolTip("Yakınlaştırma")
+        self.zoom_slider.valueChanged.connect(self._on_zoom_slider_changed)
+        f_layout.addWidget(self.zoom_slider)
 
         return footer
+
+    def _on_zoom_slider_changed(self, value: int):
+        viewer = self.get_current_viewer()
+        if viewer:
+            viewer.set_zoom(value / 100.0)
+            self.lbl_footer_zoom.setText(f"%{value}")
 
     def _setup_shortcuts(self):
         """Registers keyboard shortcuts."""
@@ -1108,7 +1063,7 @@ class MainWindow(QMainWindow):
             return
         menu = QMenu(self)
         for f in self.recent_files[:10]:
-            act = menu.addAction(f"📄 {os.path.basename(f)}")
+            act = menu.addAction(f"{os.path.basename(f)}")
             act.triggered.connect(lambda checked, path=f: self.open_pdf(path))
         menu.exec(self.nav_rail.mapToGlobal(QPoint(220, 100)))
 
@@ -1135,12 +1090,12 @@ class MainWindow(QMainWindow):
                 from PyQt6.QtWidgets import QApplication
                 QApplication.clipboard().setText(text)
                 self.copilot_panel.add_message(
-                    f"✅ Sayfa {curr_page+1} metinleri kopyalandı ({len(words)} kelime):\n\n\"{text[:200]}...\""
+                    f"Sayfa {curr_page+1} metinleri kopyalandı ({len(words)} kelime):\n\n\"{text[:200]}...\""
                 )
             else:
                 self.copilot_panel.add_message("Bu sayfada seçilebilir metin bulunamadı. OCR çalıştırmayı deneyin.")
         elif action_key == "ocr":
-            self.copilot_panel.add_message("🔍 OCR metin taraması başlatılıyor...")
+            self.copilot_panel.add_message("OCR metin taraması başlatılıyor...")
             self._run_ocr_trigger()
         elif action_key == "protect":
             self._encrypt_current_doc()
@@ -1181,7 +1136,7 @@ class MainWindow(QMainWindow):
         if matches:
             pages_str = ", ".join(str(p) for p in matches[:8])
             self.copilot_panel.add_message(
-                f"🔎 '{query}' ifadesi şu sayfalarda bulundu: Sayfa {pages_str}"
+                f"'{query}' ifadesi şu sayfalarda bulundu: Sayfa {pages_str}"
             )
             viewer = self.get_current_viewer()
             if viewer and matches:
@@ -1518,11 +1473,20 @@ class MainWindow(QMainWindow):
             curr = viewer.current_page_idx + 1
             tot = doc.page_count
             self.lbl_footer_page.setText(f"Sayfa {curr} / {tot}")
-            self.lbl_footer_zoom.setText(f"%{int(viewer.zoom * 100)}")
+            zoom_pct = int(viewer.zoom * 100)
+            self.lbl_footer_zoom.setText(f"%{zoom_pct}")
+            if hasattr(self, "zoom_slider"):
+                self.zoom_slider.blockSignals(True)
+                self.zoom_slider.setValue(zoom_pct)
+                self.zoom_slider.blockSignals(False)
             self.thumbnail_bar.set_active_page(viewer.current_page_idx)
         else:
             self.lbl_footer_page.setText("Sayfa: - / -")
             self.lbl_footer_zoom.setText("%100")
+            if hasattr(self, "zoom_slider"):
+                self.zoom_slider.blockSignals(True)
+                self.zoom_slider.setValue(100)
+                self.zoom_slider.blockSignals(False)
 
     def _prev_page(self):
         viewer = self.get_current_viewer()
@@ -1546,13 +1510,23 @@ class MainWindow(QMainWindow):
         viewer = self.get_current_viewer()
         if viewer:
             viewer.zoom_in()
-            self.lbl_footer_zoom.setText(f"%{int(viewer.zoom * 100)}")
+            zoom_pct = int(viewer.zoom * 100)
+            self.lbl_footer_zoom.setText(f"%{zoom_pct}")
+            if hasattr(self, "zoom_slider"):
+                self.zoom_slider.blockSignals(True)
+                self.zoom_slider.setValue(zoom_pct)
+                self.zoom_slider.blockSignals(False)
 
     def _zoom_out(self):
         viewer = self.get_current_viewer()
         if viewer:
             viewer.zoom_out()
-            self.lbl_footer_zoom.setText(f"%{int(viewer.zoom * 100)}")
+            zoom_pct = int(viewer.zoom * 100)
+            self.lbl_footer_zoom.setText(f"%{zoom_pct}")
+            if hasattr(self, "zoom_slider"):
+                self.zoom_slider.blockSignals(True)
+                self.zoom_slider.setValue(zoom_pct)
+                self.zoom_slider.blockSignals(False)
 
     def _on_page_changed(self, page_idx: int):
         self._update_footer_page_info()
@@ -1577,7 +1551,8 @@ class MainWindow(QMainWindow):
         self._on_document_modified()
 
     def show_status_message(self, message: str):
-        self.lbl_footer_status.setText(message)
+        if hasattr(self, "lbl_footer_status"):
+            self.lbl_footer_status.setText(message)
 
     # ==========================================
     # Tools, Editing, DIFF & OCR
@@ -1658,7 +1633,7 @@ class MainWindow(QMainWindow):
         if tab_idx < 0:
             return
         menu = QMenu(self)
-        act_compare = menu.addAction("⚖️ Açık Sekmeleri Karşılaştır (DIFF)")
+        act_compare = menu.addAction("Açık Sekmeleri Karşılaştır (DIFF)")
         act_close = menu.addAction("Kapat")
         act = menu.exec(self.tabs.tabBar().mapToGlobal(pos))
         if act == act_compare:
@@ -1694,7 +1669,7 @@ class MainWindow(QMainWindow):
 
     def _launch_diff(self, doc_a: PDFDocument, doc_b: PDFDocument, name_a: str, name_b: str):
         diff_view = DiffView(doc_a, doc_b, parent=self)
-        diff_tab_idx = self.tabs.addTab(diff_view, f"⚖️ DIFF: {name_a} vs {name_b}")
+        diff_tab_idx = self.tabs.addTab(diff_view, f"DIFF: {name_a} vs {name_b}")
         self.tabs.setCurrentIndex(diff_tab_idx)
 
     def open_diff_dialog(self):
@@ -1708,7 +1683,7 @@ class MainWindow(QMainWindow):
         doc_a = PDFDocument(f_a)
         doc_b = PDFDocument(f_b)
         diff_view = DiffView(doc_a, doc_b, parent=self)
-        idx = self.tabs.addTab(diff_view, f"⚖️ DIFF: {os.path.basename(f_a)} vs {os.path.basename(f_b)}")
+        idx = self.tabs.addTab(diff_view, f"DIFF: {os.path.basename(f_a)} vs {os.path.basename(f_b)}")
         self.tabs.setCurrentIndex(idx)
 
     def _open_settings_dialog(self):
@@ -1831,17 +1806,6 @@ class MainWindow(QMainWindow):
             self.btn_theme.setIcon(get_svg_icon("theme", icon_color, 18))
         if hasattr(self, "btn_toggle_tools"):
             self.btn_toggle_tools.setIcon(get_svg_icon("panel", icon_color, 16))
-
-        if hasattr(self, "btn_prev"):
-            self.btn_prev.setIcon(get_svg_icon("prev", icon_color, 14))
-        if hasattr(self, "btn_next"):
-            self.btn_next.setIcon(get_svg_icon("next", icon_color, 14))
-        if hasattr(self, "btn_zoom_out"):
-            self.btn_zoom_out.setIcon(get_svg_icon("zoom_out", icon_color, 14))
-        if hasattr(self, "btn_zoom_in"):
-            self.btn_zoom_in.setIcon(get_svg_icon("zoom_in", icon_color, 14))
-        if hasattr(self, "btn_thumbs"):
-            self.btn_thumbs.setIcon(get_svg_icon("thumbnails", icon_color, 16))
 
         if hasattr(self, "nav_rail") and hasattr(self.nav_rail, "update_theme"):
             self.nav_rail.update_theme(is_dark)

@@ -27,7 +27,7 @@ class MergeFilesDialog(QDialog):
 
     def __init__(self, initial_files: Optional[List[str]] = None, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("📑 NeNgi PDF - Dosyaları Birleştir")
+        self.setWindowTitle("NeNgi PDF - Dosyaları Birleştir")
         self.resize(600, 450)
         self.files: List[str] = [os.path.abspath(f) for f in (initial_files or []) if os.path.exists(f)]
         self.output_pdf_path: Optional[str] = None
@@ -57,19 +57,19 @@ class MergeFilesDialog(QDialog):
         # Reordering and management buttons
         btn_layout = QHBoxLayout()
         
-        btn_add = QPushButton("➕ Dosya Ekle")
+        btn_add = QPushButton("Dosya Ekle")
         btn_add.clicked.connect(self._add_files)
         btn_layout.addWidget(btn_add)
 
-        btn_remove = QPushButton("➖ Seçileni Kaldır")
+        btn_remove = QPushButton("Seçileni Kaldır")
         btn_remove.clicked.connect(self._remove_selected)
         btn_layout.addWidget(btn_remove)
 
-        btn_up = QPushButton("⬆️ Yukarı Taşı")
+        btn_up = QPushButton("Yukarı Taşı")
         btn_up.clicked.connect(self._move_up)
         btn_layout.addWidget(btn_up)
 
-        btn_down = QPushButton("⬇️ Aşağı Taşı")
+        btn_down = QPushButton("Aşağı Taşı")
         btn_down.clicked.connect(self._move_down)
         btn_layout.addWidget(btn_down)
 
@@ -84,7 +84,7 @@ class MergeFilesDialog(QDialog):
         btn_cancel.clicked.connect(self.reject)
         bottom_layout.addWidget(btn_cancel)
 
-        btn_merge = QPushButton("🚀 Tek PDF Olarak Birleştir")
+        btn_merge = QPushButton("Tek PDF Olarak Birleştir")
         btn_merge.setObjectName("accentButton")
         btn_merge.setStyleSheet(f"background-color: {tokens.colors.accent_primary}; color: {tokens.colors.text_inverse}; font-weight: bold; padding: 8px 16px;")
         btn_merge.clicked.connect(self._perform_merge)

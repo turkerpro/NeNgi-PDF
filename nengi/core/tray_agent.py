@@ -68,11 +68,11 @@ class NeNgiTrayAgent(QObject):
             "}"
         )
 
-        act_show = QAction("📑 NeNgi PDF'i Aç", menu)
+        act_show = QAction("NeNgi PDF'i Aç", menu)
         act_show.triggered.connect(self.show_main_window)
         menu.addAction(act_show)
 
-        act_open_file = QAction("📂 Hızlı Belge Aç...", menu)
+        act_open_file = QAction("Hızlı Belge Aç...", menu)
         act_open_file.triggered.connect(self._on_quick_open_file)
         menu.addAction(act_open_file)
 

@@ -10,7 +10,7 @@ from typing import Optional, Tuple, List, Callable
 from PyQt6.QtCore import Qt, QPoint, QRect, QRectF, pyqtSignal, QSize, QEvent
 from PyQt6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QHBoxLayout, QLabel, 
-    QMenu, QInputDialog, QMessageBox, QFileDialog, QGraphicsDropShadowEffect, QDialog,
+    QMenu, QInputDialog, QMessageBox, QFileDialog, QGraphicsDropShadowEffect,
     QLineEdit
 )
 from PyQt6.QtGui import (
@@ -23,7 +23,6 @@ from nengi.core.pdf_document import PDFDocument
 from nengi.core.result import Result
 from nengi.core.image_roundtrip import ImageRoundtripHandler
 from nengi.core.annotations import AnnotationManager
-from nengi.ui.text_editor_dialog import TextEditorDialog
 
 
 class PageRenderWidget(QWidget):
@@ -582,7 +581,11 @@ class PageRenderWidget(QWidget):
             b = self.hovered_block
             target_rect = fitz.Rect(b[0], b[1], b[2], b[3])
             target_text = b[4]
-            style = self.doc.detect_text_style_at_rect(self.page_idx, target_rect)
+            style = self.doc.detect_text_style_at_rect(self.page_idx, target_rect).unwrap_or({
+                "family": "Arial", "size": 11.0, "is_bold": False, "is_italic": False,
+                "color_rgb": (0.0, 0.0, 0.0), "raw_font": "Helvetica", "fitz_font": "helv",
+                "baseline_y": None, "origin_x": None,
+            })
         elif self.selected_words:
             min_x = min(w[0] for w in self.selected_words)
             min_y = min(w[1] for w in self.selected_words)
@@ -590,7 +593,11 @@ class PageRenderWidget(QWidget):
             max_y = max(w[3] for w in self.selected_words)
             target_rect = fitz.Rect(min_x, min_y, max_x, max_y)
             target_text = " ".join([w[4] for w in self.selected_words])
-            style = self.doc.detect_text_style_at_rect(self.page_idx, target_rect)
+            style = self.doc.detect_text_style_at_rect(self.page_idx, target_rect).unwrap_or({
+                "family": "Arial", "size": 11.0, "is_bold": False, "is_italic": False,
+                "color_rgb": (0.0, 0.0, 0.0), "raw_font": "Helvetica", "fitz_font": "helv",
+                "baseline_y": None, "origin_x": None,
+            })
             
         if target_rect and style:
             from nengi.ui.inline_editor import InlineTextEditor
@@ -715,29 +722,45 @@ class PageRenderWidget(QWidget):
 
         # Detect nearby style for smart font inheritance
         nearby_rect = fitz.Rect(pdf_x - 60, pdf_y - 30, pdf_x + 60, pdf_y + 30)
-        style = self.doc.detect_text_style_at_rect(self.page_idx, nearby_rect)
+        style = self.doc.detect_text_style_at_rect(self.page_idx, nearby_rect).unwrap_or({
+            "family": "Arial", "size": 11.0, "is_bold": False, "is_italic": False,
+            "color_rgb": (0.0, 0.0, 0.0), "raw_font": "Helvetica", "fitz_font": "helv",
+            "baseline_y": None, "origin_x": None,
+        })
 
-        dlg = TextEditorDialog(
-            initial_text="",
-            detected_style=style,
-            title="✍️ Metin Ekle",
-            parent=self
-        )
-        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.result_text.strip():
+        # Boş rect ile InlineTextEditor overlay aç (tek editör).
+        anchor_rect = fitz.Rect(pdf_x, pdf_y, pdf_x + 150, pdf_y + 30)
+        from nengi.ui.inline_editor import InlineTextEditor
+        editor = InlineTextEditor("", style, anchor_rect, self.zoom, self)
+        self.active_text_widgets.append(editor)
+
+        def on_commit(new_text, s, r):
+            if editor in self.active_text_widgets:
+                self.active_text_widgets.remove(editor)
             from nengi.ui.draggable_text import DraggableTextWidget
             box = DraggableTextWidget(
                 page_widget=self,
                 initial_pos=pos,
-                text=dlg.result_text,
-                fontsize=dlg.result_fontsize,
-                fontname=dlg.result_fitz_font,
-                color_rgb=dlg.result_color_rgb,
+                text=new_text,
+                fontsize=s.get("size", 11.0),
+                fontname=s.get("fitz_font", "helv"),
+                color_rgb=s.get("color_rgb", (0.0, 0.0, 0.0)),
                 zoom=self.zoom,
                 parent=self
             )
             self.active_text_widgets.append(box)
             box.committed.connect(lambda b=box: self.active_text_widgets.remove(b) if b in self.active_text_widgets else None)
             box.discarded.connect(lambda b=box: self.active_text_widgets.remove(b) if b in self.active_text_widgets else None)
+
+        def on_cancel():
+            if editor in self.active_text_widgets:
+                self.active_text_widgets.remove(editor)
+            self.update()
+
+        editor.editing_finished.connect(on_commit)
+        editor.editing_cancelled.connect(on_cancel)
+        editor.show()
+        editor.setFocus()
 
     def commit_all_pending_edits(self):
         """Commits all floating text boxes and signature stamps permanently onto the PDF page."""
@@ -1110,20 +1133,20 @@ class PDFViewer(QScrollArea):
         act_move = None
         act_whiteout_sel = None
         if target_pw and (target_pw.selected_words or target_pw.selected_blocks or target_pw.hovered_block):
-            act_copy = menu.addAction("📋 Seçili Metni Kopyala (Ctrl+C)")
-            act_edit = menu.addAction("✏️ Seçili Metni Düzenle / Değiştir")
-            act_move = menu.addAction("✂️ Seçili Metni Taşı (Serbest Sürükle)")
-            act_whiteout_sel = menu.addAction("◻️ Seçili Metni Sil / Beyazlat")
+            act_copy = menu.addAction("Seçili Metni Kopyala (Ctrl+C)")
+            act_edit = menu.addAction("Seçili Metni Düzenle / Değiştir")
+            act_move = menu.addAction("Seçili Metni Taşı (Serbest Sürükle)")
+            act_whiteout_sel = menu.addAction("Seçili Metni Sil / Beyazlat")
             menu.addSeparator()
 
-        act_ocr = menu.addAction("🔍 Sayfadaki Metinleri Tanı (OCR / Kelimeler)")
+        act_ocr = menu.addAction("Sayfadaki Metinleri Tanı (OCR / Kelimeler)")
         menu.addSeparator()
 
-        act_paint = menu.addAction(f"🖌️ Bu Sayfayı Harici Resim Editöründe (Paint vb.) Aç ve Temizle")
-        act_rotate = menu.addAction("🔄 Sayfayı 90° Sağa Döndür")
-        act_delete = menu.addAction("🗑️ Bu Sayfayı Sil")
+        act_paint = menu.addAction(f"Bu Sayfayı Harici Resim Editöründe (Paint vb.) Aç ve Temizle")
+        act_rotate = menu.addAction("Sayfayı 90° Sağa Döndür")
+        act_delete = menu.addAction("Bu Sayfayı Sil")
         menu.addSeparator()
-        act_export_img = menu.addAction("🖼️ Bu Sayfayı Resim Olarak Dışa Aktar (PNG)")
+        act_export_img = menu.addAction("Bu Sayfayı Resim Olarak Dışa Aktar (PNG)")
 
         action = menu.exec(self.mapToGlobal(pos))
         if action == act_copy and target_pw:

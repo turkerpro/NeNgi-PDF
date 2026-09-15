@@ -29,7 +29,7 @@ class FormFieldPropertiesDialog(QDialog):
 
     def __init__(self, config: Optional[FormFieldConfig] = None, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("📋 Form Alanı Özellikleri - NeNgi PDF")
+        self.setWindowTitle("Form Alanı Özellikleri - NeNgi PDF")
         self.resize(480, 420)
         self.config = config or FormFieldConfig()
         self._init_ui()
@@ -183,7 +183,7 @@ class FormDesignerDialog(QDialog):
 
     def __init__(self, doc: PDFDocument, current_page: int = 0, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("🛠️ Form Tasarımcısı & Alan Yönetimi - NeNgi PDF")
+        self.setWindowTitle("Form Tasarımcısı & Alan Yönetimi - NeNgi PDF")
         self.resize(650, 480)
         self.doc = doc
         self.current_page = current_page
@@ -205,27 +205,27 @@ class FormDesignerDialog(QDialog):
         # Action Buttons
         btn_grid = QGridLayout()
 
-        btn_add_text = QPushButton("➕ Metin Alanı Ekle")
+        btn_add_text = QPushButton("Metin Alanı Ekle")
         btn_add_text.clicked.connect(lambda: self._add_field(FIELD_TEXT))
         btn_grid.addWidget(btn_add_text, 0, 0)
 
-        btn_add_chk = QPushButton("☑️ Onay Kutusu Ekle")
+        btn_add_chk = QPushButton("Onay Kutusu Ekle")
         btn_add_chk.clicked.connect(lambda: self._add_field(FIELD_CHECKBOX))
         btn_grid.addWidget(btn_add_chk, 0, 1)
 
-        btn_add_radio = QPushButton("🔘 Radyo Düğmesi Ekle")
+        btn_add_radio = QPushButton("Radyo Düğmesi Ekle")
         btn_add_radio.clicked.connect(lambda: self._add_field(FIELD_RADIO))
         btn_grid.addWidget(btn_add_radio, 0, 2)
 
-        btn_add_combo = QPushButton("▼ Açılır Liste Ekle")
+        btn_add_combo = QPushButton("Açılır Liste Ekle")
         btn_add_combo.clicked.connect(lambda: self._add_field(FIELD_COMBO))
         btn_grid.addWidget(btn_add_combo, 1, 0)
 
-        btn_add_btn = QPushButton("🔲 Düğme Ekle")
+        btn_add_btn = QPushButton("Düğme Ekle")
         btn_add_btn.clicked.connect(lambda: self._add_field(FIELD_BUTTON))
         btn_grid.addWidget(btn_add_btn, 1, 1)
 
-        btn_autodetect = QPushButton("🪄 Form Alanlarını Otomatik Algıla")
+        btn_autodetect = QPushButton("Form Alanlarını Otomatik Algıla")
         btn_autodetect.clicked.connect(self._auto_detect)
         btn_grid.addWidget(btn_autodetect, 1, 2)
 
@@ -233,7 +233,7 @@ class FormDesignerDialog(QDialog):
 
         # Bottom row
         bot_layout = QHBoxLayout()
-        btn_delete = QPushButton("🗑️ Seçili Alanı Sil")
+        btn_delete = QPushButton("Seçili Alanı Sil")
         btn_delete.clicked.connect(self._delete_selected_field)
         bot_layout.addWidget(btn_delete)
 

@@ -31,7 +31,7 @@ class ThumbnailBar(QWidget):
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(6)
 
-        title = QLabel("📑 Sayfa Önizlemeleri")
+        title = QLabel("Sayfa Önizlemeleri")
         title.setStyleSheet("font-weight: bold; color: #A0A0A0; padding: 4px;")
         layout.addWidget(title)
 
@@ -100,8 +100,8 @@ class ThumbnailBar(QWidget):
         page_idx = self.list_widget.row(item)
         menu = QMenu(self)
 
-        act_rot = menu.addAction("🔄 90° Sağa Döndür")
-        act_del = menu.addAction("🗑️ Bu Sayfayı Sil")
+        act_rot = menu.addAction("90° Sağa Döndür")
+        act_del = menu.addAction("Bu Sayfayı Sil")
 
         action = menu.exec(self.list_widget.mapToGlobal(pos))
         if action == act_rot:

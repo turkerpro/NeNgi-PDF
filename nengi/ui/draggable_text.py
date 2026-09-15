@@ -11,7 +11,7 @@ from PyQt6.QtCore import Qt, QPoint, pyqtSignal, QRect
 from PyQt6.QtGui import QColor, QFont, QCursor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGraphicsDropShadowEffect, QDialog, QFrame
+    QGraphicsDropShadowEffect, QFrame
 )
 
 from nengi.ui.styles import get_dark_tokens, get_light_tokens
@@ -103,25 +103,25 @@ class DraggableTextWidget(QWidget):
         bar_layout.setContentsMargins(4, 1, 4, 1)
         bar_layout.setSpacing(4)
 
-        lbl_hint = QLabel("✥ Taşı")
+        lbl_hint = QLabel("Taşı")
         lbl_hint.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         bar_layout.addWidget(lbl_hint)
         bar_layout.addStretch()
 
-        btn_edit = QPushButton("✏️")
+        btn_edit = QPushButton("Düzenle")
         btn_edit.setFixedSize(20, 20)
         btn_edit.setToolTip("Metni veya Fontu Düzenle (Çift Tıklama)")
         btn_edit.clicked.connect(self._edit_text)
         bar_layout.addWidget(btn_edit)
 
-        btn_apply = QPushButton("✅")
+        btn_apply = QPushButton("Uygula")
         btn_apply.setFixedSize(20, 20)
         btn_apply.setToolTip("Metni Buraya Sabitle (PDF'e Yerleştir)")
         btn_apply.setStyleSheet(f"background-color: {tokens.colors.accent_primary}; color: white; border-radius: {tokens.radius.xs}px; font-size: 10px;")
         btn_apply.clicked.connect(self.commit_to_pdf)
         bar_layout.addWidget(btn_apply)
 
-        btn_delete = QPushButton("🗑️")
+        btn_delete = QPushButton("Sil")
         btn_delete.setFixedSize(20, 20)
         btn_delete.setToolTip("Metin Kutusunu Kaldır")
         btn_delete.setStyleSheet(f"background-color: {tokens.colors.error_bg}; color: {tokens.colors.error_text}; border-radius: {tokens.radius.xs}px; font-size: 10px;")
@@ -203,7 +203,9 @@ class DraggableTextWidget(QWidget):
             super().mouseDoubleClickEvent(event)
 
     def _edit_text(self):
-        from nengi.ui.text_editor_dialog import TextEditorDialog
+        if getattr(self, "_inline_editing", False):
+            return
+        self._inline_editing = True
         style = {
             "family": "Arial",
             "size": self.fontsize,
@@ -211,22 +213,55 @@ class DraggableTextWidget(QWidget):
             "is_italic": False,
             "color_rgb": self.color_rgb,
             "raw_font": "Helvetica",
-            "fitz_font": self.fontname
+            "fitz_font": self.fontname,
         }
-        dlg = TextEditorDialog(
-            initial_text=self.text,
-            detected_style=style,
-            title="✍️ Eklenen Metni Düzenle",
-            parent=self
-        )
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            self.text = dlg.result_text
-            self.fontsize = dlg.result_fontsize
-            self.fontname = dlg.result_fitz_font
-            self.color_rgb = dlg.result_color_rgb
+        # Overlay aynı kutuda: mevcut konumdan pdf_rect türet
+        try:
+            ui_pos = self.pos()
+            pw = self.page_widget
+            zoom = self.zoom
+            w_pdf = max(self.width() / zoom if zoom else 120, 120)
+            h_pdf = max(self.height() / zoom if zoom else 24, 24)
+            pdf_rect = fitz.Rect(
+                ui_pos.x() / zoom, ui_pos.y() / zoom,
+                ui_pos.x() / zoom + w_pdf, ui_pos.y() / zoom + h_pdf,
+            )
+        except Exception:
+            pdf_rect = fitz.Rect(0, 0, 120, 24)
+        from nengi.ui.inline_editor import InlineTextEditor
+        editor = InlineTextEditor(self.text, style, pdf_rect, self.zoom, self.page_widget)
+        try:
+            self.page_widget.active_text_widgets.append(editor)
+        except Exception:
+            pass
+
+        def on_commit(new_text, s, r):
+            try:
+                if editor in self.page_widget.active_text_widgets:
+                    self.page_widget.active_text_widgets.remove(editor)
+            except Exception:
+                pass
+            self.text = new_text
+            self.fontsize = s.get("size", self.fontsize)
+            self.fontname = s.get("fitz_font", self.fontname)
+            self.color_rgb = s.get("color_rgb", self.color_rgb)
             self.lbl_content.setText(self.text)
             self._update_text_style()
             self.adjustSize()
+            self._inline_editing = False
+
+        def on_cancel():
+            try:
+                if editor in self.page_widget.active_text_widgets:
+                    self.page_widget.active_text_widgets.remove(editor)
+            except Exception:
+                pass
+            self._inline_editing = False
+
+        editor.editing_finished.connect(on_commit)
+        editor.editing_cancelled.connect(on_cancel)
+        editor.show()
+        editor.setFocus()
 
     def commit_to_pdf(self):
         """Bakes the text permanently into the underlying PDF page at current position."""

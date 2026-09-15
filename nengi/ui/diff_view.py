@@ -87,14 +87,14 @@ class DiffView(QWidget):
         top_layout = QHBoxLayout(top_bar)
         top_layout.setContentsMargins(10, 2, 10, 2)
 
-        self.lbl_summary = QLabel("📊 Karşılaştırma Bekleniyor...")
+        self.lbl_summary = QLabel("Karşılaştırma Bekleniyor...")
         self.lbl_summary.setStyleSheet(f"font-weight: bold; font-size: {tokens.fonts.lg}px; color: {tokens.colors.text_primary};")
         top_layout.addWidget(self.lbl_summary)
 
         top_layout.addSpacing(20)
 
         # Navigation buttons
-        self.btn_prev = QPushButton("◀ Önceki Fark")
+        self.btn_prev = QPushButton("Önceki Fark")
         self.btn_prev.clicked.connect(self.goto_previous_change)
         top_layout.addWidget(self.btn_prev)
 
@@ -102,13 +102,13 @@ class DiffView(QWidget):
         self.lbl_counter.setStyleSheet(f"font-weight: bold; color: {tokens.colors.accent_primary}; padding: 0 8px;")
         top_layout.addWidget(self.lbl_counter)
 
-        self.btn_next = QPushButton("Sonraki Fark ▶")
+        self.btn_next = QPushButton("Sonraki Fark")
         self.btn_next.clicked.connect(self.goto_next_change)
         top_layout.addWidget(self.btn_next)
 
         top_layout.addSpacing(15)
 
-        self.btn_toggle_sync = QPushButton("🔗 Senkron Kaydırma: Açık")
+        self.btn_toggle_sync = QPushButton("Senkron Kaydırma: Açık")
         self.btn_toggle_sync.setCheckable(True)
         self.btn_toggle_sync.setChecked(True)
         self.btn_toggle_sync.clicked.connect(self._toggle_sync_scroll)
@@ -116,7 +116,7 @@ class DiffView(QWidget):
 
         top_layout.addStretch()
 
-        btn_export = QPushButton("📄 Fark Raporunu Kaydet")
+        btn_export = QPushButton("Fark Raporunu Kaydet")
         btn_export.clicked.connect(self._export_diff_report)
         top_layout.addWidget(btn_export)
 
@@ -130,7 +130,7 @@ class DiffView(QWidget):
         lay_left = QVBoxLayout(box_left)
         lay_left.setContentsMargins(0, 0, 0, 0)
         lay_left.setSpacing(0)
-        self.lbl_title_a = QLabel(" 🔴 Orijinal Belge")
+        self.lbl_title_a = QLabel("Orijinal Belge")
         self.lbl_title_a.setFixedHeight(28)
         self.lbl_title_a.setStyleSheet(f"background-color: {tokens.colors.error_bg}; color: {tokens.colors.error_text}; font-weight: bold; padding: 4px 8px; border-bottom: 1px solid {tokens.colors.border_error};")
         lay_left.addWidget(self.lbl_title_a, 0)
@@ -143,7 +143,7 @@ class DiffView(QWidget):
         lay_right = QVBoxLayout(box_right)
         lay_right.setContentsMargins(0, 0, 0, 0)
         lay_right.setSpacing(0)
-        self.lbl_title_b = QLabel(" 🟢 Revize Edilmiş Belge")
+        self.lbl_title_b = QLabel("Revize Edilmiş Belge")
         self.lbl_title_b.setFixedHeight(28)
         self.lbl_title_b.setStyleSheet(f"background-color: {tokens.colors.success_bg}; color: {tokens.colors.success_text}; font-weight: bold; padding: 4px 8px; border-bottom: 1px solid {tokens.colors.border_default};")
         lay_right.addWidget(self.lbl_title_b, 0)
@@ -155,7 +155,7 @@ class DiffView(QWidget):
         side_panel = QWidget()
         side_layout = QVBoxLayout(side_panel)
         side_layout.setContentsMargins(8, 8, 8, 8)
-        lbl_table = QLabel("📋 Tespit Edilen Değişiklikler")
+        lbl_table = QLabel("Tespit Edilen Değişiklikler")
         lbl_table.setStyleSheet(f"font-weight: bold; color: {tokens.colors.text_primary};")
         side_layout.addWidget(lbl_table)
 
@@ -183,8 +183,8 @@ class DiffView(QWidget):
         """Runs the diff engine and populates both panes with highlighted changes."""
         self.doc_a = doc_a
         self.doc_b = doc_b
-        self.lbl_title_a.setText(f" 🔴 Orijinal Belge: {label_a}")
-        self.lbl_title_b.setText(f" 🟢 Revize Edilmiş Belge: {label_b}")
+        self.lbl_title_a.setText(f"Orijinal Belge: {label_a}")
+        self.lbl_title_b.setText(f"Revize Edilmiş Belge: {label_b}")
 
         self.engine = DiffEngine(doc_a, doc_b)
         self.changes = self.engine.run_diff()
@@ -197,7 +197,7 @@ class DiffView(QWidget):
         # Update summary
         counts = self.engine.summary_counts
         self.lbl_summary.setText(
-            f"Farklar: 🟢 {counts['insert']} Eklendi  |  🔴 {counts['delete']} Silindi  |  🟡 {counts['replace']} Değişti  (Toplam: {counts['total']})"
+            f"Farklar: {counts['insert']} Eklendi  |  {counts['delete']} Silindi  |  {counts['replace']} Değişti  (Toplam: {counts['total']})"
         )
         self.lbl_counter.setText(f"0 / {len(self.changes)}")
 
@@ -241,9 +241,9 @@ class DiffView(QWidget):
         self.table_changes.setRowCount(len(self.changes))
         for row, item in enumerate(self.changes):
             type_label = {
-                "insert": "🟢 Eklendi",
-                "delete": "🔴 Silindi",
-                "replace": "🟡 Değişti"
+                "insert": "Eklendi",
+                "delete": "Silindi",
+                "replace": "Değişti"
             }.get(item.diff_type, item.diff_type)
 
             it_id = QTableWidgetItem(str(item.change_id))
@@ -294,7 +294,7 @@ class DiffView(QWidget):
     def _toggle_sync_scroll(self):
         self.sync_scroll = self.btn_toggle_sync.isChecked()
         self.btn_toggle_sync.setText(
-            "🔗 Senkron Kaydırma: Açık" if self.sync_scroll else "🔓 Senkron Kaydırma: Kapalı"
+            "Senkron Kaydırma: Açık" if self.sync_scroll else "Senkron Kaydırma: Kapalı"
         )
 
     def _on_pane_a_scroll(self, val: int):
