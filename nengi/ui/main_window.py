@@ -146,7 +146,7 @@ class MainWindow(QMainWindow):
         # Keep a reference safe for subcomponents that may access before full init
         self._settings_initialized = True
 
-        self.setWindowTitle("NeNgi PDF v2.0.5-beta")
+        self.setWindowTitle("NeNgi PDF v2.0.6-beta")
         self.resize(1340, 860)
         self.is_dark_mode = self.settings.value("theme", "dark") == "dark"
         self.recent_files: List[str] = []
@@ -1687,21 +1687,33 @@ class MainWindow(QMainWindow):
 
     def action_check_for_updates(self):
         """Yardım menüsü: yeni Setup.exe varsa indirip sessiz kurar."""
-        from nengi.core.updater import UpdateCheckWorker
+        from nengi.core.updater import UpdateCheckWorker, get_update_channel
         if getattr(self, "_update_check_worker", None) and self._update_check_worker.isRunning():
             return
         self.show_status_message("Güncellemeler denetleniyor...")
-        self._update_check_worker = UpdateCheckWorker(parent=self)
+        self._update_check_worker = UpdateCheckWorker(
+            channel=get_update_channel(), parent=self
+        )
         self._update_check_worker.finished.connect(self._on_update_check_finished)
         self._update_check_worker.failed.connect(self._on_update_check_failed)
         self._update_check_worker.start()
 
     def _on_update_check_failed(self, message: str):
+        dlg = getattr(self, "_update_progress", None)
+        if dlg is not None:
+            try:
+                dlg.close()
+            except Exception:
+                pass
+        if "iptal" in (message or "").lower():
+            self.show_status_message("İndirme iptal edildi.")
+            return
         self.show_status_message("Güncelleme denetimi başarısız.")
         QMessageBox.warning(self, "Güncelleme", message)
 
     def _on_update_check_finished(self, info):
         self.show_status_message("Hazır")
+        self._pending_update_info = info
         if not info.has_update:
             QMessageBox.information(
                 self, "Güncelleme",
@@ -1731,9 +1743,22 @@ class MainWindow(QMainWindow):
         self._update_dl_worker.progress.connect(self._on_update_download_progress)
         self._update_dl_worker.finished.connect(self._on_update_download_finished)
         self._update_dl_worker.failed.connect(self._on_update_check_failed)
-        self._update_progress.canceled.connect(self._update_dl_worker.terminate)
+        self._update_progress.canceled.connect(self._on_update_download_canceled)
         self._update_dl_worker.start()
         self._update_progress.show()
+
+    def _on_update_download_canceled(self):
+        """İptal: worker'ı kibarca durdur (yarım .part dosyası silinir)."""
+        worker = getattr(self, "_update_dl_worker", None)
+        if worker is None:
+            return
+        try:
+            if hasattr(worker, "cancel"):
+                worker.cancel()
+            else:
+                worker.terminate()
+        except Exception:
+            pass
 
     def _on_update_download_progress(self, downloaded: int, total: int):
         dlg = getattr(self, "_update_progress", None)
@@ -1747,7 +1772,11 @@ class MainWindow(QMainWindow):
 
     def _on_update_download_finished(self, installer_path: str):
         from PyQt6.QtWidgets import QApplication
-        from nengi.core.updater import launch_silent_install
+        from nengi.core.updater import (
+            launch_silent_install,
+            set_installed_published_at,
+            shutdown_app_for_update,
+        )
         dlg = getattr(self, "_update_progress", None)
         if dlg is not None:
             dlg.close()
@@ -1763,6 +1792,16 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.warning(self, "Güncelleme", f"Kurulum başlatılamadı: {e}")
             return
+        # Quit öncesi: tray agent + single-instance server kesin durdurulsun,
+        # yoksa kurucu dosya kilidine takılır / eski süreç hayatta kalır.
+        try:
+            info = getattr(self, "_pending_update_info", None)
+            published = getattr(info, "published_at", "") if info is not None else ""
+            if published:
+                set_installed_published_at(published)
+        except Exception:
+            pass
+        shutdown_app_for_update(self)
         app = QApplication.instance()
         if app is not None:
             app.quit()
@@ -1808,6 +1847,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Minimizes to system tray if tray agent is attached."""
+        # Güncelleme kurulumu için kapanış: tray'e gömülmeden kabul edilir.
+        if getattr(self, "_updating_for_restart", False):
+            event.accept()
+            return
         if hasattr(self, "tray_agent") and self.tray_agent:
             self.tray_agent.handle_window_close(event)
         else:

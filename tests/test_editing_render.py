@@ -47,11 +47,12 @@ def test_overflow_never_returns_true_with_blank_page():
     result = doc.replace_text_block(0, tiny, giant, fontsize=11.0)
     ok = result.value if result and result.success else False
     page_text = doc.get_page(0).get_text("text")
-    can_undo = doc.can_undo()
     doc.close()
     if ok:
         # True döndüyse metin gerçekten çizilmiş olmalı (sessiz boşluk yok).
         assert token in page_text
     else:
-        # False döndüyse redact geri alınabilmeli + UI warning gösterebilmeli.
-        assert can_undo is True
+        # False döndüyse redact otomatik undo ile geri alınmış olmalı:
+        # boş ekran yok, orijinal stub yerinde, dev metin çizilmemiş.
+        assert token not in page_text
+        assert "kisa not" in page_text

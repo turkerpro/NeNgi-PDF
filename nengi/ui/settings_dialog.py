@@ -150,7 +150,7 @@ class SettingsDialog(QDialog):
         lbl_app_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #0078D4;")
         lay_abt.addWidget(lbl_app_title)
 
-        lbl_version = QLabel("Sürüm: 2.0.5-beta")
+        lbl_version = QLabel("Sürüm: 2.0.6-beta")
         lbl_version.setStyleSheet("color: #AAAAAA;")
         lay_abt.addWidget(lbl_version)
 
@@ -287,13 +287,23 @@ class SettingsDialog(QDialog):
         self._update_check_worker.start()
 
     def _on_update_check_failed(self, message: str):
+        dlg = getattr(self, "_update_progress", None)
+        if dlg is not None:
+            try:
+                dlg.close()
+            except Exception:
+                pass
         self.btn_check_update.setEnabled(True)
+        if "iptal" in (message or "").lower():
+            self.lbl_update_status.setText("İndirme iptal edildi.")
+            return
         self.lbl_update_status.setText("")
         QMessageBox.warning(self, "Güncelleme", message)
 
     def _on_update_check_finished(self, info):
         self.btn_check_update.setEnabled(True)
         self.lbl_update_status.setText("")
+        self._pending_update_info = info
         if not info.has_update:
             QMessageBox.information(
                 self, "Güncelleme",
@@ -323,9 +333,22 @@ class SettingsDialog(QDialog):
         self._update_dl_worker.progress.connect(self._on_update_download_progress)
         self._update_dl_worker.finished.connect(self._on_update_download_finished)
         self._update_dl_worker.failed.connect(self._on_update_check_failed)
-        self._update_progress.canceled.connect(self._update_dl_worker.terminate)
+        self._update_progress.canceled.connect(self._on_update_download_canceled)
         self._update_dl_worker.start()
         self._update_progress.show()
+
+    def _on_update_download_canceled(self):
+        """İptal: worker'ı kibarca durdur (yarım .part dosyası silinir)."""
+        worker = getattr(self, "_update_dl_worker", None)
+        if worker is None:
+            return
+        try:
+            if hasattr(worker, "cancel"):
+                worker.cancel()
+            else:
+                worker.terminate()
+        except Exception:
+            pass
 
     def _on_update_download_progress(self, downloaded: int, total: int):
         dlg = getattr(self, "_update_progress", None)
@@ -339,7 +362,11 @@ class SettingsDialog(QDialog):
 
     def _on_update_download_finished(self, installer_path: str):
         from PyQt6.QtWidgets import QApplication
-        from nengi.core.updater import launch_silent_install
+        from nengi.core.updater import (
+            launch_silent_install,
+            set_installed_published_at,
+            shutdown_app_for_update,
+        )
         dlg = getattr(self, "_update_progress", None)
         if dlg is not None:
             dlg.close()
@@ -355,6 +382,15 @@ class SettingsDialog(QDialog):
         except Exception as e:
             QMessageBox.warning(self, "Güncelleme", f"Kurulum başlatılamadı: {e}")
             return
+        # Quit öncesi: tray agent + single-instance server kesin durdurulsun.
+        try:
+            info = getattr(self, "_pending_update_info", None)
+            published = getattr(info, "published_at", "") if info is not None else ""
+            if published:
+                set_installed_published_at(published)
+        except Exception:
+            pass
+        shutdown_app_for_update(self)
         self.accept()
         app = QApplication.instance()
         if app is not None:

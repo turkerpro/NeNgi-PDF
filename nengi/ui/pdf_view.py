@@ -607,12 +607,15 @@ class PageRenderWidget(QWidget):
             self.active_text_widgets.append(editor)
             self.update() # triggers paintEvent to draw white box
             
-            def on_commit(new_text, s, r):
+            def on_commit(new_text, s, r, eff_rect=None):
                 if editor in self.active_text_widgets:
                     self.active_text_widgets.remove(editor)
+                # Editörün güncel boyutundan türetilmiş rect varsa onu kullan:
+                # dar pdf_rect ile geniş kutu sarmalaması uyuşmazlığını önler.
+                target_rect = eff_rect if eff_rect is not None else r
                 try:
                     ok = self.doc.replace_text_block(
-                        self.page_idx, r, new_text,
+                        self.page_idx, target_rect, new_text,
                         fontname=s.get("fitz_font", "helv"),
                         fontsize=s.get("size", 11.0),
                         color=s.get("color_rgb", (0,0,0)),
@@ -734,7 +737,7 @@ class PageRenderWidget(QWidget):
         editor = InlineTextEditor("", style, anchor_rect, self.zoom, self)
         self.active_text_widgets.append(editor)
 
-        def on_commit(new_text, s, r):
+        def on_commit(new_text, s, r, eff_rect=None):
             if editor in self.active_text_widgets:
                 self.active_text_widgets.remove(editor)
             from nengi.ui.draggable_text import DraggableTextWidget

@@ -26,6 +26,7 @@ import tempfile
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Callable, Optional
 
 try:
@@ -53,12 +54,18 @@ API_URL = (
 )
 USER_AGENT = "NeNgi-PDF-Updater"
 REQUEST_TIMEOUT = 12
+# Yarım/bozuk Setup.exe'yi çalıştırmamak için minimum kurulum boyutu (10 MB).
+MIN_INSTALLER_BYTES = 10 * 1024 * 1024
 
 _VERSION_RE = re.compile(r"v?(\d+(?:\.\d+){0,3})")
 
 
 class UpdateCheckError(Exception):
     """Kullaniciya gosterilebilir, Turkce güncelleme hatasi."""
+
+
+class DownloadCancelledError(UpdateCheckError):
+    """İndirme kullanıcı tarafından iptal edildi (yarım dosya temizlenir)."""
 
 
 @dataclass
@@ -68,6 +75,7 @@ class UpdateInfo:
     remote_version: str
     download_url: Optional[str]
     notes: str = ""
+    published_at: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +287,80 @@ def fetch_latest_release(timeout: int = REQUEST_TIMEOUT, channel: Optional[str] 
     return _http_get_json(api_url_for_channel(resolved), timeout=timeout)
 
 
+# ---------------------------------------------------------------------------
+# Rolling-tag körlüğü: sürüm eşitse yayın zamanı karşılaştır
+# ---------------------------------------------------------------------------
+
+_PUBLISHED_AT_KEY = "installed_release_published_at"
+
+
+def _parse_github_time(value: object) -> Optional[datetime]:
+    """GitHub ISO-8601 zamanını UTC datetime'a çevirir (çevrilemezse None)."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        iso = text.replace("Z", "+00:00") if text.endswith(("Z", "z")) else text
+        parsed = datetime.fromisoformat(iso)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError):
+        return None
+
+
+def extract_release_published_at(release: dict) -> str:
+    """Release/asset zaman damgalarından en yeniyi normalize ISO string döner.
+
+    Rolling-tag (`latest-build`/`beta-build`) her derlemede yeniden yayınlanır;
+    sürüm dizesi aynı kalsa bile `published_at` ilerler. Boş string = damga yok.
+    """
+    candidates: list[str] = []
+    if isinstance(release, dict):
+        for key in ("published_at", "created_at", "updated_at", "pushed_at"):
+            value = release.get(key)
+            if value:
+                candidates.append(str(value))
+        assets = release.get("assets") or []
+        if isinstance(assets, list):
+            for asset in assets:
+                if isinstance(asset, dict) and asset.get("updated_at"):
+                    candidates.append(str(asset.get("updated_at")))
+    best: Optional[datetime] = None
+    for raw in candidates:
+        parsed = _parse_github_time(raw)
+        if parsed is not None and (best is None or parsed > best):
+            best = parsed
+    if best is not None:
+        return best.isoformat()
+    for raw in candidates:
+        if raw.strip():
+            return raw.strip()
+    return ""
+
+
+def get_installed_published_at() -> Optional[str]:
+    """Kurulu derlemenin yayın damgasını oku (yoksa None)."""
+    try:
+        from PyQt6.QtCore import QSettings
+        value = QSettings("NeNgi", "NeNgiPDF").value(_PUBLISHED_AT_KEY, None)
+    except Exception:
+        return None
+    text = str(value).strip() if value is not None else ""
+    return text or None
+
+
+def set_installed_published_at(published_at: str) -> None:
+    """Kurulu derlemenin yayın damgasını kaydet (kurulum sonrası çağrılır)."""
+    try:
+        from PyQt6.QtCore import QSettings
+        QSettings("NeNgi", "NeNgiPDF").setValue(
+            _PUBLISHED_AT_KEY, (published_at or "").strip()
+        )
+    except Exception:
+        pass
+
+
 def check_for_update(
     current_version: Optional[str] = None,
     channel: Optional[str] = None,
@@ -299,7 +381,16 @@ def check_for_update(
         )
     download_url = find_setup_asset_url(release)
     notes = str(release.get("body") or "")
-    has_update = is_newer(local, remote)
+    published_at = extract_release_published_at(release)
+    if is_newer(local, remote):
+        has_update = True
+    elif compare_versions(local, remote) == 0 and published_at:
+        # Rolling-tag körlüğü: sürüm dizesi aynı ama daha yeni bir derleme
+        # yayınlanmış olabilir (published_at ilerlemişse yeni build var).
+        baseline = get_installed_published_at()
+        has_update = (baseline or "") != published_at
+    else:
+        has_update = False
     if has_update and not download_url:
         raise UpdateCheckError(
             f"Yeni sürüm ({remote}) bulundu ancak kurulum dosyası "
@@ -311,6 +402,7 @@ def check_for_update(
         remote_version=remote,
         download_url=download_url,
         notes=notes,
+        published_at=published_at,
     )
 
 
@@ -323,22 +415,58 @@ def get_temp_installer_path(filename: str = "NeNgi_PDF_Setup.exe") -> str:
     return os.path.join(tempfile.gettempdir(), safe)
 
 
+def _safe_remove(path: str) -> None:
+    """Yarım/bozuk dosyayı sessizce sil (yoksa no-op)."""
+    try:
+        if path and os.path.isfile(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
 def download_file(
     url: str,
     dest_path: str,
     progress_callback: Optional[Callable[[int, int], None]] = None,
     timeout: int = 60,
     chunk_size: int = 1024 * 64,
+    min_size: int = MIN_INSTALLER_BYTES,
+    should_cancel: Optional[Callable[[], bool]] = None,
 ) -> str:
-    """URL'yi dest_path'e indirir, boyutu dondurur. Hata -> UpdateCheckError."""
+    """URL'yi `.part` dosyasına indirip atomik rename ile dest_path'e taşır.
+
+    Bütünlük kuralları:
+    - Content-Length biliniyorsa eksik indirme reddedilir.
+    - `min_size` (varsayılan 10 MB) altındaki dosyalar bozuk sayılıp silinir.
+    - Hata/iptal durumunda yarım `.part` dosyası silinir; asla yarım exe
+      hedef yola taşınmaz. Hata -> UpdateCheckError.
+    """
+    part_path = dest_path + ".part"
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    downloaded = 0
+    total = 0
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            total = int(resp.getheader("Content-Length") or 0)
-            downloaded = 0
+            getheader = getattr(resp, "getheader", None)
+            if callable(getheader):
+                try:
+                    total = int(getheader("Content-Length") or 0)
+                except (TypeError, ValueError):
+                    total = 0
             os.makedirs(os.path.dirname(os.path.abspath(dest_path)), exist_ok=True)
-            with open(dest_path, "wb") as f:
+            with open(part_path, "wb") as f:
                 while True:
+                    if should_cancel is not None:
+                        try:
+                            cancelled = bool(should_cancel())
+                        except DownloadCancelledError:
+                            raise
+                        except Exception:
+                            cancelled = False
+                        if cancelled:
+                            raise DownloadCancelledError(
+                                "İndirme iptal edildi. Yarım dosya temizlendi."
+                            )
                     chunk = resp.read(chunk_size)
                     if not chunk:
                         break
@@ -347,45 +475,81 @@ def download_file(
                     if progress_callback:
                         try:
                             progress_callback(downloaded, total)
+                        except DownloadCancelledError:
+                            raise
                         except Exception:
                             pass
+    except DownloadCancelledError:
+        _safe_remove(part_path)
+        raise
     except (urllib.error.URLError, OSError, TimeoutError) as e:
+        _safe_remove(part_path)
         raise UpdateCheckError(
             "Kurulum dosyası indirilemedi. İnternet bağlantınızı "
             "kontrol edip tekrar deneyin."
         ) from e
+    if total > 0 and downloaded != total:
+        _safe_remove(part_path)
+        raise UpdateCheckError(
+            "Kurulum dosyası eksik indirildi (%s/%s bayt). "
+            "Lütfen tekrar deneyin." % (downloaded, total)
+        )
     try:
-        size = os.path.getsize(dest_path)
+        size = os.path.getsize(part_path)
     except OSError as e:
+        _safe_remove(part_path)
         raise UpdateCheckError("İndirilen dosya doğrulanamadı.") from e
     if size <= 0:
-        try:
-            os.remove(dest_path)
-        except OSError:
-            pass
+        _safe_remove(part_path)
         raise UpdateCheckError(
             "İndirilen kurulum dosyası bozuk (0 bayt). Lütfen tekrar deneyin."
         )
+    if min_size and min_size > 0 and size < min_size:
+        _safe_remove(part_path)
+        raise UpdateCheckError(
+            "İndirilen kurulum dosyası eksik/bozuk görünüyor "
+            "(%s bayt, en az %s bayt bekleniyordu). Lütfen tekrar deneyin."
+            % (size, min_size)
+        )
+    try:
+        os.replace(part_path, dest_path)
+    except OSError as e:
+        _safe_remove(part_path)
+        raise UpdateCheckError("İndirilen dosya doğrulanamadı.") from e
     return dest_path
 
 
 def launch_silent_install(installer_path: str) -> None:
-    """NSIS sessiz kurulumu baslatir ("/S"). Donmez; hata -> UpdateCheckError."""
+    """NSIS sessiz kurulumu baslatir ("/S"). Donmez; hata -> UpdateCheckError.
+
+    Windows'ta UAC uyumu icin "runas" ile yükseltilmiş baslatilir
+    (ctypes ShellExecuteW); kullanici UAC'yi reddederse "yönetici gerekli"
+    mesaji yükseltilir.
+    """
     if not installer_path or not os.path.isfile(installer_path):
         raise UpdateCheckError("Kurulum dosyası bulunamadı.")
     if os.path.getsize(installer_path) <= 0:
         raise UpdateCheckError("Kurulum dosyası bozuk (0 bayt).")
     try:
         if sys.platform.startswith("win"):
-            # Ayrı konsolsuz süreç; kurucu eski EXE'yi kapatıp üzerine yazar.
-            subprocess.Popen(
-                [installer_path, "/S"],
-                close_fds=True,
-                creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
+            import ctypes
+
+            SW_SHOWNORMAL = 1
+            rc = ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", installer_path, "/S", None, SW_SHOWNORMAL
             )
+            if int(rc or 0) <= 32:
+                raise UpdateCheckError(
+                    "Kurulum için yönetici izni gerekli. Lütfen açılan "
+                    "kullanıcı hesabı denetimi (UAC) penceresinde 'Evet'e basın."
+                )
         else:
             subprocess.Popen([installer_path, "/S"], close_fds=True)
+    except UpdateCheckError:
+        raise
     except OSError as e:
+        raise UpdateCheckError("Kurulum başlatılamadı: %s" % e) from e
+    except Exception as e:
         raise UpdateCheckError("Kurulum başlatılamadı: %s" % e) from e
 
 
@@ -413,13 +577,150 @@ class UpdateChecker:
         url: str,
         dest_path: Optional[str] = None,
         progress_callback: Optional[Callable[[int, int], None]] = None,
+        min_size: int = MIN_INSTALLER_BYTES,
+        should_cancel: Optional[Callable[[], bool]] = None,
     ) -> str:
         filename = os.path.basename(url.split("?")[0]) or "NeNgi_PDF_Setup.exe"
         dest = dest_path or get_temp_installer_path(filename)
-        return download_file(url, dest, progress_callback=progress_callback)
+        return download_file(
+            url,
+            dest,
+            progress_callback=progress_callback,
+            min_size=min_size,
+            should_cancel=should_cancel,
+        )
 
     def install_silently(self, installer_path: str) -> None:
         launch_silent_install(installer_path)
+
+
+def shutdown_app_for_update(source_widget=None) -> None:
+    """Kurulum öncesi uygulamayı sessiz kapanışa hazırla.
+
+    - Ana pencerede `_updating_for_restart` bayrağı koyar (closeEvent tray'e
+      gömülmeden kabul edilir).
+    - Tray agent'ı durdurur (`_is_quitting=True` + simgeyi gizler).
+    - Single-instance QLocalServer'ı kapatıp soket adını temizler; aksi halde
+      kurucu dosya kilidine takılabilir / eski süreç hayatta kalır.
+    Hiçbir adımda exception yükseltmez.
+    """
+    main_win = None
+    try:
+        if source_widget is not None:
+            cur = source_widget
+            seen_ids: set[int] = set()
+            while cur is not None and id(cur) not in seen_ids:
+                seen_ids.add(id(cur))
+                if hasattr(cur, "tray_agent") or hasattr(cur, "_updating_for_restart"):
+                    main_win = cur
+                    break
+                try:
+                    cur = cur.parent()
+                except Exception:
+                    cur = None
+            if main_win is None:
+                try:
+                    cand = source_widget.window()
+                    if cand is not None and cand is not source_widget:
+                        main_win = cand
+                except Exception:
+                    pass
+        if main_win is None:
+            try:
+                from PyQt6.QtWidgets import QApplication
+
+                app = QApplication.instance()
+                if app is not None:
+                    for top in app.topLevelWidgets():
+                        if hasattr(top, "tray_agent"):
+                            main_win = top
+                            break
+            except Exception:
+                pass
+    except Exception:
+        pass
+    if main_win is None:
+        return
+    try:
+        setattr(main_win, "_updating_for_restart", True)
+    except Exception:
+        pass
+    tray = getattr(main_win, "tray_agent", None)
+    if tray is not None:
+        try:
+            setattr(tray, "_is_quitting", True)
+        except Exception:
+            pass
+        try:
+            icon = getattr(tray, "tray_icon", None)
+            if icon is not None:
+                try:
+                    icon.hide()
+                except Exception:
+                    pass
+                try:
+                    setattr(tray, "tray_icon", None)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    # Single-instance dinleyicisi: önce bilinen öznitelikler, sonra nesne ağacı.
+    try:
+        for attr in (
+            "instance_mgr",
+            "instance_manager",
+            "single_instance_mgr",
+            "single_instance_manager",
+            "_instance_mgr",
+            "_single_instance_mgr",
+        ):
+            mgr = getattr(main_win, attr, None)
+            srv = getattr(mgr, "server", None) if mgr is not None else None
+            if srv is not None:
+                try:
+                    srv.close()
+                except Exception:
+                    pass
+                try:
+                    setattr(mgr, "server", None)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    try:
+        from PyQt6.QtNetwork import QLocalServer
+
+        servers: list = []
+        try:
+            servers.extend(list(main_win.findChildren(QLocalServer)))
+        except Exception:
+            pass
+        try:
+            from PyQt6.QtWidgets import QApplication
+
+            app = QApplication.instance()
+            if app is not None:
+                for srv in app.findChildren(QLocalServer):
+                    if srv not in servers:
+                        servers.append(srv)
+        except Exception:
+            pass
+        for srv in servers:
+            try:
+                srv.close()
+            except Exception:
+                pass
+        try:
+            from nengi.core.single_instance import IPC_SOCKET_NAME
+
+            try:
+                QLocalServer.removeServer(IPC_SOCKET_NAME)
+            except Exception:
+                pass
+        except Exception:
+            pass
+    except Exception:
+        pass
 
 
 if _QT_AVAILABLE:  # pragma: no cover - GUI ortami gerektirir
@@ -456,13 +757,29 @@ if _QT_AVAILABLE:  # pragma: no cover - GUI ortami gerektirir
             self._url = url
             self._checker = UpdateChecker()
             self._dest_path = dest_path
+            self._cancelled = False
+
+        def cancel(self) -> None:
+            """Kullanıcı iptali: yarım `.part` dosyası temizlenir."""
+            self._cancelled = True
+
+        def _emit_progress(self, downloaded: int, total: int) -> None:
+            if self._cancelled:
+                raise DownloadCancelledError(
+                    "İndirme iptal edildi. Yarım dosya temizlendi."
+                )
+            try:
+                self.progress.emit(downloaded, total)
+            except Exception:
+                pass
 
         def run(self):  # type: ignore[override]
             try:
                 path = self._checker.download(
                     self._url,
                     dest_path=self._dest_path,
-                    progress_callback=lambda d, t: self.progress.emit(d, t),
+                    progress_callback=self._emit_progress,
+                    should_cancel=lambda: self._cancelled,
                 )
             except UpdateCheckError as e:
                 self.failed.emit(str(e))

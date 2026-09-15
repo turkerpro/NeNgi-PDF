@@ -7,7 +7,7 @@
 Unicode true
 
 !define PRODUCT_NAME "NeNgi PDF"
-!define PRODUCT_VERSION "2.0.5-beta"
+!define PRODUCT_VERSION "2.0.6-beta"
 !define PRODUCT_PUBLISHER "NeNgi"
 !define PRODUCT_WEB_SITE "https://github.com/turkerpro/NeNgi-PDF"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\NeNgi_PDF.exe"
@@ -61,13 +61,28 @@ ShowUnInstDetails show
 Section "MainSection" SEC01
   ; Çalışan eski sürüm varsa kapat
   nsExec::Exec 'taskkill /F /IM NeNgi_PDF.exe'
-  Sleep 500
+  Sleep 2000
 
   SetOutPath "$INSTDIR"
   SetOverwrite on
 
   ; Kurulacak program dosyaları (Hazır açılmış, anında çalışan klasör yapısı)
-  File /r "dist\NeNgi_PDF\*.*"
+  ; Dosya kilidi retry: ilk deneme başarısızsa 2 sn bekleyip bir kez daha
+  ; dene (toplam 2 deneme); hâlâ kilitliyse kullanıcıyı bilgilendirip çık.
+  StrCpy $R9 0
+  __retry_copy:
+    ClearErrors
+    File /r "dist\NeNgi_PDF\*.*"
+    IfErrors 0 __copy_done
+    IntOp $R9 $R9 + 1
+    IntCmp $R9 2 __copy_failed __retry_wait __copy_failed
+  __retry_wait:
+    Sleep 2000
+    Goto __retry_copy
+  __copy_failed:
+    MessageBox MB_OK|MB_ICONSTOP "Kurulum dosyaları yazılamadı (dosya kilidi). Lütfen NeNgi PDF uygulamasının tamamen kapalı olduğundan emin olup kurulumu yeniden çalıştırın."
+    Abort
+  __copy_done:
 
   ; Masaüstü Kısayolu
   CreateShortCut "$DESKTOP\NeNgi PDF.lnk" "$INSTDIR\NeNgi_PDF.exe" "" "$INSTDIR\NeNgi_PDF.exe" 0
@@ -127,7 +142,7 @@ SectionEnd
 Section Uninstall
   ; Kaldırmadan önce çalışan programı kapat
   nsExec::Exec 'taskkill /F /IM NeNgi_PDF.exe'
-  Sleep 500
+  Sleep 2000
 
   ; Kısayolları sil
   Delete "$DESKTOP\NeNgi PDF.lnk"

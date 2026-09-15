@@ -850,24 +850,32 @@ class PDFDocument:
                 return Result.fail("Page is rotated", "Rotate page to 0° first", "PAGE_ROTATED")
 
             res = resolve_font_for_text(new_text, fontname)
-            target_font = fontname
             _fontfile = res.get("fontfile")
             _fontbuffer = res.get("fontbuffer")
+            # Ölçüm ve yazımda AYNI gömülü font: hedefi redact ÖNCESİ
+            # netleştir, ölçümü de aynı TTF ile yap (helv tahmini yok).
+            target_font = fontname
+            meas_font = None
+            if _fontfile and os.path.isfile(_fontfile):
+                target_font = "tr-sans"
+                try:
+                    meas_font = fitz.Font(fontfile=_fontfile)
+                except Exception:
+                    meas_font = None
+            elif _fontbuffer:
+                target_font = "f_unicode"
+                try:
+                    meas_font = fitz.Font(fontbuffer=_fontbuffer)
+                except Exception:
+                    meas_font = None
 
             def _measure_width(s: str, fs: float) -> float:
                 try:
-                    if _fontfile:
-                        return fitz.Font(fontfile=_fontfile).text_length(s, fontsize=fs)
-                    if _fontbuffer and target_font == fontname:
-                        # fontbuffer yolu henuz sayfaya gomulmedi; olcum icin
-                        # dosyadan cozulen fontu dene, olmazsa base14'e dus.
-                        pass
+                    if meas_font is not None:
+                        return meas_font.text_length(s, fontsize=fs)
                     return fitz.get_text_length(s, fontname=target_font, fontsize=fs)
                 except Exception:
-                    try:
-                        return fitz.get_text_length(s, fontname="helv", fontsize=fs)
-                    except Exception:
-                        return float(len(s or "")) * float(fs) * 0.55
+                    return float(len(s or "")) * float(fs) * 0.55
 
             # Redact ONCESI sığma hesabı: satırlara böl, genişlik kontrolü,
             # puntoyu 6pt tabanına kadar küçült; gerekirse rect'i sayfa
@@ -903,56 +911,70 @@ class PDFDocument:
                 if _need_h > eff_rect.height:
                     try:
                         _bottom = page.rect.y1 - 1.0
-                        eff_rect.y1 = min(_bottom, eff_rect.y0 + _need_h + 2.0)
+                        # Tahmin ile insert_textbox'un gerçek sarmalaması
+                        # arasında birkaç pt fark olabilir; bir satır pay bırak.
+                        _spare = eff_fontsize * 1.2 + 2.0
+                        eff_rect.y1 = min(_bottom, eff_rect.y0 + _need_h + _spare)
                         if _need_h > eff_rect.height:
                             eff_rect.y1 = _bottom
                     except Exception:
                         pass
 
+            # Sığma garantisinden SONRA redact: eff_fontsize/eff_rect yukarıda
+            # aynı gömülü fontla hesaplandı; redact'tan önce undo noktası alınır.
             save_result = self.save_state_for_undo()
             if not save_result:
                 return save_result
             page.add_redact_annot(eff_rect, fill=(1, 1, 1))
             page.apply_redactions()
 
-            if _fontfile:
+            # Yazımda da ölçümdeki AYNI gömülü font kullanılır.
+            if target_font == "tr-sans" and _fontfile:
                 try:
-                    page.insert_font(fontname="tr-sans", fontfile=res["fontfile"])
-                    target_font = "tr-sans"
+                    page.insert_font(fontname="tr-sans", fontfile=_fontfile)
                 except Exception as e:
                     logger.warning("insert_font(fontfile=...) başarısız, fallback deneniyor: %s", e)
-            if target_font == fontname and res.get("fontbuffer"):
+            elif target_font == "f_unicode" and _fontbuffer:
                 try:
-                    page.insert_font(fontname="f_unicode", fontbuffer=res["fontbuffer"])
-                    target_font = "f_unicode"
+                    page.insert_font(fontname="f_unicode", fontbuffer=_fontbuffer)
                 except Exception as e:
                     logger.warning("insert_font(fontbuffer=...) başarısız, fallback deneniyor: %s", e)
 
-            lines = new_text.splitlines()
-            if len(lines) == 1:
-                # Single line: use exact baseline if provided, else use textbox for perfect bounds
-                if baseline_y is not None:
-                    x_pos = origin_x if origin_x is not None else eff_rect.x0
-                    page.insert_text((x_pos, baseline_y), lines[0], fontsize=eff_fontsize, fontname=target_font, color=color)
+            def _fail_restored(msg: str, hint: str, code: str) -> Result[bool]:
+                # Boş ekran bırakma: redact geri alınır, orijinal korunur.
+                try:
+                    self.undo()
+                except Exception:
+                    pass
+                return Result.fail(msg, hint, code)
+
+            try:
+                lines = new_text.splitlines()
+                if len(lines) == 1:
+                    # Single line: use exact baseline if provided, else use textbox for perfect bounds
+                    if baseline_y is not None:
+                        x_pos = origin_x if origin_x is not None else eff_rect.x0
+                        page.insert_text((x_pos, baseline_y), lines[0], fontsize=eff_fontsize, fontname=target_font, color=color)
+                    else:
+                        rc = page.insert_textbox(eff_rect, lines[0], fontsize=eff_fontsize, fontname=target_font, color=color, align=0)
+                        if rc is not None and rc < 0:
+                            logger.warning(
+                                "insert_textbox sığmadı (rc=%r); redact undo ile geri alındı.",
+                                rc,
+                            )
+                            return _fail_restored("Text does not fit in rectangle", "Try smaller font size or larger rectangle", "TEXT_OVERFLOW")
                 else:
-                    rc = page.insert_textbox(eff_rect, lines[0], fontsize=eff_fontsize, fontname=target_font, color=color, align=0)
+                    # Multi-line: use insert_textbox for automatic wrapping and line-heights
+                    rc = page.insert_textbox(eff_rect, new_text, fontsize=eff_fontsize, fontname=target_font, color=color, align=0)
                     if rc is not None and rc < 0:
                         logger.warning(
-                            "insert_textbox sığmadı (rc=%r); redact uygulanmıştı, undo ile geri alınabilir.",
+                            "insert_textbox sığmadı (rc=%r); redact undo ile geri alındı.",
                             rc,
                         )
-                        self.is_modified = True
-                        return Result.fail("Text does not fit in rectangle", "Try smaller font size or larger rectangle", "TEXT_OVERFLOW")
-            else:
-                # Multi-line: use insert_textbox for automatic wrapping and line-heights
-                rc = page.insert_textbox(eff_rect, new_text, fontsize=eff_fontsize, fontname=target_font, color=color, align=0)
-                if rc is not None and rc < 0:
-                    logger.warning(
-                        "insert_textbox sığmadı (rc=%r); redact uygulanmıştı, undo ile geri alınabilir.",
-                        rc,
-                    )
-                    self.is_modified = True
-                    return Result.fail("Text does not fit in rectangle", "Try smaller font size or larger rectangle", "TEXT_OVERFLOW")
+                        return _fail_restored("Text does not fit in rectangle", "Try smaller font size or larger rectangle", "TEXT_OVERFLOW")
+            except Exception as e:
+                logger.exception("Error inserting replacement text after redact")
+                return _fail_restored(str(e), "Failed to insert replacement text; original restored", "INSERT_AFTER_REDACT_FAILED")
 
             self.is_modified = True
             return Result.ok(True)

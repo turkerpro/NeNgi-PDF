@@ -14,7 +14,7 @@ def _get_tokens(is_dark: bool = True):
 
 
 class InlineTextEditor(QWidget):
-    editing_finished = pyqtSignal(str, dict, fitz.Rect) # text, style, rect
+    editing_finished = pyqtSignal(str, dict, object, object) # text, style, orig_rect, eff_rect
     editing_cancelled = pyqtSignal()
 
     def __init__(self, text: str, style: dict, pdf_rect: fitz.Rect, zoom: float, parent=None):
@@ -267,6 +267,31 @@ class InlineTextEditor(QWidget):
             return
         super().keyPressEvent(event)
 
+    def _effective_pdf_rect(self) -> fitz.Rect:
+        """Editörün GÜNCEL boyutundan türetilmiş PDF rect (aynı origin).
+
+        Commit anındaki geniş kutu sarmalaması ile PDF yazımı aynı
+        genişlikte yapılsın diye: genişlik/yükseklik widget'tan
+        (width()/zoom, height()/zoom), origin orijinal pdf_rect'ten.
+        """
+        try:
+            z = float(self.zoom) if self.zoom else 1.0
+            if z <= 0:
+                z = 1.0
+        except Exception:
+            z = 1.0
+        try:
+            w_pdf = self.width() / z
+            h_pdf = self.height() / z
+        except Exception:
+            w_pdf = self.pdf_rect.width
+            h_pdf = self.pdf_rect.height
+        x0 = self.pdf_rect.x0
+        y0 = self.pdf_rect.y0
+        eff = fitz.Rect(x0, y0, x0 + max(float(w_pdf), 10.0), y0 + max(float(h_pdf), 10.0))
+        eff.normalize()
+        return eff
+
     def commit(self):
         """Düzenlenen metni kaydet: boşsa iptal sayılır (orijinal korunur)."""
         if self._committed:
@@ -276,7 +301,13 @@ class InlineTextEditor(QWidget):
         if new_text:
             # Başarı/hata bildirimi alıcı (pdf_view.on_commit) tarafında yapılır;
             # burada sinyal her zaman gönderilir, sessiz yutma yoktur.
-            self.editing_finished.emit(new_text, self.style, self.pdf_rect)
+            # Dar pdf_rect yerine güncel editör boyutundan türetilmiş
+            # eff_rect de gönderilir; alıcı yazımda eff_rect'i kullanır.
+            try:
+                eff_rect = self._effective_pdf_rect()
+            except Exception:
+                eff_rect = self.pdf_rect
+            self.editing_finished.emit(new_text, self.style, self.pdf_rect, eff_rect)
         else:
             self.editing_cancelled.emit()
         self.deleteLater()
