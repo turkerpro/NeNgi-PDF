@@ -43,7 +43,7 @@ from nengi.ui.comments_panel import CommentsPanel
 from nengi.ui.copilot_panel import CopilotPanel
 from nengi.ui.bookmarks_panel import BookmarksPanel
 from nengi.ui.styles import DARK_THEME, LIGHT_THEME
-from nengi.ui.toast import show_error_toast, ToastManager
+from nengi.ui.toast import show_error_toast, show_info_toast, ToastManager
 from nengi.ui.icons import get_svg_icon
 
 from nengi.ui.header_footer_dialog import HeaderFooterDialog
@@ -1068,55 +1068,46 @@ class MainWindow(QMainWindow):
         menu.exec(self.nav_rail.mapToGlobal(QPoint(220, 100)))
 
     def _on_copilot_action(self, action_key: str):
-        if action_key == "merge":
-            self.open_merge_dialog()
-            return
-        elif action_key == "diff":
-            self.compare_open_tabs()
-            return
-
-        doc = self.get_current_doc()
-        viewer = self.get_current_viewer()
-        if not doc or not doc.is_open:
-            self.copilot_panel.add_message("Lütfen önce işlem yapılacak bir PDF açın.")
-            return
-
-        curr_page = viewer.current_page_idx if viewer else 0
-
-        if action_key == "summarize":
-            words = doc.get_page_text_words(curr_page)
-            text = " ".join(w[4] for w in words)
-            if text:
-                from PyQt6.QtWidgets import QApplication
-                QApplication.clipboard().setText(text)
-                self.copilot_panel.add_message(
-                    f"Sayfa {curr_page+1} metinleri kopyalandı ({len(words)} kelime):\n\n\"{text[:200]}...\""
-                )
+        if action_key == "search":
+            query = self.txt_search.text().strip() if hasattr(self, "txt_search") else ""
+            if query:
+                self._on_search_triggered()
             else:
-                self.copilot_panel.add_message("Bu sayfada seçilebilir metin bulunamadı. OCR çalıştırmayı deneyin.")
-        elif action_key == "ocr":
-            self.copilot_panel.add_message("OCR metin taraması başlatılıyor...")
-            self._run_ocr_trigger()
-        elif action_key == "protect":
-            self._encrypt_current_doc()
-        elif action_key == "header_footer":
-            self.action_header_footer()
-        elif action_key == "watermark":
-            self.action_watermark()
-        elif action_key == "crop":
-            self.action_crop()
-        elif action_key == "split":
-            self.action_split_document()
-        elif action_key == "export":
-            self.action_export()
-        elif action_key == "optimize":
-            self.action_optimize()
-        elif action_key == "form_designer":
-            self.action_form_designer()
-        elif action_key == "form_export":
-            self.action_export_form_data()
-        elif action_key == "form_import":
-            self.action_import_form_data()
+                panel_query = ""
+                if hasattr(self, "copilot_panel") and hasattr(self.copilot_panel, "txt_query"):
+                    panel_query = self.copilot_panel.txt_query.text().strip()
+                if panel_query:
+                    self._on_copilot_query(panel_query)
+                else:
+                    if hasattr(self, "txt_search"):
+                        self.txt_search.setFocus()
+                    self.copilot_panel.add_message("Aramak için üstteki arama kutusuna bir ifade yazıp Enter'a basın.")
+            return
+        elif action_key == "recent":
+            self._show_recent_files_menu()
+            return
+        elif action_key == "suggest":
+            doc = self.get_current_doc()
+            if not doc or not doc.is_open:
+                self.copilot_panel.add_message(
+                    "Öneri: önce bir PDF açın (Dosya > Aç). Ardından arama, sayfa yönetimi veya dışa aktarma önerebilirim."
+                )
+                return
+            suggestions = []
+            if doc.page_count > 5:
+                suggestions.append("Sayfa sayısı fazla — Sayfaları Yönet ile düzenleyin")
+            try:
+                words_res = doc.get_page_text_words(0)
+                words = words_res.unwrap_or([]) if hasattr(words_res, "unwrap_or") else (words_res or [])
+            except Exception:
+                words = []
+            if not words:
+                suggestions.append("Bu belgede seçilebilir metin az — OCR çalıştırmayı deneyin")
+            if not suggestions:
+                suggestions.append("Belgeyi dışa aktarın veya optimize edin")
+            suggestions = suggestions[:3]
+            self.copilot_panel.add_message("Bağlamsal öneriler:\n• " + "\n• ".join(suggestions))
+            return
 
 
     def _on_copilot_query(self, query: str):
@@ -1551,8 +1542,7 @@ class MainWindow(QMainWindow):
         self._on_document_modified()
 
     def show_status_message(self, message: str):
-        if hasattr(self, "lbl_footer_status"):
-            self.lbl_footer_status.setText(message)
+        show_info_toast(self, message)
 
     # ==========================================
     # Tools, Editing, DIFF & OCR

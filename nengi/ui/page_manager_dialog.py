@@ -96,9 +96,10 @@ class PageManagerDialog(QDialog):
             return
 
         for i in range(self.doc.page_count):
-            pix = self.doc.render_page_pixmap(i, zoom=0.25)
+            pix = self.doc.render_page_pixmap(i, zoom=0.25).unwrap_or(QPixmap())
             item = QListWidgetItem(f"Sayfa {i + 1}")
-            item.setIcon(QIcon(pix))
+            if pix and not pix.isNull():
+                item.setIcon(QIcon(pix))
             item.setData(Qt.ItemDataRole.UserRole, i)
             self.list_widget.addItem(item)
 
