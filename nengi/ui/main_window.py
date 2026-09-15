@@ -146,7 +146,7 @@ class MainWindow(QMainWindow):
         # Keep a reference safe for subcomponents that may access before full init
         self._settings_initialized = True
 
-        self.setWindowTitle("NeNgi PDF v2.0.3-beta")
+        self.setWindowTitle("NeNgi PDF v2.0.4-beta")
         self.resize(1340, 860)
         self.is_dark_mode = self.settings.value("theme", "dark") == "dark"
         self.recent_files: List[str] = []
@@ -703,13 +703,6 @@ class MainWindow(QMainWindow):
         self.btn_save.clicked.connect(self.save_current_file)
         h_layout.addWidget(self.btn_save)
 
-        self.btn_save_as = QPushButton("  Farklı Kaydet")
-        self.btn_save_as.setIcon(get_svg_icon("save", "#D0D4DC", 16))
-        self.btn_save_as.setIconSize(QSize(16, 16))
-        self.btn_save_as.setToolTip("Farklı Kaydet (Ctrl+Shift+S)")
-        self.btn_save_as.clicked.connect(self.save_current_file_as)
-        h_layout.addWidget(self.btn_save_as)
-
         self.btn_theme = QPushButton()
         self.btn_theme.setIcon(get_svg_icon("theme", "#D0D4DC", 18))
         self.btn_theme.setIconSize(QSize(18, 18))
@@ -735,13 +728,6 @@ class MainWindow(QMainWindow):
         self.btn_toggle_comments.setStyleSheet("font-weight: 600; padding: 6px 14px;")
         self.btn_toggle_comments.clicked.connect(self._toggle_comments_panel)
         h_layout.addWidget(self.btn_toggle_comments)
-
-        # User Badge
-        badge_user = QLabel("Standart Plan")
-        badge_user.setStyleSheet(
-            "background-color: #24272D; border: 1px solid #353942; border-radius: 14px; padding: 5px 12px; color: #A0A5AD; font-size: 11.5px; font-weight: 500;"
-        )
-        h_layout.addWidget(badge_user)
 
         return header
 

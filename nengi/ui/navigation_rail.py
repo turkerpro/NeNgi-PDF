@@ -17,6 +17,12 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QPixmap
 
 from nengi.ui.icons import get_svg_icon
+from nengi.ui.styles import get_dark_tokens, get_light_tokens
+
+
+def _get_tokens(is_dark: bool = True):
+    """Returns design tokens for current theme."""
+    return get_dark_tokens() if is_dark else get_light_tokens()
 
 
 class NavigationRail(QWidget):
@@ -39,6 +45,7 @@ class NavigationRail(QWidget):
         layout.setContentsMargins(12, 16, 12, 16)
         layout.setSpacing(6)
 
+        tokens = _get_tokens(True)
         self.is_dark = True
         self._item_icons: Dict[str, str] = {}
 
@@ -57,11 +64,11 @@ class NavigationRail(QWidget):
             pix = QPixmap(icon_path).scaled(28, 28, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             lbl_logo.setPixmap(pix)
         else:
-            lbl_logo.setPixmap(get_svg_icon("logo", "#0078D4", 26).pixmap(26, 26))
+            lbl_logo.setPixmap(get_svg_icon("logo", tokens.colors.text_accent, 26).pixmap(26, 26))
         brand_layout.addWidget(lbl_logo)
 
         lbl_title = QLabel("NeNgi PDF")
-        lbl_title.setStyleSheet("font-size: 17px; font-weight: bold; color: #0078D4; letter-spacing: 0.5px;")
+        lbl_title.setStyleSheet(f"font-size: 17px; font-weight: bold; color: {tokens.colors.text_accent}; letter-spacing: 0.5px;")
         brand_layout.addWidget(lbl_title)
         brand_layout.addStretch()
 
@@ -79,7 +86,8 @@ class NavigationRail(QWidget):
         # Divider
         self.divider = QFrame()
         self.divider.setFrameShape(QFrame.Shape.HLine)
-        self.divider.setStyleSheet("color: #2D3036; background-color: #2D3036; height: 1px; margin: 8px 0;")
+        tokens = _get_tokens(True)
+        self.divider.setStyleSheet(f"color: {tokens.colors.border_subtle}; background-color: {tokens.colors.border_subtle}; height: 1px; margin: 8px 0;")
         layout.addWidget(self.divider)
 
         # 3. Bottom Pinned Settings
@@ -89,7 +97,8 @@ class NavigationRail(QWidget):
         self._item_icons[key] = icon_name
         btn = QPushButton(f"  {label}")
         btn.setObjectName("navButton")
-        icon_color = "#FFFFFF" if is_checked else ("#9DA3AE" if self.is_dark else "#475569")
+        tokens = _get_tokens(True)
+        icon_color = tokens.colors.text_primary if is_checked else tokens.colors.text_tertiary
         btn.setIcon(get_svg_icon(icon_name, icon_color, 18))
         btn.setIconSize(QSize(18, 18))
         btn.setCheckable(checkable)
@@ -97,22 +106,22 @@ class NavigationRail(QWidget):
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setFixedHeight(40)
         btn.setStyleSheet(
-            "QPushButton#navButton {"
-            "  text-align: left; padding: 8px 14px; border: none; border-radius: 8px;"
-            "  font-size: 13px; font-weight: 500; color: #9DA3AE; background-color: transparent;"
-            "}"
-            "QPushButton#navButton:hover {"
-            "  background-color: #24272D; color: #FFFFFF;"
-            "}"
-            "QPushButton#navButton:checked {"
-            "  background-color: #0078D4; color: #FFFFFF; font-weight: 600;"
-            "}"
+            f"QPushButton#navButton {{"
+            f"  text-align: left; padding: 8px 14px; border: none; border-radius: {tokens.radius.lg}px;"
+            f"  font-size: 13px; font-weight: 500; color: {tokens.colors.text_tertiary}; background-color: transparent;"
+            f"}}"
+            f"QPushButton#navButton:hover {{"
+            f"  background-color: {tokens.colors.bg_hover}; color: {tokens.colors.text_primary};"
+            f"}}"
+            f"QPushButton#navButton:checked {{"
+            f"  background-color: {tokens.colors.accent_primary}; color: {tokens.colors.text_inverse}; font-weight: 600;"
+            f"}}"
         )
         if checkable:
             self._button_group.addButton(btn)
-            btn.toggled.connect(lambda is_on, b=btn, name=icon_name: b.setIcon(get_svg_icon(name, "#FFFFFF" if is_on else ("#9DA3AE" if self.is_dark else "#475569"), 18)))
+            btn.toggled.connect(lambda is_on, b=btn, name=icon_name: b.setIcon(get_svg_icon(name, tokens.colors.text_primary if is_on else tokens.colors.text_tertiary, 18)))
             if is_checked:
-                btn.setIcon(get_svg_icon(icon_name, "#FFFFFF", 18))
+                btn.setIcon(get_svg_icon(icon_name, tokens.colors.text_primary, 18))
 
         btn.clicked.connect(lambda: self._on_btn_clicked(key))
         self._buttons[key] = btn
@@ -121,10 +130,11 @@ class NavigationRail(QWidget):
     def update_theme(self, is_dark: bool):
         """Updates SVG icons and styles dynamically for dark or light theme."""
         self.is_dark = is_dark
-        text_color = "#9DA3AE" if is_dark else "#475569"
-        hover_bg = "#24272D" if is_dark else "#E2E8F0"
-        hover_text = "#FFFFFF" if is_dark else "#0F172A"
-        div_color = "#2D3036" if is_dark else "#E2E8F0"
+        tokens = _get_tokens(is_dark)
+        text_color = tokens.colors.text_tertiary
+        hover_bg = tokens.colors.bg_hover
+        hover_text = tokens.colors.text_primary
+        div_color = tokens.colors.border_subtle
 
         if hasattr(self, "divider"):
             self.divider.setStyleSheet(f"color: {div_color}; background-color: {div_color}; height: 1px; margin: 8px 0;")
@@ -132,19 +142,19 @@ class NavigationRail(QWidget):
         for key, btn in self._buttons.items():
             icon_name = self._item_icons.get(key, "")
             is_checked = btn.isChecked()
-            icon_color = "#FFFFFF" if is_checked else ("#9DA3AE" if is_dark else "#475569")
+            icon_color = tokens.colors.text_primary if is_checked else tokens.colors.text_tertiary
             if icon_name:
                 btn.setIcon(get_svg_icon(icon_name, icon_color, 18))
             btn.setStyleSheet(
                 f"QPushButton#navButton {{"
-                f"  text-align: left; padding: 8px 14px; border: none; border-radius: 8px;"
+                f"  text-align: left; padding: 8px 14px; border: none; border-radius: {tokens.radius.lg}px;"
                 f"  font-size: 13px; font-weight: 500; color: {text_color}; background-color: transparent;"
                 f"}}"
                 f"QPushButton#navButton:hover {{"
                 f"  background-color: {hover_bg}; color: {hover_text};"
                 f"}}"
                 f"QPushButton#navButton:checked {{"
-                f"  background-color: #0078D4; color: #FFFFFF; font-weight: 600;"
+                f"  background-color: {tokens.colors.accent_primary}; color: {tokens.colors.text_inverse}; font-weight: 600;"
                 f"}}"
             )
 

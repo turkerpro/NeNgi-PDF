@@ -15,6 +15,12 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QColor
 
 from nengi.ui.icons import get_svg_icon
+from nengi.ui.styles import get_dark_tokens, get_light_tokens
+
+
+def _get_tokens(is_dark: bool = True):
+    """Returns design tokens for current theme."""
+    return get_dark_tokens() if is_dark else get_light_tokens()
 
 
 class FloatingPillToolbar(QFrame):
@@ -54,7 +60,8 @@ class FloatingPillToolbar(QFrame):
 
         self.divider1 = QFrame()
         self.divider1.setFrameShape(QFrame.Shape.VLine)
-        self.divider1.setStyleSheet("color: #383C44; background-color: #383C44; width: 1px; margin: 8px 4px;")
+        tokens_div = _get_tokens(True)
+        self.divider1.setStyleSheet(f"color: {tokens_div.colors.border_default}; background-color: {tokens_div.colors.border_default}; width: 1px; margin: 8px 4px;")
         layout.addWidget(self.divider1)
 
         self.btn_edit_text = self._add_tool_btn("edit", "Seçili Metni Düzenle", "edit_text", checkable=False)
@@ -63,7 +70,8 @@ class FloatingPillToolbar(QFrame):
 
         self.divider2 = QFrame()
         self.divider2.setFrameShape(QFrame.Shape.VLine)
-        self.divider2.setStyleSheet("color: #383C44; background-color: #383C44; width: 1px; margin: 8px 4px;")
+        tokens_div2 = _get_tokens(True)
+        self.divider2.setStyleSheet(f"color: {tokens_div2.colors.border_default}; background-color: {tokens_div2.colors.border_default}; width: 1px; margin: 8px 4px;")
         layout.addWidget(self.divider2)
 
         self.btn_undo = self._add_tool_btn("undo", "Geri Al (Ctrl+Z)", "undo", checkable=False)
@@ -74,7 +82,8 @@ class FloatingPillToolbar(QFrame):
         btn = QPushButton()
         btn.setObjectName("pillButton")
         btn.setToolTip(tooltip)
-        icon_color = "#FFFFFF" if checked else ("#D0D4DC" if self.is_dark else "#334155")
+        tokens = _get_tokens(True)
+        icon_color = tokens.colors.text_inverse if checked else tokens.colors.text_tertiary
         btn.setIcon(get_svg_icon(icon_name, icon_color, 18))
         btn.setIconSize(QSize(18, 18))
         btn.setCheckable(checkable)
@@ -86,18 +95,18 @@ class FloatingPillToolbar(QFrame):
             "  border: none; border-radius: 18px;"
             "  background-color: transparent;"
             "}"
-            "QPushButton#pillButton:hover {"
-            "  background-color: #353942;"
-            "}"
-            "QPushButton#pillButton:checked {"
-            "  background-color: #0078D4;"
-            "}"
+            f"QPushButton#pillButton:hover {{"
+            f"  background-color: {tokens.colors.bg_hover};"
+            f"}}"
+            f"QPushButton#pillButton:checked {{"
+            f"  background-color: {tokens.colors.accent_primary};"
+            f"}}"
         )
         if checkable:
             self._btn_group.addButton(btn)
-            btn.toggled.connect(lambda is_on, b=btn, name=icon_name: b.setIcon(get_svg_icon(name, "#FFFFFF" if is_on else ("#D0D4DC" if self.is_dark else "#334155"), 18)))
+            btn.toggled.connect(lambda is_on, b=btn, name=icon_name: b.setIcon(get_svg_icon(name, tokens.colors.text_inverse if is_on else tokens.colors.text_tertiary, 18)))
             if checked:
-                btn.setIcon(get_svg_icon(icon_name, "#FFFFFF", 18))
+                btn.setIcon(get_svg_icon(icon_name, tokens.colors.text_inverse, 18))
 
         btn.clicked.connect(lambda: self.tool_changed.emit(tool_id))
         self._buttons.append((btn, icon_name))
@@ -107,8 +116,9 @@ class FloatingPillToolbar(QFrame):
     def update_theme(self, is_dark: bool):
         """Updates icons and button hover backgrounds dynamically when theme toggles."""
         self.is_dark = is_dark
-        hover_bg = "#353942" if is_dark else "#E2E8F0"
-        div_color = "#383C44" if is_dark else "#CBD5E1"
+        tokens = _get_tokens(is_dark)
+        hover_bg = tokens.colors.bg_hover
+        div_color = tokens.colors.border_default
         if hasattr(self, "divider1"):
             self.divider1.setStyleSheet(f"color: {div_color}; background-color: {div_color}; width: 1px; margin: 8px 4px;")
         if hasattr(self, "divider2"):
@@ -116,7 +126,7 @@ class FloatingPillToolbar(QFrame):
 
         for btn, icon_name in self._buttons:
             is_checked = btn.isChecked()
-            icon_color = "#FFFFFF" if is_checked else ("#D0D4DC" if is_dark else "#334155")
+            icon_color = tokens.colors.text_inverse if is_checked else tokens.colors.text_tertiary
             btn.setIcon(get_svg_icon(icon_name, icon_color, 18))
             btn.setStyleSheet(
                 f"QPushButton#pillButton {{"
@@ -127,7 +137,7 @@ class FloatingPillToolbar(QFrame):
                 f"  background-color: {hover_bg};"
                 f"}}"
                 f"QPushButton#pillButton:checked {{"
-                f"  background-color: #0078D4;"
+                f"  background-color: {tokens.colors.accent_primary};"
                 f"}}"
             )
 

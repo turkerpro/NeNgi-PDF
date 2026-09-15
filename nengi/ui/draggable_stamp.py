@@ -14,8 +14,15 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
 )
 
+from nengi.ui.styles import get_dark_tokens, get_light_tokens
+
 if TYPE_CHECKING:
     from nengi.ui.pdf_view import PageRenderWidget
+
+
+def _get_tokens(is_dark: bool = True):
+    """Returns design tokens for current theme."""
+    return get_dark_tokens() if is_dark else get_light_tokens()
 
 
 class ResizeHandle(QWidget):
@@ -32,13 +39,15 @@ class ResizeHandle(QWidget):
         self._start_size = QSize()
 
     def paintEvent(self, event):
+        from nengi.ui.styles import get_dark_tokens
+        tokens = get_dark_tokens()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(0, 120, 212))
+        painter.setBrush(QColor(tokens.colors.accent_primary))
         # Draw small bottom-right corner triangle / square handle
         painter.drawRect(6, 6, 9, 9)
-        painter.setBrush(QColor(255, 255, 255))
+        painter.setBrush(QColor(tokens.colors.bg_primary))
         painter.drawRect(8, 8, 5, 5)
 
     def mousePressEvent(self, event):
@@ -112,31 +121,34 @@ class DraggableStampWidget(QWidget):
         self.layout.setContentsMargins(4, 2, 4, 4)
         self.layout.setSpacing(2)
 
-        # Mini Top Action Bar (Clean white floating pill)
+        # Get tokens for current theme (assume dark for now)
+        tokens = _get_tokens(True)
+
+        # Mini Top Action Bar (Clean floating pill)
         self.action_pill = QFrame(self)
         self.action_pill.setObjectName("actionPill")
         self.action_pill.setStyleSheet(
-            "QFrame#actionPill {"
-            "  background-color: #FFFFFF;"
-            "  border: 1px solid #CBD5E1;"
-            "  border-radius: 10px;"
-            "  padding: 1px 4px;"
-            "}"
-            "QFrame#actionPill QLabel {"
-            "  background: transparent;"
-            "  color: #0078D4;"
-            "  font-weight: bold;"
-            "  font-size: 10px;"
-            "}"
-            "QFrame#actionPill QPushButton {"
-            "  background: transparent;"
-            "  border: none;"
-            "  border-radius: 3px;"
-            "  font-size: 11px;"
-            "}"
-            "QFrame#actionPill QPushButton:hover {"
-            "  background-color: #E2E8F0;"
-            "}"
+            f"QFrame#actionPill {{"
+            f"  background-color: {tokens.colors.bg_tertiary};"
+            f"  border: 1px solid {tokens.colors.border_default};"
+            f"  border-radius: {tokens.radius.lg}px;"
+            f"  padding: 1px 4px;"
+            f"}}"
+            f"QFrame#actionPill QLabel {{"
+            f"  background: transparent;"
+            f"  color: {tokens.colors.text_accent};"
+            f"  font-weight: bold;"
+            f"  font-size: 10px;"
+            f"}}"
+            f"QFrame#actionPill QPushButton {{"
+            f"  background: transparent;"
+            f"  border: none;"
+            f"  border-radius: {tokens.radius.xs}px;"
+            f"  font-size: 11px;"
+            f"}}"
+            f"QFrame#actionPill QPushButton:hover {{"
+            f"  background-color: {tokens.colors.bg_hover};"
+            f"}}"
         )
         bar_layout = QHBoxLayout(self.action_pill)
         bar_layout.setContentsMargins(4, 1, 4, 1)
@@ -150,14 +162,14 @@ class DraggableStampWidget(QWidget):
         btn_apply = QPushButton("✅")
         btn_apply.setFixedSize(20, 20)
         btn_apply.setToolTip("İmzayı Buraya Sabitle (PDF'e Ekle)")
-        btn_apply.setStyleSheet("background-color: #0078D4; color: white; border-radius: 3px; font-size: 10px;")
+        btn_apply.setStyleSheet(f"background-color: {tokens.colors.accent_primary}; color: white; border-radius: {tokens.radius.xs}px; font-size: 10px;")
         btn_apply.clicked.connect(self.commit_to_pdf)
         bar_layout.addWidget(btn_apply)
 
         btn_delete = QPushButton("🗑️")
         btn_delete.setFixedSize(20, 20)
         btn_delete.setToolTip("İmzayı Kaldır")
-        btn_delete.setStyleSheet("background-color: #DC2626; color: white; border-radius: 3px; font-size: 10px;")
+        btn_delete.setStyleSheet(f"background-color: {tokens.colors.error_bg}; color: {tokens.colors.error_text}; border-radius: {tokens.radius.xs}px; font-size: 10px;")
         btn_delete.clicked.connect(self.discard)
         bar_layout.addWidget(btn_delete)
 
@@ -182,15 +194,15 @@ class DraggableStampWidget(QWidget):
 
         # Studio Style Transparent Box with Dashed Border
         self.setStyleSheet(
-            "QWidget#draggableStampBox {"
-            "  background: transparent;"
-            "  border: 1.5px dashed #0078D4;"
-            "  border-radius: 4px;"
-            "}"
-            "QWidget#draggableStampBox QLabel#stampContent {"
-            "  background: transparent;"
-            "  border: none;"
-            "}"
+            f"QWidget#draggableStampBox {{"
+            f"  background: transparent;"
+            f"  border: 1.5px dashed {tokens.colors.accent_primary};"
+            f"  border-radius: {tokens.radius.md}px;"
+            f"}}"
+            f"QWidget#draggableStampBox QLabel#stampContent {{"
+            f"  background: transparent;"
+            f"  border: none;"
+            f"}}"
         )
 
     def resizeEvent(self, event):

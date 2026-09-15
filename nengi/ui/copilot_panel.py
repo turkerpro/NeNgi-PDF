@@ -15,6 +15,12 @@ from PyQt6.QtWidgets import (
 )
 
 from nengi.ui.icons import get_svg_icon
+from nengi.ui.styles import get_dark_tokens, get_light_tokens
+
+
+def _get_tokens(is_dark: bool = True):
+    """Returns design tokens for current theme."""
+    return get_dark_tokens() if is_dark else get_light_tokens()
 
 
 class CopilotPanel(QWidget):
@@ -36,28 +42,29 @@ class CopilotPanel(QWidget):
         layout.setContentsMargins(14, 16, 14, 16)
         layout.setSpacing(12)
 
+        tokens = _get_tokens(True)
         self.is_dark = True
         self._action_buttons: List[Tuple[QPushButton, str]] = []
 
         # 1. Header: Document Tools title and close button
         header_layout = QHBoxLayout()
         lbl_icon = QLabel()
-        lbl_icon.setPixmap(get_svg_icon("tools", "#0078D4", 20).pixmap(20, 20))
+        lbl_icon.setPixmap(get_svg_icon("tools", tokens.colors.text_accent, 20).pixmap(20, 20))
         header_layout.addWidget(lbl_icon)
 
         self.lbl_title = QLabel("Belge Araçları")
-        self.lbl_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #FFFFFF;")
+        self.lbl_title.setStyleSheet(f"font-size: 15px; font-weight: bold; color: {tokens.colors.text_primary};")
         header_layout.addWidget(self.lbl_title)
         header_layout.addStretch()
 
         self.btn_close = QPushButton()
-        self.btn_close.setIcon(get_svg_icon("close", "#8C929C", 16))
+        self.btn_close.setIcon(get_svg_icon("close", tokens.colors.text_tertiary, 16))
         self.btn_close.setIconSize(QSize(16, 16))
         self.btn_close.setFixedSize(26, 26)
         self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_close.setStyleSheet(
-            "QPushButton { border: none; background: transparent; border-radius: 13px; }"
-            "QPushButton:hover { background-color: #2D3036; }"
+            f"QPushButton {{ border: none; background: transparent; border-radius: 13px; }}"
+            f"QPushButton:hover {{ background-color: {tokens.colors.bg_hover}; }}"
         )
         self.btn_close.clicked.connect(self.closed.emit)
         header_layout.addWidget(self.btn_close)
@@ -85,26 +92,27 @@ class CopilotPanel(QWidget):
 
         # 4. Bottom Interactive Input
         self.input_frame = QFrame()
+        tokens = _get_tokens(True)
         self.input_frame.setStyleSheet(
-            "QFrame { background-color: #24272D; border: 1px solid #353942; border-radius: 20px; padding: 2px 6px; }"
+            f"QFrame {{ background-color: {tokens.colors.bg_tertiary}; border: 1px solid {tokens.colors.border_default}; border-radius: 20px; padding: 2px 6px; }}"
         )
         input_lay = QHBoxLayout(self.input_frame)
         input_lay.setContentsMargins(8, 2, 4, 2)
 
         self.txt_query = QLineEdit()
         self.txt_query.setPlaceholderText("Belge içinde arayın veya işlem yapın...")
-        self.txt_query.setStyleSheet("QLineEdit { border: none; background: transparent; color: #FFFFFF; font-size: 12px; }")
+        self.txt_query.setStyleSheet(f"QLineEdit {{ border: none; background: transparent; color: {tokens.colors.text_primary}; font-size: 12px; }}")
         self.txt_query.returnPressed.connect(self._send_query)
         input_lay.addWidget(self.txt_query)
 
         btn_send = QPushButton()
-        btn_send.setIcon(get_svg_icon("send", "#FFFFFF", 14))
+        btn_send.setIcon(get_svg_icon("send", tokens.colors.text_inverse, 14))
         btn_send.setIconSize(QSize(14, 14))
         btn_send.setFixedSize(28, 28)
         btn_send.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_send.setStyleSheet(
-            "QPushButton { border: none; border-radius: 14px; background-color: #0078D4; }"
-            "QPushButton:hover { background-color: #1084D9; }"
+            f"QPushButton {{ border: none; border-radius: 14px; background-color: {tokens.colors.accent_primary}; }}"
+            f"QPushButton:hover {{ background-color: {tokens.colors.accent_hover}; }}"
         )
         btn_send.clicked.connect(self._send_query)
         input_lay.addWidget(btn_send)
@@ -114,18 +122,19 @@ class CopilotPanel(QWidget):
     def _add_action_card(self, layout: QVBoxLayout, icon_name: str, title: str, action_key: str):
         btn = QPushButton(f"  {title}")
         btn.setObjectName("actionCard")
-        icon_color = "#A0A5B0" if self.is_dark else "#475569"
+        tokens = _get_tokens(True)
+        icon_color = tokens.colors.text_tertiary
         btn.setIcon(get_svg_icon(icon_name, icon_color, 16))
         btn.setIconSize(QSize(16, 16))
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setStyleSheet(
-            "QPushButton#actionCard {"
-            "  text-align: left; padding: 10px 12px; border: 1px solid #2B2E33;"
-            "  border-radius: 8px; background-color: #1E2023; color: #D0D4DC; font-size: 12px; font-weight: 500;"
-            "}"
-            "QPushButton#actionCard:hover {"
-            "  background-color: #26292E; border-color: #0078D4; color: #FFFFFF;"
-            "}"
+            f"QPushButton#actionCard {{"
+            f"  text-align: left; padding: 10px 12px; border: 1px solid {tokens.colors.border_strong};"
+            f"  border-radius: {tokens.radius.lg}px; background-color: {tokens.colors.bg_tertiary}; color: {tokens.colors.text_primary}; font-size: 12px; font-weight: 500;"
+            f"}}"
+            f"QPushButton#actionCard:hover {{"
+            f"  background-color: {tokens.colors.bg_hover}; border-color: {tokens.colors.accent_primary}; color: {tokens.colors.text_inverse};"
+            f"}}"
         )
         btn.clicked.connect(lambda: self.action_triggered.emit(action_key))
         self._action_buttons.append((btn, icon_name))
@@ -134,39 +143,37 @@ class CopilotPanel(QWidget):
     def update_theme(self, is_dark: bool):
         """Updates icons, borders, and backgrounds dynamically when theme changes."""
         self.is_dark = is_dark
-        title_color = "#FFFFFF" if is_dark else "#0F172A"
+        tokens = _get_tokens(is_dark)
+        title_color = tokens.colors.text_primary
         if hasattr(self, "lbl_title"):
             self.lbl_title.setStyleSheet(f"font-size: 15px; font-weight: bold; color: {title_color};")
-        close_color = "#8C929C" if is_dark else "#475569"
         if hasattr(self, "btn_close"):
-            self.btn_close.setIcon(get_svg_icon("close", close_color, 16))
+            self.btn_close.setIcon(get_svg_icon("close", tokens.colors.text_tertiary, 16))
 
-        card_bg = "#1E2023" if is_dark else "#F8FAFC"
-        card_border = "#2B2E33" if is_dark else "#E2E8F0"
-        card_text = "#D0D4DC" if is_dark else "#334155"
-        card_hover_bg = "#26292E" if is_dark else "#EDF2F7"
-        icon_color = "#A0A5B0" if is_dark else "#475569"
+        card_bg = tokens.colors.bg_tertiary
+        card_border = tokens.colors.border_strong
+        card_text = tokens.colors.text_primary
+        card_hover_bg = tokens.colors.bg_hover
+        icon_color = tokens.colors.text_tertiary
 
         for btn, icon_name in self._action_buttons:
             btn.setIcon(get_svg_icon(icon_name, icon_color, 16))
             btn.setStyleSheet(
                 f"QPushButton#actionCard {{"
-                f"  text-align: left; padding: 10px 12px; border: 1px solid {card_border};"
-                f"  border-radius: 8px; background-color: {card_bg}; color: {card_text}; font-size: 12px; font-weight: 500;"
+                f"  text-align: left; padding: 10px 12px; border: 1px solid {tokens.colors.border_strong};"
+                f"  border-radius: {tokens.radius.lg}px; background-color: {tokens.colors.bg_tertiary}; color: {tokens.colors.text_primary}; font-size: 12px; font-weight: 500;"
                 f"}}"
                 f"QPushButton#actionCard:hover {{"
-                f"  background-color: {card_hover_bg}; border-color: #0078D4; color: {'#FFFFFF' if is_dark else '#0078D4'};"
+                f"  background-color: {tokens.colors.bg_hover}; border-color: {tokens.colors.accent_primary}; color: {tokens.colors.text_inverse};"
                 f"}}"
             )
         if hasattr(self, "input_frame"):
-            input_bg = "#24272D" if is_dark else "#F1F5F9"
-            input_border = "#353942" if is_dark else "#CBD5E1"
             self.input_frame.setStyleSheet(
-                f"QFrame {{ background-color: {input_bg}; border: 1px solid {input_border}; border-radius: 20px; padding: 2px 6px; }}"
+                f"QFrame {{ background-color: {tokens.colors.bg_tertiary}; border: 1px solid {tokens.colors.border_default}; border-radius: 20px; padding: 2px 6px; }}"
             )
         if hasattr(self, "txt_query"):
             self.txt_query.setStyleSheet(
-                f"QLineEdit {{ border: none; background: transparent; color: {'#FFFFFF' if is_dark else '#0F172A'}; font-size: 12px; }}"
+                f"QLineEdit {{ border: none; background: transparent; color: {tokens.colors.text_primary}; font-size: 12px; }}"
             )
 
     def add_message(self, text: str, is_user: bool = False):

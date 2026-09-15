@@ -13,7 +13,13 @@ from PyQt6.QtWidgets import (
     QPlainTextEdit, QComboBox, QDoubleSpinBox, QColorDialog, QFrame
 )
 
+from nengi.ui.styles import get_dark_tokens, get_light_tokens
 from nengi.core.pdf_document import _resolve_tr_font
+
+
+def _get_tokens(is_dark: bool = True):
+    """Returns design tokens for current theme."""
+    return get_dark_tokens() if is_dark else get_light_tokens()
 
 
 class TextEditorDialog(QDialog):
@@ -65,9 +71,16 @@ class TextEditorDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
+        tokens = _get_tokens(True)
+
         # 1. Detected Font Badge (Studio style)
         badge_frame = QFrame()
-        badge_frame.setStyleSheet("background-color: #24272D; border: 1px solid #353942; border-radius: 6px; padding: 6px 10px;")
+        badge_frame.setStyleSheet(
+            f"background-color: {tokens.colors.bg_tertiary}; "
+            f"border: 1px solid {tokens.colors.border_default}; "
+            f"border-radius: {tokens.radius.md}px; "
+            f"padding: 6px 10px;"
+        )
         badge_lay = QHBoxLayout(badge_frame)
         badge_lay.setContentsMargins(4, 2, 4, 2)
 
@@ -76,7 +89,7 @@ class TextEditorDialog(QDialog):
         ital_lbl = "İtalik, " if self.is_italic else ""
         badge_text = f"🔍 <b>Algılanan Yazı Tipi:</b> {self.current_family} ({raw_f}) • {bold_lbl}{ital_lbl}{self.current_size:.1f} pt"
         lbl_badge = QLabel(badge_text)
-        lbl_badge.setStyleSheet("color: #0078D4; font-size: 11.5px;")
+        lbl_badge.setStyleSheet(f"color: {tokens.colors.text_accent}; font-size: 11.5px;")
         badge_lay.addWidget(lbl_badge)
         layout.addWidget(badge_frame)
 
@@ -141,8 +154,14 @@ class TextEditorDialog(QDialog):
         self.txt_editor = QPlainTextEdit()
         self.txt_editor.setPlainText(self.initial_text)
         self.txt_editor.setPlaceholderText("Metni veya paragrafı buraya yazın...")
+        tokens = _get_tokens(True)
         self.txt_editor.setStyleSheet(
-            "QPlainTextEdit { background-color: #1A1C20; border: 1px solid #33373E; border-radius: 6px; padding: 8px; color: #FFFFFF; font-size: 13px; }"
+            f"QPlainTextEdit {{ background-color: {tokens.colors.bg_tertiary}; "
+            f"border: 1px solid {tokens.colors.border_default}; "
+            f"border-radius: {tokens.radius.md}px; "
+            f"padding: 8px; "
+            f"color: {tokens.colors.text_primary}; "
+            f"font-size: 13px; }}"
         )
         layout.addWidget(self.txt_editor)
 
@@ -156,16 +175,17 @@ class TextEditorDialog(QDialog):
 
         btn_apply = QPushButton("💾 Uygula")
         btn_apply.setObjectName("accentButton")
-        btn_apply.setStyleSheet("background-color: #0078D4; color: white; font-weight: bold; padding: 7px 18px;")
+        # accentButton is styled by global theme
         btn_apply.clicked.connect(self._apply_and_accept)
-        btn_layout.addWidget(btn_apply)
-
         layout.addLayout(btn_layout)
 
     def _update_color_button(self):
         c_name = self.current_color.name()
+        tokens = _get_tokens(True)
         self.btn_color.setStyleSheet(
-            f"background-color: {c_name}; border: 2px solid #555555; border-radius: 4px;"
+            f"background-color: {self.current_color.name()}; "
+            f"border: 2px solid {tokens.colors.border_strong}; "
+            f"border-radius: {tokens.radius.sm}px;"
         )
 
     def _choose_color(self):
@@ -200,3 +220,11 @@ class TextEditorDialog(QDialog):
 
         self.result_fitz_font = fitz_font
         self.accept()
+
+
+if __name__ == "__main__":
+    import sys
+    from PyQt6.QtWidgets import QApplication
+    app = QApplication(sys.argv)
+    dlg = TextEditorDialog("Test metni")
+    dlg.exec()

@@ -14,8 +14,15 @@ from PyQt6.QtWidgets import (
     QGraphicsDropShadowEffect, QDialog, QFrame
 )
 
+from nengi.ui.styles import get_dark_tokens, get_light_tokens
+
 if TYPE_CHECKING:
     from nengi.ui.pdf_view import PageRenderWidget
+
+
+def _get_tokens(is_dark: bool = True):
+    """Returns design tokens for current theme."""
+    return get_dark_tokens() if is_dark else get_light_tokens()
 
 
 class DraggableTextWidget(QWidget):
@@ -63,31 +70,34 @@ class DraggableTextWidget(QWidget):
         layout.setContentsMargins(4, 2, 4, 4)
         layout.setSpacing(3)
 
-        # Mini Top Action Bar Pill (Clean floating light pill on white page)
+        # Get tokens for current theme (assume dark for now, could be enhanced)
+        tokens = _get_tokens(True)
+
+        # Mini Top Action Bar Pill
         self.action_pill = QFrame(self)
         self.action_pill.setObjectName("actionPill")
         self.action_pill.setStyleSheet(
-            "QFrame#actionPill {"
-            "  background-color: #FFFFFF;"
-            "  border: 1px solid #CBD5E1;"
-            "  border-radius: 11px;"
-            "  padding: 1px 4px;"
-            "}"
-            "QFrame#actionPill QLabel {"
-            "  background: transparent;"
-            "  color: #0078D4;"
-            "  font-weight: bold;"
-            "  font-size: 10px;"
-            "}"
-            "QFrame#actionPill QPushButton {"
-            "  background: transparent;"
-            "  border: none;"
-            "  border-radius: 3px;"
-            "  font-size: 11px;"
-            "}"
-            "QFrame#actionPill QPushButton:hover {"
-            "  background-color: #E2E8F0;"
-            "}"
+            f"QFrame#actionPill {{"
+            f"  background-color: {tokens.colors.bg_tertiary};"
+            f"  border: 1px solid {tokens.colors.border_default};"
+            f"  border-radius: {tokens.radius.xl}px;"
+            f"  padding: 1px 4px;"
+            f"}}"
+            f"QFrame#actionPill QLabel {{"
+            f"  background: transparent;"
+            f"  color: {tokens.colors.text_accent};"
+            f"  font-weight: bold;"
+            f"  font-size: 10px;"
+            f"}}"
+            f"QFrame#actionPill QPushButton {{"
+            f"  background: transparent;"
+            f"  border: none;"
+            f"  border-radius: {tokens.radius.xs}px;"
+            f"  font-size: 11px;"
+            f"}}"
+            f"QFrame#actionPill QPushButton:hover {{"
+            f"  background-color: {tokens.colors.bg_hover};"
+            f"}}"
         )
         bar_layout = QHBoxLayout(self.action_pill)
         bar_layout.setContentsMargins(4, 1, 4, 1)
@@ -107,14 +117,14 @@ class DraggableTextWidget(QWidget):
         btn_apply = QPushButton("✅")
         btn_apply.setFixedSize(20, 20)
         btn_apply.setToolTip("Metni Buraya Sabitle (PDF'e Yerleştir)")
-        btn_apply.setStyleSheet("background-color: #0078D4; color: white; border-radius: 3px; font-size: 10px;")
+        btn_apply.setStyleSheet(f"background-color: {tokens.colors.accent_primary}; color: white; border-radius: {tokens.radius.xs}px; font-size: 10px;")
         btn_apply.clicked.connect(self.commit_to_pdf)
         bar_layout.addWidget(btn_apply)
 
         btn_delete = QPushButton("🗑️")
         btn_delete.setFixedSize(20, 20)
         btn_delete.setToolTip("Metin Kutusunu Kaldır")
-        btn_delete.setStyleSheet("background-color: #DC2626; color: white; border-radius: 3px; font-size: 10px;")
+        btn_delete.setStyleSheet(f"background-color: {tokens.colors.error_bg}; color: {tokens.colors.error_text}; border-radius: {tokens.radius.xs}px; font-size: 10px;")
         btn_delete.clicked.connect(self.discard)
         bar_layout.addWidget(btn_delete)
 
@@ -135,15 +145,15 @@ class DraggableTextWidget(QWidget):
 
         # Studio Style Transparent Bounding Box
         self.setStyleSheet(
-            "QWidget#draggableTextBox {"
-            "  background: transparent;"
-            "  border: 1.5px dashed #0078D4;"
-            "  border-radius: 4px;"
-            "}"
-            "QWidget#draggableTextBox QLabel#textContent {"
-            "  background: transparent;"
-            "  border: none;"
-            "}"
+            f"QWidget#draggableTextBox {{"
+            f"  background: transparent;"
+            f"  border: 1.5px dashed {tokens.colors.accent_primary};"
+            f"  border-radius: {tokens.radius.md}px;"
+            f"}}"
+            f"QWidget#draggableTextBox QLabel#textContent {{"
+            f"  background: transparent;"
+            f"  border: none;"
+            f"}}"
         )
 
     def _update_text_style(self):

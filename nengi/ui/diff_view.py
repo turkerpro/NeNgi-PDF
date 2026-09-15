@@ -20,6 +20,12 @@ import fitz
 from nengi.core.pdf_document import PDFDocument
 from nengi.core.diff_engine import DiffEngine, DiffChangeItem, DiffHighlight
 from nengi.ui.pdf_view import PageRenderWidget
+from nengi.ui.styles import get_dark_tokens, get_light_tokens
+
+
+def _get_tokens(is_dark: bool = True):
+    """Returns design tokens for current theme."""
+    return get_dark_tokens() if is_dark else get_light_tokens()
 
 
 class DiffScrollPane(QScrollArea):
@@ -68,6 +74,7 @@ class DiffView(QWidget):
             self.load_diff(doc_a, doc_b, name_a, name_b)
 
     def _init_ui(self):
+        tokens = _get_tokens(True)
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
@@ -76,12 +83,12 @@ class DiffView(QWidget):
         top_bar = QFrame()
         top_bar.setFixedHeight(46)
         top_bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        top_bar.setStyleSheet("background-color: #282828; border-bottom: 1px solid #383838; padding: 4px;")
+        top_bar.setStyleSheet(f"background-color: {tokens.colors.bg_secondary}; border-bottom: 1px solid {tokens.colors.border_default}; padding: 4px;")
         top_layout = QHBoxLayout(top_bar)
         top_layout.setContentsMargins(10, 2, 10, 2)
 
         self.lbl_summary = QLabel("📊 Karşılaştırma Bekleniyor...")
-        self.lbl_summary.setStyleSheet("font-weight: bold; font-size: 13px; color: #FFFFFF;")
+        self.lbl_summary.setStyleSheet(f"font-weight: bold; font-size: {tokens.fonts.lg}px; color: {tokens.colors.text_primary};")
         top_layout.addWidget(self.lbl_summary)
 
         top_layout.addSpacing(20)
@@ -92,7 +99,7 @@ class DiffView(QWidget):
         top_layout.addWidget(self.btn_prev)
 
         self.lbl_counter = QLabel("0 / 0")
-        self.lbl_counter.setStyleSheet("font-weight: bold; color: #0078D4; padding: 0 8px;")
+        self.lbl_counter.setStyleSheet(f"font-weight: bold; color: {tokens.colors.accent_primary}; padding: 0 8px;")
         top_layout.addWidget(self.lbl_counter)
 
         self.btn_next = QPushButton("Sonraki Fark ▶")
@@ -125,7 +132,7 @@ class DiffView(QWidget):
         lay_left.setSpacing(0)
         self.lbl_title_a = QLabel(" 🔴 Orijinal Belge")
         self.lbl_title_a.setFixedHeight(28)
-        self.lbl_title_a.setStyleSheet("background-color: #331A1A; color: #FF6B6B; font-weight: bold; padding: 4px 8px; border-bottom: 1px solid #4D2626;")
+        self.lbl_title_a.setStyleSheet(f"background-color: {tokens.colors.error_bg}; color: {tokens.colors.error_text}; font-weight: bold; padding: 4px 8px; border-bottom: 1px solid {tokens.colors.border_error};")
         lay_left.addWidget(self.lbl_title_a, 0)
         self.pane_a = DiffScrollPane("A")
         lay_left.addWidget(self.pane_a, 1)
@@ -138,7 +145,7 @@ class DiffView(QWidget):
         lay_right.setSpacing(0)
         self.lbl_title_b = QLabel(" 🟢 Revize Edilmiş Belge")
         self.lbl_title_b.setFixedHeight(28)
-        self.lbl_title_b.setStyleSheet("background-color: #1A331E; color: #6BFF84; font-weight: bold; padding: 4px 8px; border-bottom: 1px solid #264D2D;")
+        self.lbl_title_b.setStyleSheet(f"background-color: {tokens.colors.success_bg}; color: {tokens.colors.success_text}; font-weight: bold; padding: 4px 8px; border-bottom: 1px solid {tokens.colors.border_default};")
         lay_right.addWidget(self.lbl_title_b, 0)
         self.pane_b = DiffScrollPane("B")
         lay_right.addWidget(self.pane_b, 1)
@@ -149,7 +156,7 @@ class DiffView(QWidget):
         side_layout = QVBoxLayout(side_panel)
         side_layout.setContentsMargins(8, 8, 8, 8)
         lbl_table = QLabel("📋 Tespit Edilen Değişiklikler")
-        lbl_table.setStyleSheet("font-weight: bold; color: #E0E0E0;")
+        lbl_table.setStyleSheet(f"font-weight: bold; color: {tokens.colors.text_primary};")
         side_layout.addWidget(lbl_table)
 
         self.table_changes = QTableWidget()

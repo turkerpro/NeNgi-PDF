@@ -3,7 +3,14 @@ from PyQt6.QtCore import Qt, pyqtSignal, QEvent
 from PyQt6.QtGui import QFont, QColor, QFontDatabase
 import fitz
 
+from nengi.ui.styles import get_dark_tokens, get_light_tokens
+
 from nengi.core.pdf_document import _resolve_tr_font
+
+
+def _get_tokens(is_dark: bool = True):
+    """Returns design tokens for current theme."""
+    return get_dark_tokens() if is_dark else get_light_tokens()
 
 
 class InlineTextEditor(QWidget):
@@ -16,6 +23,8 @@ class InlineTextEditor(QWidget):
         self.style = dict(style)
         self.zoom = zoom
         self._committed = False
+
+        tokens = _get_tokens(True)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -69,9 +78,10 @@ class InlineTextEditor(QWidget):
         self.btn_italic.toggled.connect(self._on_italic_toggled)
         bar.addWidget(self.btn_italic)
 
+        tokens = _get_tokens(True)
         self.toolbar.setStyleSheet(
-            "QWidget { background-color: #24272D; border: 1px solid #353942; border-radius: 4px; }"
-            "QComboBox, QDoubleSpinBox, QPushButton { color: #FFFFFF; }"
+            f"QWidget {{ background-color: {tokens.colors.bg_tertiary}; border: 1px solid {tokens.colors.border_default}; border-radius: {tokens.radius.md}px; }}"
+            f"QComboBox, QDoubleSpinBox, QPushButton {{ color: {tokens.colors.text_primary}; }}"
         )
         layout.addWidget(self.toolbar)
 
@@ -86,12 +96,13 @@ class InlineTextEditor(QWidget):
         self.edit.setTextColor(QColor(int(r*255), int(g*255), int(b*255)))
 
         # Styling
-        self.edit.setStyleSheet("""
-            QTextEdit {
+        tokens = _get_tokens(True)
+        self.edit.setStyleSheet(f"""
+            QTextEdit {{
                 background-color: rgba(255, 255, 255, 240);
-                border: 2px dashed #0078D4;
-                color: #000000;
-            }
+                border: 2px dashed {tokens.colors.accent_primary};
+                color: {tokens.colors.text_primary};
+            }}
         """)
 
         self.edit.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)

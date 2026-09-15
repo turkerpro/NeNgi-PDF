@@ -14,6 +14,12 @@ from PyQt6.QtWidgets import (
 )
 import fitz
 from nengi.core.converter import FormatConverter
+from nengi.ui.styles import get_dark_tokens, get_light_tokens
+
+
+def _get_tokens(is_dark: bool = True):
+    """Returns design tokens for current theme."""
+    return get_dark_tokens() if is_dark else get_light_tokens()
 
 
 class MergeFilesDialog(QDialog):
@@ -29,20 +35,21 @@ class MergeFilesDialog(QDialog):
         self._init_ui()
 
     def _init_ui(self):
+        tokens = _get_tokens(True)
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
         # Header banner
         lbl_info = QLabel("Birleştirmek istediğiniz dosyaların sırasını aşağıdan düzenleyin:")
-        lbl_info.setStyleSheet("font-weight: bold; font-size: 13px; color: #FFFFFF;")
+        lbl_info.setStyleSheet(f"font-weight: bold; font-size: {tokens.fonts.lg}px; color: {tokens.colors.text_primary};")
         layout.addWidget(lbl_info)
 
         # List widget
         self.list_widget = QListWidget()
         self.list_widget.setStyleSheet(
-            "QListWidget { background-color: #1E1E1E; border: 1px solid #3A3A3A; border-radius: 4px; padding: 4px; }"
-            "QListWidget::item { padding: 6px 10px; border-bottom: 1px solid #2A2A2A; color: #E0E0E0; }"
-            "QListWidget::item:selected { background-color: #0078D4; color: #FFFFFF; }"
+            f"QListWidget {{ background-color: {tokens.colors.bg_tertiary}; border: 1px solid {tokens.colors.border_default}; border-radius: {tokens.radius.sm}px; padding: 4px; }}"
+            f"QListWidget::item {{ padding: 6px 10px; border-bottom: 1px solid {tokens.colors.border_subtle}; color: {tokens.colors.text_primary}; }}"
+            f"QListWidget::item:selected {{ background-color: {tokens.colors.accent_primary}; color: {tokens.colors.text_inverse}; }}"
         )
         self._refresh_list()
         layout.addWidget(self.list_widget)
@@ -79,7 +86,7 @@ class MergeFilesDialog(QDialog):
 
         btn_merge = QPushButton("🚀 Tek PDF Olarak Birleştir")
         btn_merge.setObjectName("accentButton")
-        btn_merge.setStyleSheet("background-color: #0078D4; color: white; font-weight: bold; padding: 8px 16px;")
+        btn_merge.setStyleSheet(f"background-color: {tokens.colors.accent_primary}; color: {tokens.colors.text_inverse}; font-weight: bold; padding: 8px 16px;")
         btn_merge.clicked.connect(self._perform_merge)
         bottom_layout.addWidget(btn_merge)
 

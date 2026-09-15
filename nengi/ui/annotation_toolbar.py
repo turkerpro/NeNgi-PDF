@@ -6,6 +6,12 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QAction
 
 from .icons import get_svg_icon
+from .styles import get_dark_tokens, get_light_tokens
+
+
+def _get_tokens(is_dark: bool = True):
+    """Returns design tokens for current theme."""
+    return get_dark_tokens() if is_dark else get_light_tokens()
 
 
 class CollapsibleAnnotationToolbar(QFrame):
@@ -48,11 +54,12 @@ class CollapsibleAnnotationToolbar(QFrame):
         header_layout.addStretch()
 
         self.btn_chevron = QPushButton()
-        self.btn_chevron.setIcon(get_svg_icon("chevron_down", "#D0D4DC", 16))
+        tokens_hdr = _get_tokens(self.is_dark)
+        self.btn_chevron.setIcon(get_svg_icon("chevron_down", tokens_hdr.colors.text_tertiary, 16))
         self.btn_chevron.setFixedSize(28, 28)
         self.btn_chevron.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_chevron.setStyleSheet("QPushButton { border: none; background: transparent; border-radius: 14px; }"
-                                       "QPushButton:hover { background: #2C3036; }")
+                                       f"QPushButton:hover {{ background: {tokens_hdr.colors.bg_hover}; }}")
         self.btn_chevron.clicked.connect(self._toggle_expanded)
         header_layout.addWidget(self.btn_chevron)
 
@@ -146,18 +153,22 @@ class CollapsibleAnnotationToolbar(QFrame):
         self._expanded = not self._expanded
         self.content.setVisible(self._expanded)
         icon = "chevron_up" if self._expanded else "chevron_down"
-        color = "#FFFFFF" if self.is_dark else "#374151"
+        tokens = _get_tokens(self.is_dark)
+        color = tokens.colors.text_primary
         self.btn_chevron.setIcon(get_svg_icon(icon, color, 16))
 
     def _create_section_label(self, text):
         lbl = QLabel(text)
-        lbl.setStyleSheet("font-size: 10px; font-weight: bold; color: gray;")
+        tokens = _get_tokens(self.is_dark)
+        lbl.setStyleSheet(f"font-size: 10px; font-weight: bold; color: {tokens.colors.text_tertiary};")
         return lbl
 
     def _create_separator(self):
         line = QFrame()
         line.setFrameShape(QFrame.Shape.VLine)
         line.setFrameShadow(QFrame.Shadow.Sunken)
+        tokens = _get_tokens(self.is_dark)
+        line.setStyleSheet(f"color: {tokens.colors.border_subtle}; background-color: {tokens.colors.border_subtle};")
         return line
 
     def _add_tool_button(self, layout, name, tooltip):
@@ -167,7 +178,8 @@ class CollapsibleAnnotationToolbar(QFrame):
         btn.setProperty("tool_name", name)
         btn.setFixedSize(32, 32)
 
-        color = "#EDEDED" if self.is_dark else "#1F2328"
+        tokens = _get_tokens(self.is_dark)
+        color = tokens.colors.text_primary
         btn.setIcon(get_svg_icon(name, color=color))
 
         self.tool_group.addButton(btn)
@@ -179,7 +191,8 @@ class CollapsibleAnnotationToolbar(QFrame):
         btn = QPushButton()
         btn.setToolTip("Damga Ekle")
         btn.setFixedSize(32, 32)
-        color = "#EDEDED" if self.is_dark else "#1F2328"
+        tokens = _get_tokens(self.is_dark)
+        color = tokens.colors.text_primary
         btn.setIcon(get_svg_icon("stamp", color=color))
 
         menu = QMenu(self)
@@ -218,7 +231,8 @@ class CollapsibleAnnotationToolbar(QFrame):
         r = int(self.current_color[0]*255)
         g = int(self.current_color[1]*255)
         b = int(self.current_color[2]*255)
-        self.color_btn.setStyleSheet(f"background-color: rgb({r},{g},{b}); border: 1px solid gray; border-radius: 4px;")
+        tokens = _get_tokens(self.is_dark)
+        self.color_btn.setStyleSheet(f"background-color: rgb({r},{g},{b}); border: 1px solid {tokens.colors.border_strong}; border-radius: 4px;")
 
     def _width_changed(self, val):
         self.current_width = float(val)
@@ -236,11 +250,12 @@ class CollapsibleAnnotationToolbar(QFrame):
 
     def update_theme(self, is_dark: bool):
         self.is_dark = is_dark
-        bg = "#1E2023" if is_dark else "#FFFFFF"
-        border = "#383C44" if is_dark else "#E2E8F0"
-        hover = "#2C3036" if is_dark else "#F1F5F9"
-        accent = "#0078D4"
-        text = "#D0D4DC" if is_dark else "#374151"
+        tokens = _get_tokens(is_dark)
+        bg = tokens.colors.bg_secondary
+        border = tokens.colors.border_default
+        hover = tokens.colors.bg_hover
+        accent = tokens.colors.accent_primary
+        text = tokens.colors.text_primary
 
         self.setStyleSheet(f"""
             QFrame {{
