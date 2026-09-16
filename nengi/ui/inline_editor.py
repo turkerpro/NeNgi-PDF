@@ -24,13 +24,22 @@ class InlineTextEditor(QWidget):
         self.zoom = zoom
         self._committed = False
 
-        tokens = _get_tokens(True)
+        # Detect dark mode dynamically
+        is_dark = True
+        try:
+            from PyQt6.QtWidgets import QApplication
+            app = QApplication.instance()
+            if app and app.styleSheet():
+                is_dark = "#FFFFFF" not in app.styleSheet()[:200]
+        except Exception:
+            pass
+
+        tokens = _get_tokens(is_dark)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Mini format şeridi (canvas overlay, ayrı pencere yok)
         self.toolbar = QWidget(self)
         bar = QHBoxLayout(self.toolbar)
         bar.setContentsMargins(4, 2, 4, 2)
@@ -78,7 +87,6 @@ class InlineTextEditor(QWidget):
         self.btn_italic.toggled.connect(self._on_italic_toggled)
         bar.addWidget(self.btn_italic)
 
-        tokens = _get_tokens(True)
         self.toolbar.setStyleSheet(
             f"QWidget {{ background-color: {tokens.colors.bg_tertiary}; border: 1px solid {tokens.colors.border_default}; border-radius: {tokens.radius.md}px; }}"
             f"QComboBox, QDoubleSpinBox, QPushButton {{ color: {tokens.colors.text_primary}; }}"
@@ -88,20 +96,22 @@ class InlineTextEditor(QWidget):
         self.edit = QTextEdit(self)
         self.edit.setText(text)
 
-        # Configure Font
         self._apply_font_to_edit()
 
         # Configure Color
         r, g, b = self.style.get("color_rgb", (0, 0, 0))
-        self.edit.setTextColor(QColor(int(r*255), int(g*255), int(b*255)))
+        # If in dark mode and text is pure black, invert it for visibility during edit
+        if is_dark and r == 0.0 and g == 0.0 and b == 0.0:
+            self.edit.setTextColor(QColor(240, 240, 240))
+        else:
+            self.edit.setTextColor(QColor(int(r*255), int(g*255), int(b*255)))
 
-        # Styling
-        tokens = _get_tokens(True)
+        # Styling (Remove color from QSS so setTextColor works properly)
+        bg_color = "rgba(40, 40, 40, 240)" if is_dark else "rgba(255, 255, 255, 240)"
         self.edit.setStyleSheet(f"""
             QTextEdit {{
-                background-color: rgba(255, 255, 255, 240);
+                background-color: {bg_color};
                 border: 2px dashed {tokens.colors.accent_primary};
-                color: {tokens.colors.text_primary};
             }}
         """)
 
@@ -111,21 +121,16 @@ class InlineTextEditor(QWidget):
         self.edit.installEventFilter(self)
         layout.addWidget(self.edit, 1)
 
-        # Sağ-alt köşe tutamacı: sürükleyerek kutu genişletme.
-        # Font/punto korunur; WidgetWidth sarmalama ile metin çok satıra yayılır.
         self.setMinimumSize(200, 80)
         self._grip = QSizeGrip(self)
         self._grip.setFixedSize(16, 16)
         self._grip.show()
 
-        # İçerik taşınca otomatik yükseklik büyümesi
         self._auto_fit_guard = False
         self.edit.document().contentsChanged.connect(self._auto_fit_height)
 
-        # Position and size (+şerit payı)
         sx = pdf_rect.x0 * zoom
         sy = pdf_rect.y0 * zoom
-        # Give it a bit more width/height for editing comfortably
         sw = max((pdf_rect.width * zoom) + 100, 200)
         sh = max((pdf_rect.height * zoom) + 50 + 30, 80)
         self.setGeometry(int(sx - 5), int(sy - 5), int(sw), int(sh))
