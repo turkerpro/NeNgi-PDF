@@ -43,7 +43,7 @@ from nengi.ui.comments_panel import CommentsPanel
 from nengi.ui.copilot_panel import CopilotPanel
 from nengi.ui.bookmarks_panel import BookmarksPanel
 from nengi.ui.styles import DARK_THEME, LIGHT_THEME
-from nengi.ui.toast import show_error_toast, show_info_toast, ToastManager
+from nengi.ui.toast import show_error_toast, show_info_toast, show_success_toast, ToastManager
 from nengi.ui.icons import get_svg_icon
 
 from nengi.ui.header_footer_dialog import HeaderFooterDialog
@@ -556,9 +556,12 @@ class MainWindow(QMainWindow):
             result = doc.add_header_footer(dlg.get_config())
             if result:
                 self.show_status_message("Üstbilgi/Altbilgi eklendi.")
-                self.get_current_viewer().refresh_view()
+                viewer = self.get_current_viewer()
+                if viewer:
+                    viewer.refresh_view()
             else:
                 show_error_toast(self, result.error, result.hint)
+
                 
     def action_watermark(self):
         doc = self.get_current_doc()
@@ -570,9 +573,12 @@ class MainWindow(QMainWindow):
             result = doc.add_watermark(dlg.get_config())
             if result:
                 self.show_status_message("Filigran eklendi.")
-                self.get_current_viewer().refresh_view()
+                viewer = self.get_current_viewer()
+                if viewer:
+                    viewer.refresh_view()
             else:
                 show_error_toast(self, result.error, result.hint)
+
                 
     def action_crop(self):
         doc = self.get_current_doc()
@@ -629,16 +635,25 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             cfg = dlg.get_config()
             try:
-                if cfg['format'] == 'docx': result = ExportEngine.pdf_to_docx(doc, cfg['output_path'])
-                elif cfg['format'] == 'xlsx': result = ExportEngine.pdf_to_xlsx(doc, cfg['output_path'])
-                elif cfg['format'] == 'pptx': result = ExportEngine.pdf_to_pptx(doc, cfg['output_path'])
-                elif cfg['format'] == 'html': result = ExportEngine.pdf_to_html(doc, cfg['output_path'])
-                if result:
-                    self.show_status_message("Dışa aktarma tamamlandı.")
+                result = None
+                if cfg['format'] == 'docx':
+                    result = ExportEngine.pdf_to_docx(doc, cfg['output_path'])
+                elif cfg['format'] == 'xlsx':
+                    result = ExportEngine.pdf_to_xlsx(doc, cfg['output_path'])
+                elif cfg['format'] == 'pptx':
+                    result = ExportEngine.pdf_to_pptx(doc, cfg['output_path'])
+                elif cfg['format'] == 'html':
+                    result = ExportEngine.pdf_to_html(doc, cfg['output_path'])
                 else:
+                    show_error_toast(self, f"Bilinmeyen format: {cfg.get('format', '?')}", "Desteklenen formatlar: docx, xlsx, pptx, html")
+                    return
+                if result and result:
+                    self.show_status_message("Dışa aktarma tamamlandı.")
+                elif result is not None:
                     show_error_toast(self, result.error, result.hint)
             except ImportError as e:
                 QMessageBox.critical(self, "Eksik Paket", str(e))
+
                 
     def action_optimize(self):
         doc = self.get_current_doc()
@@ -650,8 +665,11 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             if PDFOptimizer.optimize(doc, dlg.get_config()):
                 self.show_status_message("Optimizasyon tamamlandı.")
-                self.get_current_viewer().refresh_view()
+                viewer = self.get_current_viewer()
+                if viewer:
+                    viewer.refresh_view()
                 QMessageBox.information(self, "Başarılı", "Belge optimize edildi ve kaydedildi.")
+
 
 
     def _create_header(self) -> QFrame:
@@ -1299,21 +1317,26 @@ class MainWindow(QMainWindow):
                     # Spooler is actively writing or file is locked
                     continue
 
-                # Successfully read complete PDF, truncate spool file
-                try:
-                    with open(spool_path, "wb") as f:
-                        f.truncate(0)
-                except Exception:
-                    pass
-
-                # Save to user's Documents/NeNgi PDF
+                # Save to user's Documents/NeNgi PDF *before* clearing the spool
+                # to avoid a race condition where content is lost if the save fails.
                 import datetime
                 docs_dir = os.path.join(os.path.expanduser("~"), "Documents", "NeNgi PDF")
                 os.makedirs(docs_dir, exist_ok=True)
                 ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                 dest_path = os.path.join(docs_dir, f"Yazdirilan_Belge_{ts}.pdf")
-                with open(dest_path, "wb") as f:
-                    f.write(content)
+                try:
+                    with open(dest_path, "wb") as f:
+                        f.write(content)
+                except Exception:
+                    # Could not write the destination file - skip silently
+                    continue
+
+                # Successfully saved - now clear the spool file so it's not re-processed
+                try:
+                    with open(spool_path, "wb") as f:
+                        pass  # opening in 'wb' mode already truncates
+                except Exception:
+                    pass
 
                 # Open in UI
                 self.open_pdf(dest_path)
@@ -1325,6 +1348,7 @@ class MainWindow(QMainWindow):
                 self.activateWindow()
                 self.show_status_message(f"Yazdırılan belge açıldı: {os.path.basename(dest_path)}")
                 break
+
         except Exception:
             pass
 
