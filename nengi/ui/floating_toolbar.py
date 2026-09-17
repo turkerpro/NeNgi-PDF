@@ -82,6 +82,7 @@ class FloatingPillToolbar(QFrame):
         btn = QPushButton()
         btn.setObjectName("pillButton")
         btn.setToolTip(tooltip)
+        btn.setMouseTracking(True)  # Ensure proper tooltip hide on leave
         tokens = _get_tokens(True)
         icon_color = tokens.colors.text_inverse if checked else tokens.colors.text_tertiary
         btn.setIcon(get_svg_icon(icon_name, icon_color, 18))
@@ -108,6 +109,9 @@ class FloatingPillToolbar(QFrame):
             if checked:
                 btn.setIcon(get_svg_icon(icon_name, tokens.colors.text_inverse, 18))
 
+        # Ensure tooltip hides properly on leave
+        btn.installEventFilter(self)
+        
         btn.clicked.connect(lambda: self.tool_changed.emit(tool_id))
         self._buttons.append((btn, icon_name))
         self.layout().addWidget(btn)
@@ -150,3 +154,10 @@ class FloatingPillToolbar(QFrame):
             self.btn_whiteout.setChecked(True)
         elif tool_id == "draw":
             self.btn_draw.setChecked(True)
+
+    def eventFilter(self, obj, event):
+        """Handle tooltip hiding when mouse leaves button"""
+        if event.type() == QEvent.Type.Leave and isinstance(obj, QPushButton):
+            from PyQt6.QtWidgets import QToolTip
+            QToolTip.hideText()
+        return super().eventFilter(obj, event)

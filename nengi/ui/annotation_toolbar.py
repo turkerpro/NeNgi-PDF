@@ -234,6 +234,7 @@ class CollapsibleAnnotationToolbar(QFrame):
         btn = QPushButton()
         btn.setCheckable(True)
         btn.setToolTip(tooltip)
+        btn.setMouseTracking(True)  # Ensure proper tooltip hide on leave
         btn.setProperty("tool_name", name)
         btn.setFixedSize(32, 32)
 

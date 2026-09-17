@@ -248,7 +248,8 @@ class InlineTextEditor(QWidget):
             return
         from PyQt6.QtWidgets import QApplication
         fw = QApplication.focusWidget()
-        if fw is not None and self.isAncestorOf(fw):
+        # Don't commit if focus is still within this widget or its toolbar
+        if fw is not None and (self.isAncestorOf(fw) or fw is self.toolbar or self.toolbar.isAncestorOf(fw)):
             return
         self.commit()
 

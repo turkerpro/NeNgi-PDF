@@ -146,7 +146,7 @@ class MainWindow(QMainWindow):
         # Keep a reference safe for subcomponents that may access before full init
         self._settings_initialized = True
 
-        self.setWindowTitle("NeNgi PDF v2.0.9-beta")
+        self.setWindowTitle("NeNgi PDF v2.0.10-beta")
         self.resize(1340, 860)
         self.is_dark_mode = self.settings.value("theme", "dark") == "dark"
         self.recent_files: List[str] = []
