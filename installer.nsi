@@ -27,7 +27,7 @@ RequestExecutionLevel admin
 
 ; Welcome page
 !define MUI_WELCOMEPAGE_TITLE "NeNgi PDF Kurulum Sihirbazına Hoş Geldiniz"
-!define MUI_WELCOMEPAGE_TEXT "Bu sihirbaz, NeNgi PDF ${PRODUCT_VERSION} sürümünü bilgisayarınıza kuracaktır.$\r$\n$\r$\nv2.0.0 Yenilikleri:$\r$\n• Gelişmiş canlı katmanlar ve düzenlenebilir metin/imza nesneleri$\r$\n• Spacebar (Boşluk) tuşu ile serbest el aracı (Pan/Sayfa Sürükleme)$\r$\n• Çoklu dosya seçerek tek tıkla sıralı birleştirme$\r$\n• Taranmış sayfalarda tam açılı metin yerleşimi ve zıplamayan silgi aracı$\r$\n$\r$\nDevam etmek için İleri'ye tıklayın."
+!define MUI_WELCOMEPAGE_TEXT "Bu sihirbaz, NeNgi PDF ${PRODUCT_VERSION} sürümünü bilgisayarınıza kuracaktır.$\r$\n$\r$\nv2.0.10-beta Yenilikleri:\r$\n• Gelişmiş canlı katmanlar ve düzenlenebilir metin/imza nesneleri$\r$\n• Spacebar (Boşluk) tuşu ile serbest el aracı (Pan/Sayfa Sürükleme)$\r$\n• Çoklu dosya seçerek tek tıkla sıralı birleştirme$\r$\n• Taranmış sayfalarda tam açılı metin yerleşimi ve zıplamayan silgi aracı$\r$\n$\r$\nDevam etmek için İleri'ye tıklayın."
 !insertmacro MUI_PAGE_WELCOME
 
 ; Directory page
