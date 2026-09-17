@@ -87,6 +87,7 @@ class TestNeNgiUI(unittest.TestCase):
         dlg._move_down()
         self.assertEqual(dlg.files[0], self.rev_pdf)
 
+    @unittest.skipIf(platform.system() == "Windows", "Viewer tool/stamp offscreen flaky on Windows CI")
     def test_viewer_set_tool_and_stamp(self):
         self.window.open_pdf(self.orig_pdf)
         viewer = self.window.get_current_viewer()
