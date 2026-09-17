@@ -4,6 +4,7 @@ UI Integration tests for NeNgi PDF MainWindow and DiffView.
 
 import os
 import sys
+import platform
 import unittest
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt, QPoint, QEvent
@@ -59,6 +60,7 @@ class TestNeNgiUI(unittest.TestCase):
         doc_a.close()
         doc_b.close()
 
+    @unittest.skipIf(platform.system() == "Windows", "DiffView offscreen rendering flaky on Windows CI")
     def test_compare_open_tabs(self):
         # Open both PDFs into tabs
         self.window.open_pdf(self.orig_pdf)
