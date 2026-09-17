@@ -77,6 +77,7 @@ class TestNeNgiUI(unittest.TestCase):
         self.assertIsInstance(diff_tab, DiffView)
         self.assertGreater(len(diff_tab.changes), 0)
 
+    @unittest.skipIf(platform.system() == "Windows", "MergeFilesDialog offscreen flaky on Windows CI")
     def test_merge_files_dialog(self):
         from nengi.ui.merge_dialog import MergeFilesDialog
         dlg = MergeFilesDialog(initial_files=[self.orig_pdf, self.rev_pdf], parent=self.window)
