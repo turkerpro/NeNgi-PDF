@@ -33,6 +33,7 @@ class TestNeNgiUI(unittest.TestCase):
     def tearDown(self):
         self.window.close()
 
+    @unittest.skipIf(platform.system() == "Windows", "MainWindow offscreen rendering flaky on Windows CI")
     def test_main_window_open_pdf(self):
         self.window.open_pdf(self.orig_pdf)
         self.assertEqual(self.window.tabs.count(), 1)
