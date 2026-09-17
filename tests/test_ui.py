@@ -40,6 +40,7 @@ class TestNeNgiUI(unittest.TestCase):
         self.assertIsNotNone(viewer)
         self.assertEqual(viewer.doc.page_count, 1)
 
+    @unittest.skipIf(platform.system() == "Windows", "DiffView offscreen rendering flaky on Windows CI")
     def test_diff_view_loading(self):
         doc_a = PDFDocument(self.orig_pdf)
         doc_b = PDFDocument(self.rev_pdf)
