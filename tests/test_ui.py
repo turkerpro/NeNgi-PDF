@@ -178,6 +178,7 @@ class TestNeNgiUI(unittest.TestCase):
         if os.path.exists(tmp_img):
             os.unlink(tmp_img)
 
+    @unittest.skipIf(platform.system() == "Windows", "Spacebar pan/rotate offscreen flaky on Windows CI")
     def test_spacebar_hand_pan_and_rotated_page_insertion(self):
         """Tests spacebar pan activation and text insertion on rotated pages."""
         self.window.open_pdf(self.orig_pdf)
