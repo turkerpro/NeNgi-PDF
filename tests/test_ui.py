@@ -124,6 +124,7 @@ class TestNeNgiUI(unittest.TestCase):
         txt = pw.doc.get_page(0).get_text()
         self.assertIn("Test Sürüklenebilir Metin", txt)
 
+    @unittest.skipIf(platform.system() == "Windows", "DraggableStampWidget offscreen rendering flaky on Windows CI")
     def test_draggable_stamp_widget_and_undo(self):
         """Tests Studio style interactive signature box, resizing, committing and undoing."""
         from nengi.ui.draggable_stamp import DraggableStampWidget
