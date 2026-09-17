@@ -88,17 +88,32 @@ jobs:
             --add-data "resources;resources" `
             nengi/main.py
 
-      - name: Get Version
+- name: Get Version
         id: get_version
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
           if (-not $tag -or $tag -eq "main" -or $tag -eq "master") {
-            $match = (Select-String -Path "nengi/ui/main_window.py" -Pattern 'v(\d+\.\d+\.\d+(?:-beta)?)' | Select-Object -First 1)
-            $ver = if ($match) { $match.Matches.Groups[1].Value } else { "2.0.10-beta" }
+            $path = "nengi/ui/main_window.py"
+            if (Test-Path $path) {
+              $content = Get-Content $path -Raw
+              Write-Host "DEBUG: File content length: $($content.Length)"
+              $match = [regex]::Match($content, 'v(\d+\.\d+\.\d+(?:-beta)?)')
+              if ($match.Success) {
+                $ver = $match.Groups[1].Value
+                Write-Host "DEBUG: Matched version: $ver"
+              } else {
+                Write-Host "DEBUG: No match found, using fallback"
+                $ver = "2.0.10-beta"
+              }
+            } else {
+              Write-Host "DEBUG: File not found at $path"
+              $ver = "2.0.10-beta"
+            }
             $tag = "v$ver"
           }
           echo "VERSION=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "DEBUG: Final version tag: $tag"
 
       - name: Build NSIS Setup Installer
         shell: pwsh
@@ -247,17 +262,32 @@ jobs:
             --add-data "resources;resources" `
             nengi/main.py
 
-      - name: Get Version
+- name: Get Version
         id: get_version
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
           if (-not $tag -or $tag -eq "beta") {
-            $match = (Select-String -Path "nengi/ui/main_window.py" -Pattern 'v(\d+\.\d+\.\d+(?:-beta)?)' | Select-Object -First 1)
-            $ver = if ($match) { $match.Matches.Groups[1].Value } else { "2.0.10-beta" }
+            $path = "nengi/ui/main_window.py"
+            if (Test-Path $path) {
+              $content = Get-Content $path -Raw
+              Write-Host "DEBUG: File content length: $($content.Length)"
+              $match = [regex]::Match($content, 'v(\d+\.\d+\.\d+(?:-beta)?)')
+              if ($match.Success) {
+                $ver = $match.Groups[1].Value
+                Write-Host "DEBUG: Matched version: $ver"
+              } else {
+                Write-Host "DEBUG: No match found, using fallback"
+                $ver = "2.0.10-beta"
+              }
+            } else {
+              Write-Host "DEBUG: File not found at $path"
+              $ver = "2.0.10-beta"
+            }
             $tag = "v$ver"
           }
           echo "VERSION=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "DEBUG: Final version tag: $tag"
 
       - name: Build NSIS Setup Installer
         shell: pwsh
