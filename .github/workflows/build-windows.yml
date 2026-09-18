@@ -39,7 +39,7 @@ jobs:
       - name: Run Tests
         run: |
           pip install pytest
-          python -m pytest tests/ -v -k "not test_ui" --ignore=tests/test_ui.py
+          python -m pytest tests/test_core.py tests/test_features.py tests/test_batch.py tests/test_editing_render.py tests/test_tr_long_narrow.py tests/test_updater.py tests/test_v2bridge.py -v
         continue-on-error: false
 
       - name: Build Windows Setup Installer (onedir)
@@ -213,7 +213,7 @@ jobs:
       - name: Run Tests
         run: |
           pip install pytest
-          python -m pytest tests/ -v -k "not test_ui" --ignore=tests/test_ui.py
+          python -m pytest tests/test_core.py tests/test_features.py tests/test_batch.py tests/test_editing_render.py tests/test_tr_long_narrow.py tests/test_updater.py tests/test_v2bridge.py -v
         continue-on-error: false
 
       - name: Build Windows Setup Installer (onedir)
