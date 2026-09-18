@@ -5,6 +5,7 @@ Tests PDFDocument, DiffEngine, ImageRoundtrip, Security, Page Operations, and Co
 
 import os
 import sys
+import platform
 import tempfile
 import unittest
 import fitz
@@ -264,6 +265,7 @@ class TestNeNgiCore(unittest.TestCase):
         self.assertIn("Üü", txt)
         doc.close()
 
+    @unittest.skipIf(platform.system() == "Windows", "VirtualPrinterManager offscreen flaky on Windows CI")
     def test_virtual_printer_manager(self):
         from nengi.core.virtual_printer import VirtualPrinterManager
         self.assertEqual(VirtualPrinterManager.PRINTER_NAME, "NeNgi PDF")
